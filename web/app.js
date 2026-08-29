@@ -683,7 +683,115 @@ async function openAudioSheet() {
   fillDeviceSelect(ui.loopbackSelect, data.speakers || [], sel.loopback_device_id || '');
   ui.micEnabled.checked = sel.capture_mic !== false;
   ui.systemEnabled.checked = sel.capture_system !== false;
+  refreshEnrollment();
+  refreshPeople();
   ui.audioSheet.hidden = false;
+}
+
+/* --- Мой голос ----------------------------------------------------------- */
+
+/**
+ * Показать состояние эталона.
+ *
+ * Пока идёт запись, показываем, сколько речи уже услышали: без этого
+ * человек не понимает, достаточно ли он наговорил и когда остановиться.
+ */
+async function refreshEnrollment() {
+  const st = await api.enrollment_status();
+  if (!st) return;
+  state.enroll = st;
+
+  if (st.recording) {
+    const left = Math.max(0, st.target - st.seconds);
+    ui.enrollState.textContent = st.enough
+      ? `Записано ${st.seconds.toFixed(0)} с, уже достаточно`
+      : `Записано ${st.seconds.toFixed(0)} с, осталось около ${left.toFixed(0)} с`;
+    ui.enrollStart.textContent = st.enough ? 'Сохранить голос' : 'Остановить';
+    ui.enrollForget.hidden = true;
+    // Фразы показываем только во время записи: в остальное время они
+    // просто занимают место в настройках.
+    ui.enrollPrompt.hidden = false;
+    ui.enrollPrompt.textContent = (st.prompts || []).join(' ');
+  } else {
+    ui.enrollState.textContent = st.has_owner
+      ? `Голос записан: ${st.owner_name}`
+      : 'Голос не записан';
+    ui.enrollStart.textContent = st.has_owner ? 'Перезаписать голос' : 'Записать голос';
+    ui.enrollForget.hidden = !st.has_owner;
+    ui.enrollPrompt.hidden = true;
+  }
+}
+
+async function onEnrollClick() {
+  const st = state.enroll || {};
+  if (!st.recording) {
+    try {
+      await api.start_enrollment();
+    } catch (err) {
+      showToast('Не удалось начать запись голоса');
+      console.error(err);
+      return;
+    }
+    await refreshEnrollment();
+    // Пока идёт запись, обновляем счётчик: это единственная подсказка,
+    // по которой человек понимает, что его слышат.
+    state.enrollTimer = setInterval(refreshEnrollment, 700);
+    return;
+  }
+
+  clearInterval(state.enrollTimer);
+  state.enrollTimer = null;
+  if (!st.enough) {
+    await api.cancel_enrollment();
+    showToast('Запись голоса отменена: речи было слишком мало');
+    await refreshEnrollment();
+    return;
+  }
+  try {
+    await api.finish_enrollment('');
+    showToast('Голос запомнен');
+  } catch (err) {
+    showToast('Не удалось сохранить голос');
+    console.error(err);
+  }
+  await refreshEnrollment();
+  await refreshPeople();
+}
+
+async function onForgetOwner() {
+  const people = await api.list_people();
+  const owner = (people || []).find((p) => p.kind === 'owner');
+  if (!owner) return;
+  await api.forget_person(owner.id);
+  await refreshEnrollment();
+  await refreshPeople();
+}
+
+async function refreshPeople() {
+  const people = (await api.list_people()) || [];
+  ui.peopleField.hidden = people.length === 0;
+  ui.peopleList.textContent = '';
+  for (const person of people) {
+    const li = document.createElement('li');
+    li.className = 'people__item';
+
+    const name = document.createElement('span');
+    name.textContent = person.kind === 'owner' ? `${person.name} (это вы)` : person.name;
+
+    const forget = document.createElement('button');
+    forget.className = 'btn-ghost';
+    forget.type = 'button';
+    forget.textContent = 'Забыть';
+    forget.addEventListener('click', async () => {
+      await api.forget_person(person.id);
+      await refreshPeople();
+      await refreshEnrollment();
+    });
+
+    li.appendChild(name);
+    li.appendChild(forget);
+    ui.peopleList.appendChild(li);
+  }
 }
 
 async function saveAudioSheet() {
@@ -727,6 +835,12 @@ function bindUi() {
     loopbackSelect: el('loopback-select'),
     micEnabled: el('mic-enabled'),
     systemEnabled: el('system-enabled'),
+    enrollState: el('enroll-state'),
+    enrollPrompt: el('enroll-prompt'),
+    enrollStart: el('enroll-start'),
+    enrollForget: el('enroll-forget'),
+    peopleField: el('people-field'),
+    peopleList: el('people-list'),
     transcript: el('transcript'),
     transcriptEmpty: el('transcript-empty'),
     modelBar: el('model-bar'),
@@ -747,6 +861,8 @@ function bindUi() {
   el('audio-close').addEventListener('click', () => { ui.audioSheet.hidden = true; });
   el('theme-switch').addEventListener('click', onThemeClick);
   el('audio-save').addEventListener('click', saveAudioSheet);
+  el('enroll-start').addEventListener('click', onEnrollClick);
+  el('enroll-forget').addEventListener('click', onForgetOwner);
   el('toast-close').addEventListener('click', hideToast);
   ui.modelAction.addEventListener('click', onModelAction);
   // Клик по затемнению закрывает панель, как принято в подобных окнах.

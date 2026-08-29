@@ -189,6 +189,26 @@
         </div>
       </label>
 
+      <label class="field">
+        <span class="field__label">Мой голос</span>
+        <div class="voice-enroll" id="voice-enroll">
+          <p class="voice-enroll__state" id="enroll-state">Голос не записан</p>
+          <p class="hint">Прочитайте вслух пару фраз, и Konspekt научится
+          отличать вас от остальных, даже если за компьютером говорят
+          несколько человек.</p>
+          <p class="voice-enroll__prompt" id="enroll-prompt" hidden></p>
+          <div class="voice-enroll__row">
+            <button class="btn-secondary" type="button" id="enroll-start">Записать голос</button>
+            <button class="btn-ghost" type="button" id="enroll-forget" hidden>Забыть</button>
+          </div>
+        </div>
+      </label>
+
+      <label class="field" id="people-field" hidden>
+        <span class="field__label">Знакомые голоса</span>
+        <ul class="people" id="people-list"></ul>
+      </label>
+
       <div class="sheet__foot">
         <button class="btn-primary" id="audio-save">Готово</button>
       </div>

@@ -8,6 +8,7 @@ UI и трей ходят только сюда и ничего не знают 
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -27,6 +28,13 @@ from ..asr.embedder import MODEL_DIR_NAME as EMBEDDER_DIR_NAME
 from ..asr.embedder import MODEL_FILES as EMBEDDER_FILES
 from ..asr.embedder import MODEL_REPO as EMBEDDER_REPO
 from ..asr.embedder import VoiceEmbedder
+from ..asr.enroll import (
+    MIN_SECONDS,
+    PROMPTS,
+    SAMPLE_RATE,
+    TARGET_SECONDS,
+    VoiceEnrollment,
+)
 from ..asr.voices import VoiceRoster
 from ..audio import AudioCapture, NullCapture, WasapiCapture
 from ..audio import devices as audio_devices
@@ -81,6 +89,9 @@ class AppService:
             MODEL_REPO, MODEL_FILES, paths.models_dir() / MODEL_DIR_NAME
         )
         self.active_meeting_id: str | None = None
+        # Запись эталона голоса: живёт только пока человек читает фразы.
+        self._enrollment: VoiceEnrollment | None = None
+        self._enroll_capture: WasapiCapture | None = None
         # Сдвиг времени для второго и последующих включений записи в одной
         # встрече: без него каждый заход начинался бы с нуля.
         self.time_offset: float = 0.0
@@ -296,6 +307,110 @@ class AppService:
     def forget_person(self, person_id: str) -> None:
         """Забыть голос: человек перестанет узнаваться на новых встречах."""
         self.store.delete_person(person_id)
+
+    # --- эталон владельца -------------------------------------------------
+
+    def enrollment_status(self) -> dict[str, Any]:
+        """Состояние записи эталона для UI."""
+        owner = self.store.get_owner()
+        active = self._enrollment is not None
+        return {
+            "recording": active,
+            "seconds": round(self._enrollment.seconds, 1) if active else 0.0,
+            "progress": round(self._enrollment.progress, 3) if active else 0.0,
+            "enough": self._enrollment.enough if active else False,
+            "target": TARGET_SECONDS,
+            "has_owner": owner is not None,
+            "owner_name": owner.name if owner else "",
+            "prompts": list(PROMPTS),
+        }
+
+    def start_enrollment(self) -> dict[str, Any]:
+        """Начать запись эталона голоса.
+
+        Пишем только микрофон: эталон владельца снимаем с того устройства,
+        куда он говорит, а системный звук здесь только помешал бы.
+        """
+        if self.active_meeting_id is not None:
+            raise RuntimeError("Нельзя записывать голос во время встречи")
+        if self._enrollment is not None:
+            return self.enrollment_status()
+
+        try:
+            self.embedder.load()
+        except Exception as exc:
+            raise RuntimeError(f"Модель распознавания голоса недоступна: {exc}") from exc
+
+        self._enrollment = VoiceEnrollment(self.embedder, SAMPLE_RATE)
+        self._enroll_capture = WasapiCapture(
+            mic_device_id=self.settings.audio.mic_device_id or None,
+            capture_mic=True,
+            capture_system=False,
+            chunk_seconds=1.0,
+            on_chunk=self._on_enroll_chunk,
+        )
+        try:
+            self._enroll_capture.start("voice-enroll")
+        except Exception as exc:
+            self._enrollment = None
+            self._enroll_capture = None
+            raise RuntimeError(str(exc)) from exc
+        log.info("Запись эталона голоса начата")
+        return self.enrollment_status()
+
+    def _on_enroll_chunk(self, track: str, pcm, offset: float) -> None:
+        enrollment = self._enrollment
+        if enrollment is None:
+            return
+        try:
+            enrollment.feed(pcm)
+        except Exception:
+            log.exception("Ошибка накопления эталона голоса")
+
+    def cancel_enrollment(self) -> dict[str, Any]:
+        self._stop_enroll_capture()
+        self._enrollment = None
+        return self.enrollment_status()
+
+    def finish_enrollment(self, name: str = "") -> dict[str, Any]:
+        """Закончить запись и сохранить эталон."""
+        enrollment = self._enrollment
+        self._stop_enroll_capture()
+        self._enrollment = None
+        if enrollment is None:
+            raise RuntimeError("Запись голоса не начиналась")
+
+        vector = enrollment.result()
+        if vector is None:
+            raise RuntimeError(
+                f"Речи слишком мало: нужно хотя бы {int(MIN_SECONDS)} секунд"
+            )
+
+        # Владелец в базе один: перезапись эталона заменяет старый, а не
+        # плодит вторую запись того же человека.
+        owner = self.store.get_owner()
+        name = (name or "").strip() or (owner.name if owner else "Я")
+        person = owner or Person(kind="owner")
+        person.name = name
+        person.kind = "owner"
+        person.embedding = vector.tolist()
+        person.samples = max(1, enrollment.samples())
+        self.store.save_person(person)
+        log.info("Эталон голоса сохранён: %s", name)
+        return self.enrollment_status()
+
+    def _stop_enroll_capture(self) -> None:
+        capture = self._enroll_capture
+        self._enroll_capture = None
+        if capture is None:
+            return
+        try:
+            path = capture.stop()
+            # Файл эталона не нужен: нам важен только вектор.
+            if path:
+                Path(path).unlink(missing_ok=True)
+        except Exception:
+            log.exception("Не удалось остановить запись эталона")
 
     # --- модель ----------------------------------------------------------
 

@@ -111,6 +111,20 @@ class Api:
         self._service.forget_person(person_id)
         return True
 
+    # --- эталон голоса ----------------------------------------------------
+
+    def enrollment_status(self) -> dict[str, Any]:
+        return self._service.enrollment_status()
+
+    def start_enrollment(self) -> dict[str, Any]:
+        return self._service.start_enrollment()
+
+    def finish_enrollment(self, name: str = "") -> dict[str, Any]:
+        return self._service.finish_enrollment(name)
+
+    def cancel_enrollment(self) -> dict[str, Any]:
+        return self._service.cancel_enrollment()
+
     # --- окно -------------------------------------------------------------
 
     def hide_window(self) -> bool:
