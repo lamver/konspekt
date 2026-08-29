@@ -59,6 +59,14 @@ class Api:
             "meeting_id": self._service.active_meeting_id,
         }
 
+    # --- аудиоустройства ---------------------------------------------------
+
+    def list_audio_devices(self) -> dict[str, Any]:
+        return self._service.list_audio_devices()
+
+    def save_audio_settings(self, fields: dict[str, Any]) -> dict[str, Any]:
+        return self._service.save_audio_settings(**fields)
+
     # --- заметки ---------------------------------------------------------
 
     def save_notes(self, meeting_id: str, notes: str) -> bool:

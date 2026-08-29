@@ -81,6 +81,15 @@ window.__konspekt_event = function (payload) {
     case 'recording.level':
       renderLevels(payload.me, payload.them);
       break;
+    case 'recording.error':
+      // Запись не началась: сообщаем прямо, иначе человек будет думать,
+      // что встреча пишется, и потеряет её.
+      showToast(payload.message || 'Не удалось начать запись');
+      state.isRecording = false;
+      state.recordingId = null;
+      renderRecordingState();
+      stopTimer();
+      break;
     case 'meeting.updated':
       if (payload.meeting && payload.meeting.id === state.currentId) {
         renderMeta(payload.meeting);
@@ -308,6 +317,69 @@ function setupDrag() {
   window.addEventListener('mouseup', () => { dragging = false; });
 }
 
+/* --- Плашка сообщений --------------------------------------------------- */
+
+let toastTimer = null;
+
+function showToast(text, ms = 7000) {
+  if (!ui.toast) return;
+  ui.toastText.textContent = text;
+  ui.toast.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(hideToast, ms);
+}
+
+function hideToast() {
+  if (ui.toast) ui.toast.hidden = true;
+}
+
+/* --- Настройки звука ----------------------------------------------------- */
+
+function fillDeviceSelect(select, items, selectedId) {
+  select.innerHTML = '';
+  const auto = document.createElement('option');
+  auto.value = '';
+  const def = items.find((d) => d.is_default);
+  auto.textContent = def ? `По умолчанию (${def.name})` : 'По умолчанию';
+  select.appendChild(auto);
+  items.forEach((d) => {
+    const opt = document.createElement('option');
+    opt.value = d.id;
+    opt.textContent = d.name;
+    select.appendChild(opt);
+  });
+  // Устройство могли отключить: тогда молча падаем на «по умолчанию».
+  select.value = items.some((d) => d.id === selectedId) ? selectedId : '';
+}
+
+async function openAudioSheet() {
+  const data = await api.list_audio_devices();
+  if (!data) {
+    showToast('Не удалось получить список аудиоустройств');
+    return;
+  }
+  const sel = data.selected || {};
+  fillDeviceSelect(ui.micSelect, data.microphones || [], sel.mic_device_id || '');
+  fillDeviceSelect(ui.loopbackSelect, data.speakers || [], sel.loopback_device_id || '');
+  ui.micEnabled.checked = sel.capture_mic !== false;
+  ui.systemEnabled.checked = sel.capture_system !== false;
+  ui.audioSheet.hidden = false;
+}
+
+async function saveAudioSheet() {
+  if (!ui.micEnabled.checked && !ui.systemEnabled.checked) {
+    showToast('Нужна хотя бы одна дорожка: микрофон или системный звук');
+    return;
+  }
+  await api.save_audio_settings({
+    mic_device_id: ui.micSelect.value,
+    loopback_device_id: ui.loopbackSelect.value,
+    capture_mic: ui.micEnabled.checked,
+    capture_system: ui.systemEnabled.checked,
+  });
+  ui.audioSheet.hidden = true;
+}
+
 /* --- Инициализация ------------------------------------------------------ */
 
 function bindUi() {
@@ -328,6 +400,13 @@ function bindUi() {
     levelThem: el('level-them'),
     timer: el('timer'),
     pin: el('btn-pin'),
+    toast: el('toast'),
+    toastText: el('toast-text'),
+    audioSheet: el('audio-sheet'),
+    micSelect: el('mic-select'),
+    loopbackSelect: el('loopback-select'),
+    micEnabled: el('mic-enabled'),
+    systemEnabled: el('system-enabled'),
   });
 
   el('btn-new').addEventListener('click', createMeeting);
@@ -336,6 +415,15 @@ function bindUi() {
 
   el('btn-hide').addEventListener('click', () => api.hide_window());
   el('btn-minimize').addEventListener('click', () => api.minimize_window());
+
+  el('btn-audio').addEventListener('click', openAudioSheet);
+  el('audio-close').addEventListener('click', () => { ui.audioSheet.hidden = true; });
+  el('audio-save').addEventListener('click', saveAudioSheet);
+  el('toast-close').addEventListener('click', hideToast);
+  // Клик по затемнению закрывает панель, как принято в подобных окнах.
+  ui.audioSheet.addEventListener('click', (e) => {
+    if (e.target === ui.audioSheet) ui.audioSheet.hidden = true;
+  });
 
   ui.pin.addEventListener('click', async () => {
     state.pinned = !state.pinned;
@@ -382,6 +470,7 @@ function bindUi() {
       state.filter = '';
       renderMeetingList();
     }
+    if (e.key === 'Escape' && !ui.audioSheet.hidden) ui.audioSheet.hidden = true;
   });
 
   // Страховка от потери правок при закрытии окна.

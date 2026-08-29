@@ -11,11 +11,13 @@ import logging
 from typing import Any
 
 from ..asr import NullTranscriber, Transcriber
-from ..audio import AudioCapture, NullCapture
+from ..audio import AudioCapture, NullCapture, WasapiCapture
+from ..audio import devices as audio_devices
 from ..core import settings as settings_mod
 from ..core.events import (
     MEETINGS_CHANGED,
     MEETING_UPDATED,
+    RECORDING_ERROR,
     RECORDING_STARTED,
     RECORDING_STOPPED,
     bus,
@@ -34,11 +36,30 @@ class AppService:
         transcriber: Transcriber | None = None,
     ) -> None:
         self.store = store or Store()
-        self.capture = capture or NullCapture()
-        self.transcriber = transcriber or NullTranscriber()
         self.settings = settings_mod.load()
+        self.capture = capture or self._build_capture()
+        self.transcriber = transcriber or NullTranscriber()
         self.active_meeting_id: str | None = None
         self._recover_stale_recordings()
+
+    def _build_capture(self) -> AudioCapture:
+        """Настоящий захват, а при его недоступности — заглушка.
+
+        Без звуковой подсистемы приложение всё равно остаётся рабочим
+        блокнотом, просто без записи.
+        """
+        audio = self.settings.audio
+        try:
+            return WasapiCapture(
+                mic_device_id=audio.mic_device_id or None,
+                loopback_device_id=audio.loopback_device_id or None,
+                capture_mic=audio.capture_mic,
+                capture_system=audio.capture_system,
+                chunk_seconds=audio.chunk_seconds,
+            )
+        except Exception:
+            log.exception("Захват звука недоступен, работаем без записи")
+            return NullCapture()
 
     def _recover_stale_recordings(self) -> None:
         """Чиним встречи, зависшие в статусе «идёт запись».
@@ -112,7 +133,19 @@ class AppService:
             meeting_id, started_at=started, status=MeetingStatus.RECORDING
         )
         self.active_meeting_id = meeting_id
-        self.capture.start(meeting_id)
+        try:
+            self.capture.start(meeting_id)
+        except Exception as exc:
+            # Устройства не открылись: откатываем статус, иначе встреча
+            # навсегда зависнет в состоянии «идёт запись».
+            self.active_meeting_id = None
+            self.store.update_meeting(
+                meeting_id, started_at=None, status=MeetingStatus.DRAFT
+            )
+            bus.emit(MEETINGS_CHANGED)
+            bus.emit(RECORDING_ERROR, {"meeting_id": meeting_id, "message": str(exc)})
+            log.error("Запись не начата: %s", exc)
+            return None
 
         bus.emit(RECORDING_STARTED, {"meeting_id": meeting_id, "started_at": started})
         bus.emit(MEETINGS_CHANGED)
@@ -138,6 +171,32 @@ class AppService:
     @property
     def is_recording(self) -> bool:
         return self.capture.is_recording
+
+    # --- аудиоустройства ------------------------------------------------
+
+    def list_audio_devices(self) -> dict[str, Any]:
+        """Список устройств для экрана настроек."""
+        data = audio_devices.describe()
+        data["selected"] = {
+            "mic_device_id": self.settings.audio.mic_device_id,
+            "loopback_device_id": self.settings.audio.loopback_device_id,
+            "capture_mic": self.settings.audio.capture_mic,
+            "capture_system": self.settings.audio.capture_system,
+        }
+        return data
+
+    def save_audio_settings(self, **fields: Any) -> dict[str, Any]:
+        """Сохранить выбор устройств и применить его к следующей записи."""
+        audio = self.settings.audio
+        for key, value in fields.items():
+            if hasattr(audio, key):
+                setattr(audio, key, value)
+        settings_mod.save(self.settings)
+
+        # Менять устройства посреди записи нельзя: применим после стопа.
+        if not self.capture.is_recording:
+            self.capture = self._build_capture()
+        return self.list_audio_devices()
 
     # --- заметки ---------------------------------------------------------
 
