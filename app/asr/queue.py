@@ -21,6 +21,7 @@ import numpy as np
 
 from ..core.models import TranscriptSegment
 from .base import SAMPLE_RATE, Transcriber
+from .vad import SpeechSegmenter
 
 log = logging.getLogger(__name__)
 
@@ -49,10 +50,17 @@ class TranscriptionQueue:
         transcriber: Transcriber,
         on_segment: Callable[[TranscriptSegment], None],
         sample_rate: int = SAMPLE_RATE,
+        use_vad: bool = True,
     ) -> None:
         self.transcriber = transcriber
         self.on_segment = on_segment
         self.sample_rate = sample_rate
+        self.use_vad = use_vad
+        # Своя нарезка на каждую дорожку: у микрофона и системного звука
+        # разный уровень фона, общий порог был бы неверен для обоих.
+        self._vad: dict[str, SpeechSegmenter] = {}
+        # Дорожки приходят из разных потоков, а stop() из потока UI.
+        self._vad_lock = threading.Lock()
         self._queue: queue.Queue[Job | None] = queue.Queue(maxsize=MAX_PENDING)
         self._thread: threading.Thread | None = None
         self._dropped = 0
@@ -81,19 +89,70 @@ class TranscriptionQueue:
         log.info("Очередь распознавания запущена")
 
     def submit(self, meeting_id: str, speaker: str, pcm: np.ndarray, offset: float) -> None:
-        """Положить чанк в очередь. Вызывается из потоков захвата."""
+        """Положить чанк в очередь. Вызывается из потоков захвата.
+
+        Здесь же ищем речь: копейка процессора на пару арифметических
+        действий, зато модель не жуёт тишину, а фразы приходят целыми, а
+        не разрезанными по границе чанка.
+        """
         with self._lock:
             self._start_locked()
+
+        if not self.use_vad:
+            self._put(Job(meeting_id, speaker, pcm, offset))
+            return
+
         try:
-            self._queue.put_nowait(Job(meeting_id, speaker, pcm, offset))
+            with self._vad_lock:
+                vad = self._vad.get(speaker)
+                if vad is None:
+                    vad = SpeechSegmenter(sample_rate=self.sample_rate)
+                    self._vad[speaker] = vad
+                pieces = vad.feed(self._as_float(pcm), offset)
+        except Exception:
+            # Поиск речи не должен ронять запись: в худшем случае отдаём
+            # чанк как есть, как это было до появления VAD.
+            log.exception("Поиск речи упал, отдаём чанк целиком")
+            pieces = []
+            self._put(Job(meeting_id, speaker, pcm, offset))
+        for piece in pieces:
+            self._put(Job(meeting_id, speaker, piece.pcm, piece.offset))
+
+    @staticmethod
+    def _as_float(pcm: np.ndarray) -> np.ndarray:
+        """int16 из звуковой карты в float32 [-1, 1] для анализа."""
+        arr = np.asarray(pcm)
+        if arr.dtype == np.int16:
+            return arr.astype(np.float32) / 32768.0
+        return arr.astype(np.float32, copy=False)
+
+    def _put(self, job: Job) -> None:
+        try:
+            self._queue.put_nowait(job)
         except queue.Full:
             self._dropped += 1
             log.warning(
                 "Очередь распознавания переполнена, чанк %s@%.1fс пропущен (всего %d)",
-                speaker,
-                offset,
+                job.speaker,
+                job.offset,
                 self._dropped,
             )
+
+    def flush(self, meeting_id: str) -> None:
+        """Дослать недоговорённые фразы. Зовём по кнопке «стоп».
+
+        Без этого последняя фраза встречи оставалась бы внутри VAD и
+        никогда не попала в транскрипт.
+        """
+        with self._vad_lock:
+            items = list(self._vad.items())
+            self._vad.clear()
+        for speaker, vad in items:
+            try:
+                for piece in vad.flush():
+                    self._put(Job(meeting_id, speaker, piece.pcm, piece.offset))
+            except Exception:
+                log.exception("Не удалось дослать хвост дорожки %s", speaker)
 
     def stop(self, timeout: float = 30.0) -> None:
         """Дождаться разбора очереди и остановить поток.

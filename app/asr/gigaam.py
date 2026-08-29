@@ -30,6 +30,8 @@ log = logging.getLogger(__name__)
 MODEL_NAME = "gigaam-v3-ctc"
 MODEL_REPO = "istupakov/gigaam-v3-onnx"
 QUANTIZATION = "int8"
+# Короче этого модель отдаёт пустую строку. Дополняем тишиной до предела.
+MIN_INPUT_SECONDS = 6.0
 
 # Файлы, без которых модель не заработает. Список нужен и для скачивания,
 # и для проверки «а всё ли уже на диске».
@@ -119,6 +121,18 @@ class GigaamTranscriber:
         if waveform.size == 0:
             return []
         duration = waveform.size / float(sample_rate)
+
+        # Куски короче примерно пяти секунд GigaAM возвращает пустыми:
+        # свёрточный энкодер рассчитан на длинный вход, и коротким просто
+        # не хватает кадров. Проверено: одна и та же фраза длиной 4 с даёт
+        # пустоту, а дополненная тишиной до 6 с распознаётся целиком.
+        # Раньше это не мешало, потому что захват всегда слал куски
+        # фиксированной длины, а с поиском речи фразы стали короткими.
+        need = int(MIN_INPUT_SECONDS * sample_rate) - waveform.size
+        if need > 0:
+            waveform = np.concatenate(
+                [waveform, np.zeros(need, dtype=np.float32)]
+            )
 
         try:
             text = self._model.recognize(waveform, sample_rate=sample_rate)
