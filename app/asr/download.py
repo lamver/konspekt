@@ -138,6 +138,18 @@ class ModelDownloader:
                 done = 0
                 part.unlink(missing_ok=True)
             total = int(response.headers.get("Content-Length") or 0) + done
+            if total and done > total:
+                # Недокачанный кусок больше целого файла. Так бывает, если
+                # две загрузки одного файла шли одновременно и дописывали
+                # в один и тот же .part: получается склейка, которая весит
+                # больше настоящего файла и не открывается. Чинится только
+                # загрузкой заново.
+                log.warning(
+                    "Файл %s на диске больше настоящего (%d против %d), качаем заново",
+                    name, done, total,
+                )
+                part.unlink(missing_ok=True)
+                raise RuntimeError(f"Повреждённая докачка {name}, начинаем сначала")
             mode = "ab" if done else "wb"
             with open(part, mode) as fh:
                 while True:
@@ -151,9 +163,12 @@ class ModelDownloader:
                     if on_progress:
                         on_progress(name, done, total)
 
-        if total and done < total:
-            # Оборвалось молча: не выдаём огрызок за готовый файл.
-            raise RuntimeError(f"Файл {name} скачан не полностью: {done} из {total}")
+        if total and done != total:
+            # Размер не сошёлся: либо оборвалось молча, либо в файл писали
+            # дважды. Огрызок и склейка одинаково бесполезны, и лучше
+            # честно упасть, чем выдать их за готовую модель.
+            part.unlink(missing_ok=True)
+            raise RuntimeError(f"Файл {name} скачан неверно: {done} байт вместо {total}")
         part.replace(target)
         log.info("Файл %s готов (%d байт)", name, done)
 
