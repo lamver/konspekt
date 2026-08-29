@@ -95,6 +95,7 @@ for path in wavs[:6]:
     assert cyr > lat, "русская речь записана латиницей"
     print("[ok] русская запись осталась в GigaAM и записана кириллицей")
     ru_done = True
+    wave_ru, rate_ru = piece, rate      # пригодится дальше
     break
 assert ru_done, "не нашлось русской записи для проверки"
 
@@ -106,14 +107,40 @@ print("\n[ok] без определителя роутер ведёт себя �
 
 # --- Неуверенный язык наследуется у той же дорожки -------------------------
 router.reset()
-router._last["them"] = False          # прошлая фраза была английской
+router._last["them"] = "de"        # прошлая фраза была немецкой
 short = np.zeros(4000, dtype=np.float32)   # слишком коротко для определителя
-assert router._decide(short, 16000, "them") is False, "язык дорожки не унаследован"
-assert router._decide(short, 16000, "me") is True, "по умолчанию должен быть русский"
+assert router._decide(short, 16000, "them") == "de", "язык дорожки не унаследован"
+assert router._decide(short, 16000, "me") == "ru", "по умолчанию должен быть русский"
 print("[ok] на неразборчивой фразе берётся язык прошлой реплики той же дорожки")
 
 router.reset()
-assert router._decide(short, 16000, "them") is True, "reset не очистил языки"
+assert router._decide(short, 16000, "them") == "ru", "reset не очистил языки"
 print("[ok] новая встреча начинается без памяти о языках")
+
+# --- Неанглийская чужая речь помечается своим кодом -------------------
+# Раньше всё нерусское помечалось как «en», даже немецкая речь.
+class _FakeDetector:
+    """Определитель, всегда слышащий немецкий."""
+    def detect(self, pcm, sample_rate=16000):
+        return ("de", 0.9)
+
+fake = LanguageRouter(gigaam, _FakeDetector(), whisper)
+segs = list(fake.transcribe(wave_en, 16000, "m4", 0.0, "them"))
+assert segs, "немецкая ветка ничего не вернула"
+assert segs[0].lang == "de", f"язык помечен как {segs[0].lang!r}, а не de"
+print(f"[ok] неанглийская чужая речь помечена как {segs[0].lang}, а не огульно en")
+
+# Украинская речь кириллическая: её честнее отдать GigaAM, чем писать латиницей.
+class _UkDetector:
+    def detect(self, pcm, sample_rate=16000):
+        return ("uk", 0.9)
+
+uk = LanguageRouter(gigaam, _UkDetector(), whisper)
+segs = list(uk.transcribe(wave_ru, rate_ru, "m5", 0.0, "me"))
+if segs:
+    assert segs[0].lang == "uk", f"язык помечен как {segs[0].lang!r}"
+    text = segs[0].text
+    assert any("а" <= c.lower() <= "я" for c in text), "кириллическая речь ушла не в GigaAM"
+    print("[ok] украинская речь осталась в GigaAM и помечена как uk")
 
 print("\nРоутер языков работает.")

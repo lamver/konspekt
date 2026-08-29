@@ -14,6 +14,12 @@ is the first sentence» превращается в «холло дис из з�
 неуверенный ответ), берём язык предыдущей фразы того же говорящего:
 человек редко переключает язык посреди разговора. А если и этого нет,
 считаем речь русской, потому что программа прежде всего русская.
+
+Пометка языка. Whisper многоязычный: он одинаково распознаёт немецкую,
+французскую и любую другую речь, сам определяя язык по звуку. Поэтому в
+сегменте пишем то, что услышал определитель языка (de, fr, es...), а не
+одно и то же «en» на всё нерусское. Иначе саммари английской и немецкой
+реплики выглядят одинаково, а по транскрипту нельзя понять, что звучало.
 """
 
 from __future__ import annotations
@@ -26,7 +32,7 @@ import numpy as np
 
 from ..core.models import TranscriptSegment
 from .base import SAMPLE_RATE, Transcriber
-from .langid import LanguageDetector
+from .langid import CYRILLIC_LANGS, LanguageDetector
 
 log = logging.getLogger(__name__)
 
@@ -46,12 +52,14 @@ class LanguageRouter:
         self.detector = detector
         self.foreign = foreign
         # Последний язык каждой дорожки: им подменяем неуверенные ответы.
-        self._last: dict[str, bool] = {}
+        self._last: dict[str, str] = {}
         self._lock = threading.Lock()
 
     @property
     def languages(self) -> tuple[str, ...]:
-        return ("ru",) if self.foreign is None else ("ru", "en")
+        if self.foreign is None:
+            return ("ru",)
+        return ("ru",) + tuple(getattr(self.foreign, "languages", ("en",)))
 
     def is_downloaded(self) -> bool:
         return getattr(self.russian, "is_downloaded", lambda: True)()
@@ -78,7 +86,8 @@ class LanguageRouter:
         offset: float = 0.0,
         speaker: str = "them",
     ) -> Iterable[TranscriptSegment]:
-        russian = self._decide(pcm, sample_rate, speaker)
+        lang = self._decide(pcm, sample_rate, speaker)
+        russian = lang in CYRILLIC_LANGS
         engine = self.russian if russian else (self.foreign or self.russian)
 
         segments = list(engine.transcribe(
@@ -86,24 +95,25 @@ class LanguageRouter:
             offset=offset, speaker=speaker,
         ))
         # Помечаем язык честно: по нему потом строится саммари, и знать,
-        # что реплика была не по-русски, полезно.
+        # что реплика была немецкой, а не просто «нерусской», полезно.
         for segment in segments:
-            segment.lang = "ru" if russian else "en"
+            segment.lang = lang
         return segments
 
-    def _decide(self, pcm, sample_rate: int, speaker: str) -> bool:
-        """Русская ли это речь. Ошибаться в сторону русского безопаснее."""
+    def _decide(self, pcm, sample_rate: int, speaker: str) -> str:
+        """Код языка фразы. Ошибаться в сторону русского безопаснее."""
         if self.detector is None or self.foreign is None:
-            return True
+            return "ru"
         try:
-            verdict = self.detector.is_russian(pcm, sample_rate)
+            verdict = self.detector.detect(pcm, sample_rate)
         except Exception:
             log.exception("Определение языка упало, считаем речь русской")
-            return True
+            return "ru"
 
         with self._lock:
             if verdict is None:
                 # Не разобрали: продолжаем на языке прошлой фразы.
-                return self._last.get(speaker, True)
-            self._last[speaker] = verdict
-        return verdict
+                return self._last.get(speaker, "ru")
+            lang = verdict[0]
+            self._last[speaker] = lang
+        return lang

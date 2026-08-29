@@ -5,6 +5,11 @@
 знает 99 языков, в int8 весит около 80 МБ вместе с декодером и на
 процессоре работает достаточно быстро для коротких фраз.
 
+Не только английский. Язык мы модели не навязываем: Whisper сам слышит,
+что звучит, и немецкая или французская реплика распознаётся так же
+хорошо, как английская. Код языка для пометки приходит снаружи, от
+роутера, который всё равно спрашивал определителя языка.
+
 Почему base, а не small. Small точнее, но весит 250 МБ в int8 и на
 процессоре обрабатывает фразу в несколько раз дольше. Для реплики на
 чужом языке посреди русской встречи важнее, чтобы она вообще появилась в
@@ -61,7 +66,10 @@ class WhisperTranscriber:
     """Распознавание нерусской речи."""
 
     name = "whisper-base"
-    languages = ("en", "de", "fr", "es", "it")
+    # Что модель умеет разбирать уверенно. Список ничего не ограничивает:
+    # Whisper знает 99 языков и определяет язык сам, это просто те, что
+    # встречаются чаще всего и на которых base держится прилично.
+    languages = ("en", "de", "fr", "es", "it", "pt", "nl", "pl", "tr", "zh", "ja")
 
     def __init__(self, model_dir: Path, auto_load: bool = True) -> None:
         self.model_dir = Path(model_dir)
@@ -105,6 +113,7 @@ class WhisperTranscriber:
         meeting_id: str = "",
         offset: float = 0.0,
         speaker: str = "them",
+        lang: str = "",
     ) -> Iterable[TranscriptSegment]:
         if self._model is None:
             if not self.auto_load or self._load_failed:
@@ -141,7 +150,7 @@ class WhisperTranscriber:
                 text=text,
                 start=offset,
                 end=offset + duration,
-                lang="en",
+                lang=lang or "",
             )
         ]
 
