@@ -222,8 +222,11 @@ function appendSegment(seg, scroll = true) {
   // Склеиваем только то, что человек сказал подряд. Если между репликами
   // была заметная пауза, это уже новая мысль и новый абзац, иначе весь
   // монолог слипается в одну простыню без единого разрыва.
+  // Разные голоса не склеиваем никогда, даже внутри одной дорожки: в
+  // звонке участники говорят встык, и слить их было бы хуже всего.
   const gap = last ? seg.start - Number(last.dataset.end || 0) : Infinity;
-  if (last && last.dataset.speaker === seg.speaker && gap < TURN_GAP) {
+  const sameVoice = (last?.dataset.voice || '') === (seg.voice_id || '');
+  if (last && last.dataset.speaker === seg.speaker && sameVoice && gap < TURN_GAP) {
     const body = last.querySelector('.turn__text');
     body.textContent = `${body.textContent} ${seg.text}`.trim();
     last.dataset.end = seg.end;
@@ -232,13 +235,26 @@ function appendSegment(seg, scroll = true) {
     turn.className = 'turn' + (isMe ? ' turn--me' : '');
     turn.dataset.speaker = seg.speaker;
     turn.dataset.end = seg.end;
+    turn.dataset.voice = seg.voice_id || '';
 
     const head = document.createElement('div');
     head.className = 'turn__head';
 
-    const who = document.createElement('span');
+    // Имя участника, а не просто дорожка: за компьютером и в звонке
+    // может быть несколько человек. По клику имя можно поменять, и оно
+    // запомнится за голосом на будущие встречи.
+    const who = document.createElement('button');
     who.className = 'turn__who';
-    who.textContent = isMe ? 'Я' : 'Собеседник';
+    who.type = 'button';
+    who.textContent = seg.voice_label || (isMe ? 'Я' : 'Собеседник');
+    if (seg.voice_id) {
+      who.dataset.voice = seg.voice_id;
+      who.title = 'Нажмите, чтобы назвать говорящего';
+      who.addEventListener('click', () => renameVoice(who, seg.voice_id));
+    } else {
+      who.classList.add('turn__who--plain');
+      who.disabled = true;
+    }
 
     const time = document.createElement('span');
     time.className = 'turn__time';
@@ -263,6 +279,62 @@ function appendSegment(seg, scroll = true) {
     const nearBottom = pane.scrollHeight - pane.scrollTop - pane.clientHeight < 80;
     if (nearBottom) pane.scrollTop = pane.scrollHeight;
   }
+}
+
+/**
+ * Назвать говорящего.
+ *
+ * Имя закрепляется за голосом, а не за встречей: на следующих встречах
+ * этот же человек определится сам.
+ */
+function renameVoice(button, voiceId) {
+  if (!state.meetingId || !voiceId || button.dataset.editing === '1') return;
+
+  // Правим прямо на месте, а не через window.prompt: системный диалог
+  // внутри webview блокирует поток UI и на окне поверх всех выглядит
+  // чужеродно, а тут человек просто дописывает имя там, где его видит.
+  const current = button.textContent;
+  button.dataset.editing = '1';
+
+  const input = document.createElement('input');
+  input.className = 'turn__who-input';
+  input.value = current;
+  input.spellcheck = false;
+  input.setAttribute('aria-label', 'Имя говорящего');
+  button.replaceWith(input);
+  input.focus();
+  input.select();
+
+  let done = false;
+  const finish = async (save) => {
+    if (done) return;
+    done = true;
+    const name = input.value.trim();
+    input.replaceWith(button);
+    button.dataset.editing = '';
+    if (!save || !name || name === current) return;
+
+    button.textContent = name;
+    try {
+      await api().name_voice(state.meetingId, voiceId, name);
+    } catch (err) {
+      console.error('Не удалось назвать говорящего', err);
+      button.textContent = current;
+      return;
+    }
+    // Остальные реплики того же голоса переименовываем на месте:
+    // перезагружать транскрипт ради имени значит дёрнуть прокрутку
+    // у человека, который его читает.
+    for (const other of ui.transcript.querySelectorAll('.turn__who')) {
+      if (other !== button && other.dataset.voice === voiceId) other.textContent = name;
+    }
+  };
+
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+    if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+  });
+  input.addEventListener('blur', () => finish(true));
 }
 
 function updateTranscriptEmpty() {

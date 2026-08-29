@@ -95,7 +95,7 @@ named = svc.meeting_voices(m1)
 assert {v["label"] for v in named} == {"Анна", "Борис"}, f"метки не обновились: {named}"
 print("[ok] имена проставились во всех репликах встречи")
 
-svc._remember_voices()
+svc._remember_voices(m1)
 people = svc.store.list_people()
 assert len(people) == 2, f"в базе {len(people)} голосов вместо двух"
 print(f"[ok] в базе голосов: {[p.name for p in people]}")

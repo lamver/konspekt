@@ -163,7 +163,7 @@ class AppService:
         except Exception:
             log.exception("Не удалось поднять базу голосов")
 
-    def _remember_voices(self) -> None:
+    def _remember_voices(self, meeting_id: str) -> None:
         """Сохранить голоса участников встречи в общую базу.
 
         Безымянных не сохраняем намеренно. «Собеседник 2» ничего не значит
@@ -172,6 +172,18 @@ class AppService:
         Как только человека назвали, его голос попадает в базу.
         """
         try:
+            # Отпечатки участников этой встречи храним всегда, даже
+            # безымянные: иначе назвать говорящего можно было бы только
+            # пока открыто окно, а через день встреча стала бы безымянной
+            # навсегда.
+            for voice in self.roster.voices():
+                centroid = voice.centroid
+                if centroid is None:
+                    continue
+                self.store.save_meeting_voice(
+                    meeting_id, voice.id, voice.track, voice.label,
+                    centroid, voice.samples, voice.person_id,
+                )
             for voice in self.roster.voices():
                 if voice.person_id is None:
                     continue
@@ -233,12 +245,25 @@ class AppService:
         if not name:
             raise ValueError("Имя не может быть пустым")
 
-        voice = self.roster.get(voice_id)
         self.roster.rename(voice_id, name)
         self.store.relabel_segments(meeting_id, voice_id, name)
 
-        person_id = voice.person_id if voice else None
-        centroid = voice.centroid if voice else None
+        # Отпечаток ищем сначала в живом составе встречи, а если её уже
+        # закрыли — в базе. Без этого назвать говорящего в старой встрече
+        # было невозможно: состав участников жил только в памяти.
+        voice = self.roster.get(voice_id)
+        saved = self.store.get_meeting_voice(meeting_id, voice_id)
+        if voice is not None and voice.centroid is not None:
+            centroid = voice.centroid
+            samples = voice.samples
+            person_id = voice.person_id
+        elif saved is not None:
+            centroid = saved["embedding"]
+            samples = saved["samples"]
+            person_id = saved["person_id"]
+        else:
+            centroid, samples, person_id = None, 1, None
+
         if centroid is not None:
             if person_id:
                 person = self.store.get_person(person_id)
@@ -248,14 +273,22 @@ class AppService:
             else:
                 person = Person(
                     name=name,
-                    embedding=centroid.tolist(),
-                    samples=max(1, voice.samples if voice else 1),
+                    embedding=np.asarray(centroid, dtype=np.float32).tolist(),
+                    samples=max(1, samples),
                 )
                 self.store.save_person(person)
                 person_id = person.id
-                voice.person_id = person_id
+                if voice is not None:
+                    voice.person_id = person_id
             if person_id:
                 self.store.link_segments(meeting_id, voice_id, person_id)
+                # Голос встречи тоже подписываем: при следующем открытии
+                # он уже будет связан с человеком.
+                self.store.save_meeting_voice(
+                    meeting_id, voice_id,
+                    saved["track"] if saved else (voice.track if voice else "them"),
+                    name, centroid, samples, person_id,
+                )
 
         bus.emit(MEETING_UPDATED, {"meeting_id": meeting_id})
         return {"voice_id": voice_id, "label": name, "person_id": person_id}
@@ -420,7 +453,7 @@ class AppService:
         self.asr_queue.stop()
         # Голоса запоминаем только теперь: за время встречи эталон каждого
         # участника собрался из всех его фраз, а не из первой попавшейся.
-        self._remember_voices()
+        self._remember_voices(meeting_id)
         self.active_meeting_id = None
         self.store.update_meeting(
             meeting_id,

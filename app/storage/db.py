@@ -26,7 +26,7 @@ from ..core.models import (
 
 log = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS meetings (
@@ -73,6 +73,21 @@ CREATE TABLE IF NOT EXISTS people (
     samples     INTEGER NOT NULL DEFAULT 1,
     created_at  REAL NOT NULL,
     updated_at  REAL NOT NULL
+);
+
+-- Голоса конкретной встречи. Без них назвать говорящего можно было бы
+-- только пока приложение не закрыли: состав участников жил в памяти, и
+-- при открытии старой встречи отпечатка уже не существовало.
+CREATE TABLE IF NOT EXISTS meeting_voices (
+    meeting_id  TEXT NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,
+    voice_id    TEXT NOT NULL,
+    track       TEXT NOT NULL DEFAULT 'them',
+    label       TEXT NOT NULL DEFAULT '',
+    person_id   TEXT,
+    embedding   BLOB NOT NULL,
+    samples     INTEGER NOT NULL DEFAULT 1,
+    updated_at  REAL NOT NULL,
+    PRIMARY KEY (meeting_id, voice_id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_notes_meeting ON note_lines(meeting_id);
@@ -323,6 +338,63 @@ class Store:
                 (person_id,),
             )
             self._conn.commit()
+
+    # --- голоса встречи ---------------------------------------------------
+
+    def save_meeting_voice(
+        self,
+        meeting_id: str,
+        voice_id: str,
+        track: str,
+        label: str,
+        embedding: Any,
+        samples: int,
+        person_id: str | None = None,
+    ) -> None:
+        """Запомнить отпечаток участника встречи.
+
+        Нужно, чтобы назвать говорящего можно было и через неделю, открыв
+        старую встречу: имя закрепляется за голосом, а голос надо где-то
+        держать.
+        """
+        blob = np.asarray(embedding, dtype=np.float32).tobytes()
+        with self._lock:
+            self._conn.execute(
+                """INSERT INTO meeting_voices
+                   (meeting_id, voice_id, track, label, person_id,
+                    embedding, samples, updated_at)
+                   VALUES (?,?,?,?,?,?,?,?)
+                   ON CONFLICT(meeting_id, voice_id) DO UPDATE SET
+                     track=excluded.track, label=excluded.label,
+                     person_id=excluded.person_id, embedding=excluded.embedding,
+                     samples=excluded.samples, updated_at=excluded.updated_at""",
+                (meeting_id, voice_id, track, label, person_id, blob, samples, now()),
+            )
+            self._conn.commit()
+
+    def list_meeting_voices(self, meeting_id: str) -> list[dict[str, Any]]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM meeting_voices WHERE meeting_id=? ORDER BY voice_id",
+                (meeting_id,),
+            ).fetchall()
+        return [
+            {
+                "voice_id": r["voice_id"],
+                "track": r["track"],
+                "label": r["label"],
+                "person_id": r["person_id"],
+                "embedding": np.frombuffer(r["embedding"], dtype=np.float32),
+                "samples": r["samples"],
+            }
+            for r in rows
+        ]
+
+    def get_meeting_voice(self, meeting_id: str, voice_id: str) -> dict[str, Any] | None:
+        for voice in self.list_meeting_voices(meeting_id):
+            if voice["voice_id"] == voice_id:
+                return voice
+        return None
 
 
 def _row_to_person(row: sqlite3.Row) -> Person:

@@ -42,7 +42,7 @@ con.close()
 print(f"после: версия={after_ver}, встреч={after_meetings}, "
       f"сегментов={after_segs}, заметок={after_notes}")
 
-assert after_ver == 2, f"версия схемы {after_ver}"
+assert after_ver == 3, f"версия схемы {after_ver}"
 assert (after_meetings, after_segs, after_notes) == (before_meetings, before_segs, before_notes), \
     "миграция потеряла данные"
 print("[ok] ни одна запись не потеряна")

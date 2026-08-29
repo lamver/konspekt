@@ -95,6 +95,22 @@ class Api:
     def add_note_line(self, meeting_id: str, text: str) -> dict[str, Any]:
         return self._service.add_note_line(meeting_id, text)
 
+    # --- голоса -----------------------------------------------------------
+
+    def meeting_voices(self, meeting_id: str) -> list[dict[str, Any]]:
+        return self._service.meeting_voices(meeting_id)
+
+    def name_voice(self, meeting_id: str, voice_id: str, name: str) -> dict[str, Any]:
+        """Назвать говорящего. Имя закрепляется за голосом, а не за встречей."""
+        return self._service.name_voice(meeting_id, voice_id, name)
+
+    def list_people(self) -> list[dict[str, Any]]:
+        return self._service.list_people()
+
+    def forget_person(self, person_id: str) -> bool:
+        self._service.forget_person(person_id)
+        return True
+
     # --- окно -------------------------------------------------------------
 
     def hide_window(self) -> bool:
