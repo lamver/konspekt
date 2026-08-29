@@ -112,6 +112,9 @@ class _Track:
     def _run(self) -> None:
         recorder = None
         try:
+            # COM обязан быть поднят в том же потоке, где открываем устройство,
+            # и оставаться поднятым до конца записи.
+            devices.hold_com()
             device = self._opener()
             recorder = device.recorder(samplerate=SAMPLE_RATE, channels=1, blocksize=BLOCK_FRAMES)
             recorder.__enter__()

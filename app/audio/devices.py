@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 from dataclasses import dataclass
 from typing import Any
 
@@ -18,6 +19,49 @@ log = logging.getLogger(__name__)
 # распознавать и показывать реплики надо раздельно.
 TRACK_ME = "me"       # микрофон — то, что говорю я
 TRACK_THEM = "them"   # системный выход — то, что говорит собеседник
+
+# COM, инициализированный для текущего потока. Хранить обязательно.
+_com_local = threading.local()
+
+
+def hold_com() -> None:
+    """Поднять COM в текущем потоке и не отпускать до его конца.
+
+    Здесь легко напороться на неочевидное. `soundcard` поднимает COM сам,
+    но временным объектом, а в его деструкторе стоит `CoUninitialize`.
+    Стоит сборщику мусора добраться до этого объекта, и COM в потоке гаснет,
+    хотя поток ещё работает. Первый заход обычно успевает отработать, а вот
+    повторный старт записи падает с 0x800401f0 «COM не инициализирован».
+
+    Поэтому инициализируем COM сами и просто больше его не выключаем: поток
+    живёт ровно столько, сколько идёт запись, и отдать COM всё равно некому.
+    Вызов идемпотентен, повторные заходы в тот же поток бесплатны.
+    """
+    if getattr(_com_local, "ready", False):
+        return
+    try:
+        import ctypes
+
+        # Порядок важен. При первом импорте soundcard сам инициализирует COM
+        # и считает ошибкой ответ «уже поднят», падая с 0x100000001. Поэтому
+        # сначала даём ему импортироваться, и только потом поднимаем COM для
+        # текущего потока.
+        import soundcard  # noqa: F401
+
+        # COINIT_MULTITHREADED: запись идёт из фоновых потоков, окно STA нам
+        # тут не нужно и только мешало бы.
+        hr = ctypes.windll.ole32.CoInitializeEx(None, 0x0)
+    except Exception:
+        # Не Windows или нет ole32: пусть soundcard разбирается сам, как раньше.
+        log.debug("COM поднять не удалось", exc_info=True)
+        _com_local.ready = True
+        return
+
+    # S_OK - подняли, S_FALSE - уже был поднят, RPC_E_CHANGED_MODE - поднят
+    # в другом режиме. Во всех трёх случаях COM в потоке рабочий.
+    if hr not in (0, 1) and hr + 2**32 != 0x80010106:
+        log.warning("CoInitializeEx вернул 0x%08x", hr + 2**32 if hr < 0 else hr)
+    _com_local.ready = True
 
 
 @dataclass(frozen=True)
@@ -46,6 +90,9 @@ def _sc():
     """
     import soundcard as sc
 
+    # Любое обращение к звуку требует COM в текущем потоке, а потоков у нас
+    # много: две дорожки записи, мост UI, фоновые задачи.
+    hold_com()
     return sc
 
 
