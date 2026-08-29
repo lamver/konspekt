@@ -21,7 +21,9 @@ import numpy as np
 
 from ..core.models import TranscriptSegment
 from .base import SAMPLE_RATE, Transcriber
+from .embedder import VoiceEmbedder
 from .vad import SpeechSegmenter
+from .voices import VoiceRoster
 
 log = logging.getLogger(__name__)
 
@@ -51,11 +53,17 @@ class TranscriptionQueue:
         on_segment: Callable[[TranscriptSegment], None],
         sample_rate: int = SAMPLE_RATE,
         use_vad: bool = True,
+        embedder: VoiceEmbedder | None = None,
+        roster: VoiceRoster | None = None,
     ) -> None:
         self.transcriber = transcriber
         self.on_segment = on_segment
         self.sample_rate = sample_rate
         self.use_vad = use_vad
+        # Кто говорит. Обе части необязательны: без них всё работает
+        # ровно как раньше, только реплики остаются просто дорожками.
+        self.embedder = embedder
+        self.roster = roster
         # Своя нарезка на каждую дорожку: у микрофона и системного звука
         # разный уровень фона, общий порог был бы неверен для обоих.
         self._vad: dict[str, SpeechSegmenter] = {}
@@ -184,6 +192,7 @@ class TranscriptionQueue:
                     speaker=job.speaker,
                 )
                 for segment in segments:
+                    self._identify(segment, job)
                     self.on_segment(segment)
             except Exception:
                 # Один плохой чанк не должен останавливать распознавание.
@@ -191,3 +200,24 @@ class TranscriptionQueue:
             finally:
                 self._queue.task_done()
         log.info("Очередь распознавания остановлена")
+
+    def _identify(self, segment: TranscriptSegment, job: Job) -> None:
+        """Проставить сегменту говорящего.
+
+        Считаем отпечаток здесь, а не в потоке захвата: там нельзя
+        задерживаться ни на миллисекунду, иначе в записи появится дыра.
+        Любая осечка тут не должна стоить нам реплики, поэтому текст
+        сохраняется в любом случае, просто без имени говорящего.
+        """
+        if self.embedder is None or self.roster is None:
+            return
+        try:
+            vector = self.embedder.embed(job.pcm, self.sample_rate)
+            voice = self.roster.assign(job.speaker, vector)
+            if voice is None:
+                return
+            segment.voice_id = voice.id
+            segment.voice_label = voice.label
+            segment.person_id = voice.person_id
+        except Exception:
+            log.exception("Не удалось определить говорящего")

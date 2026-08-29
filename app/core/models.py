@@ -89,8 +89,37 @@ class TranscriptSegment:
     start: float = 0.0
     end: float = 0.0
     lang: str = "ru"
+    # Кто говорит внутри дорожки. Дорожка отвечает, откуда пришёл звук,
+    # а эти поля — кто именно из людей его произнёс.
+    voice_id: str = ""        # участник этой встречи
+    person_id: str | None = None   # он же в базе знакомых голосов
+    voice_label: str = ""     # то, что видит человек: «Я», «Собеседник 2», имя
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
         d["speaker"] = self.speaker.value
+        return d
+
+
+@dataclass
+class Person:
+    """Знакомый голос: узнаём его между встречами.
+
+    Вектор хранится усреднённым по всем услышанным фразам, поэтому чем
+    больше человек говорил, тем устойчивее узнавание.
+    """
+
+    id: str = field(default_factory=new_id)
+    name: str = ""
+    kind: str = "other"        # owner — владелец программы, other — остальные
+    embedding: list[float] = field(default_factory=list)
+    samples: int = 1
+    created_at: float = field(default_factory=now)
+    updated_at: float = field(default_factory=now)
+
+    def to_dict(self) -> dict[str, Any]:
+        d = asdict(self)
+        # Вектор в UI не нужен и весит больше всей остальной записи.
+        d.pop("embedding", None)
+        d["dim"] = len(self.embedding)
         return d

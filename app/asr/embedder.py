@@ -28,6 +28,9 @@ log = logging.getLogger(__name__)
 
 MODEL_REPO = "Wespeaker/wespeaker-voxceleb-resnet34-LM"
 MODEL_FILE = "voxceleb_resnet34_LM.onnx"
+MODEL_FILES = (MODEL_FILE,)
+# Каталог с весами внутри models_dir().
+MODEL_DIR_NAME = "wespeaker"
 MODEL_TOTAL_BYTES = 26_500_000
 
 SAMPLE_RATE = 16000

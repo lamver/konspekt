@@ -11,12 +11,22 @@ import sqlite3
 import threading
 from typing import Any
 
+import numpy as np
+
 from ..core import paths
-from ..core.models import Meeting, MeetingStatus, NoteLine, Speaker, TranscriptSegment
+from ..core.models import (
+    Meeting,
+    MeetingStatus,
+    NoteLine,
+    Person,
+    Speaker,
+    TranscriptSegment,
+    now,
+)
 
 log = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS meetings (
@@ -47,7 +57,22 @@ CREATE TABLE IF NOT EXISTS transcript_segments (
     text        TEXT NOT NULL DEFAULT '',
     start_s     REAL NOT NULL DEFAULT 0,
     end_s       REAL NOT NULL DEFAULT 0,
-    lang        TEXT NOT NULL DEFAULT 'ru'
+    lang        TEXT NOT NULL DEFAULT 'ru',
+    voice_id    TEXT NOT NULL DEFAULT '',
+    person_id   TEXT,
+    voice_label TEXT NOT NULL DEFAULT ''
+);
+
+-- Голоса, знакомые между встречами. Вектор лежит сырыми байтами float32:
+-- искать по нему всё равно только перебором, а людей в базе десятки.
+CREATE TABLE IF NOT EXISTS people (
+    id          TEXT PRIMARY KEY,
+    name        TEXT NOT NULL DEFAULT '',
+    kind        TEXT NOT NULL DEFAULT 'other',  -- owner | other
+    embedding   BLOB NOT NULL,
+    samples     INTEGER NOT NULL DEFAULT 1,
+    created_at  REAL NOT NULL,
+    updated_at  REAL NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_notes_meeting ON note_lines(meeting_id);
@@ -73,10 +98,37 @@ class Store:
         self._migrate()
 
     def _migrate(self) -> None:
+        """Привести схему к текущей версии.
+
+        `CREATE TABLE IF NOT EXISTS` не трогает уже существующие таблицы,
+        поэтому новые колонки приходится добавлять руками: у пользователя
+        база с записанными встречами, и терять их из-за обновления нельзя.
+        """
         with self._lock:
+            was = self._conn.execute("PRAGMA user_version").fetchone()[0]
             self._conn.executescript(SCHEMA)
+            if was < 2:
+                self._add_columns(
+                    "transcript_segments",
+                    {
+                        "voice_id": "TEXT NOT NULL DEFAULT ''",
+                        "person_id": "TEXT",
+                        "voice_label": "TEXT NOT NULL DEFAULT ''",
+                    },
+                )
             self._conn.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
             self._conn.commit()
+            if was < SCHEMA_VERSION:
+                log.info("Схема базы обновлена с версии %d до %d", was, SCHEMA_VERSION)
+
+    def _add_columns(self, table: str, columns: dict[str, str]) -> None:
+        """Добавить недостающие колонки, не трогая данные."""
+        have = {row["name"] for row in self._conn.execute(f"PRAGMA table_info({table})")}
+        for name, decl in columns.items():
+            if name in have:
+                continue
+            self._conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
+            log.info("Добавлена колонка %s.%s", table, name)
 
     def close(self) -> None:
         with self._lock:
@@ -171,10 +223,12 @@ class Store:
         with self._lock:
             self._conn.execute(
                 """INSERT INTO transcript_segments
-                   (id, meeting_id, speaker, text, start_s, end_s, lang)
-                   VALUES (?,?,?,?,?,?,?)""",
+                   (id, meeting_id, speaker, text, start_s, end_s, lang,
+                    voice_id, person_id, voice_label)
+                   VALUES (?,?,?,?,?,?,?,?,?,?)""",
                 (seg.id, seg.meeting_id, seg.speaker.value, seg.text,
-                 seg.start, seg.end, seg.lang),
+                 seg.start, seg.end, seg.lang,
+                 seg.voice_id, seg.person_id, seg.voice_label),
             )
             self._conn.commit()
         return seg
@@ -190,9 +244,97 @@ class Store:
                 id=r["id"], meeting_id=r["meeting_id"],
                 speaker=Speaker(r["speaker"]), text=r["text"],
                 start=r["start_s"], end=r["end_s"], lang=r["lang"],
+                voice_id=r["voice_id"], person_id=r["person_id"],
+                voice_label=r["voice_label"],
             )
             for r in rows
         ]
+
+    def relabel_segments(self, meeting_id: str, voice_id: str, label: str) -> int:
+        """Переименовать участника во всех его репликах этой встречи."""
+        with self._lock:
+            cur = self._conn.execute(
+                "UPDATE transcript_segments SET voice_label=? "
+                "WHERE meeting_id=? AND voice_id=?",
+                (label, meeting_id, voice_id),
+            )
+            self._conn.commit()
+            return cur.rowcount
+
+    def link_segments(self, meeting_id: str, voice_id: str, person_id: str) -> int:
+        """Привязать реплики участника к человеку из базы голосов."""
+        with self._lock:
+            cur = self._conn.execute(
+                "UPDATE transcript_segments SET person_id=? "
+                "WHERE meeting_id=? AND voice_id=?",
+                (person_id, meeting_id, voice_id),
+            )
+            self._conn.commit()
+            return cur.rowcount
+
+    # --- знакомые голоса --------------------------------------------------
+
+    def save_person(self, person: Person) -> Person:
+        """Создать или обновить человека. Вектор кладём сырыми байтами."""
+        blob = np.asarray(person.embedding, dtype=np.float32).tobytes()
+        person.updated_at = now()
+        with self._lock:
+            self._conn.execute(
+                """INSERT INTO people
+                   (id, name, kind, embedding, samples, created_at, updated_at)
+                   VALUES (?,?,?,?,?,?,?)
+                   ON CONFLICT(id) DO UPDATE SET
+                     name=excluded.name, kind=excluded.kind,
+                     embedding=excluded.embedding, samples=excluded.samples,
+                     updated_at=excluded.updated_at""",
+                (person.id, person.name, person.kind, blob, person.samples,
+                 person.created_at, person.updated_at),
+            )
+            self._conn.commit()
+        return person
+
+    def list_people(self) -> list[Person]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM people ORDER BY kind DESC, name"
+            ).fetchall()
+        return [_row_to_person(r) for r in rows]
+
+    def get_person(self, person_id: str) -> Person | None:
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT * FROM people WHERE id=?", (person_id,)
+            ).fetchone()
+        return _row_to_person(row) if row else None
+
+    def get_owner(self) -> Person | None:
+        """Владелец программы: тот, чей голос записан эталоном."""
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT * FROM people WHERE kind='owner' ORDER BY updated_at DESC LIMIT 1"
+            ).fetchone()
+        return _row_to_person(row) if row else None
+
+    def delete_person(self, person_id: str) -> None:
+        with self._lock:
+            self._conn.execute("DELETE FROM people WHERE id=?", (person_id,))
+            self._conn.execute(
+                "UPDATE transcript_segments SET person_id=NULL WHERE person_id=?",
+                (person_id,),
+            )
+            self._conn.commit()
+
+
+def _row_to_person(row: sqlite3.Row) -> Person:
+    return Person(
+        id=row["id"],
+        name=row["name"],
+        kind=row["kind"],
+        embedding=np.frombuffer(row["embedding"], dtype=np.float32).tolist(),
+        samples=row["samples"],
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
+    )
 
 
 def _row_to_meeting(row: sqlite3.Row) -> Meeting:

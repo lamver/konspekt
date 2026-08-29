@@ -1,0 +1,116 @@
+"""Миграция схемы на копии настоящей базы пользователя."""
+import shutil
+import sqlite3
+import tempfile
+from pathlib import Path
+
+import numpy as np
+
+from app.core import paths
+from app.core.models import Person, Speaker, TranscriptSegment
+from app.storage.db import Store
+
+src = paths.db_path()
+print("боевая база:", src, src.exists())
+
+tmp = Path(tempfile.mkdtemp()) / "copy.db"
+shutil.copy(src, tmp)
+
+# Что было до миграции
+con = sqlite3.connect(tmp)
+before_ver = con.execute("PRAGMA user_version").fetchone()[0]
+before_meetings = con.execute("SELECT COUNT(*) FROM meetings").fetchone()[0]
+before_segs = con.execute("SELECT COUNT(*) FROM transcript_segments").fetchone()[0]
+before_notes = con.execute("SELECT COUNT(*) FROM note_lines").fetchone()[0]
+sample = con.execute(
+    "SELECT id, text FROM transcript_segments ORDER BY rowid LIMIT 3").fetchall()
+con.close()
+print(f"до: версия={before_ver}, встреч={before_meetings}, "
+      f"сегментов={before_segs}, заметок={before_notes}")
+
+store = Store(str(tmp))
+
+con = sqlite3.connect(tmp)
+after_ver = con.execute("PRAGMA user_version").fetchone()[0]
+after_meetings = con.execute("SELECT COUNT(*) FROM meetings").fetchone()[0]
+after_segs = con.execute("SELECT COUNT(*) FROM transcript_segments").fetchone()[0]
+after_notes = con.execute("SELECT COUNT(*) FROM note_lines").fetchone()[0]
+cols = {r[1] for r in con.execute("PRAGMA table_info(transcript_segments)")}
+after_sample = con.execute(
+    "SELECT id, text FROM transcript_segments ORDER BY rowid LIMIT 3").fetchall()
+con.close()
+print(f"после: версия={after_ver}, встреч={after_meetings}, "
+      f"сегментов={after_segs}, заметок={after_notes}")
+
+assert after_ver == 2, f"версия схемы {after_ver}"
+assert (after_meetings, after_segs, after_notes) == (before_meetings, before_segs, before_notes), \
+    "миграция потеряла данные"
+print("[ok] ни одна запись не потеряна")
+assert sample == after_sample, "тексты сегментов изменились"
+print("[ok] тексты старых реплик на месте")
+assert {"voice_id", "person_id", "voice_label"} <= cols, f"колонок нет: {cols}"
+print("[ok] новые колонки добавлены к существующей таблице")
+
+# Старые сегменты читаются, просто без говорящего
+mid = None
+con = sqlite3.connect(tmp)
+row = con.execute("SELECT meeting_id FROM transcript_segments LIMIT 1").fetchone()
+con.close()
+if row:
+    mid = row[0]
+    segs = store.list_segments(mid)
+    assert segs, "старые сегменты не читаются"
+    assert segs[0].voice_label == "", "у старой реплики взялся говорящий"
+    print(f"[ok] старые реплики читаются ({len(segs)} шт.), говорящий пуст")
+
+# Новый сегмент с говорящим
+if mid:
+    seg = TranscriptSegment(
+        meeting_id=mid, speaker=Speaker.THEM, text="проверка",
+        start=1.0, end=2.0, voice_id="them-1",
+        person_id="p-1", voice_label="Собеседник 1")
+    store.add_segment(seg)
+    got = [s for s in store.list_segments(mid) if s.id == seg.id][0]
+    assert got.voice_label == "Собеседник 1" and got.voice_id == "them-1"
+    assert got.person_id == "p-1"
+    print("[ok] новая реплика сохраняет говорящего")
+
+    assert store.relabel_segments(mid, "them-1", "Анна") == 1
+    got = [s for s in store.list_segments(mid) if s.id == seg.id][0]
+    assert got.voice_label == "Анна"
+    print("[ok] переименование участника меняет его реплики")
+
+# База знакомых голосов
+vec = np.random.default_rng(1).normal(size=256).astype(np.float32)
+vec /= np.linalg.norm(vec)
+p = Person(name="Валерий", kind="owner", embedding=vec.tolist(), samples=5)
+store.save_person(p)
+back = store.get_person(p.id)
+assert back is not None and back.name == "Валерий"
+assert np.allclose(back.embedding, vec, atol=1e-6), "вектор исказился при хранении"
+print(f"[ok] голос сохранён и прочитан без искажений ({len(back.embedding)} чисел)")
+
+owner = store.get_owner()
+assert owner is not None and owner.id == p.id
+print("[ok] владелец находится по типу")
+
+p.name = "Валерий Петрович"
+p.samples = 9
+store.save_person(p)
+again = store.get_person(p.id)
+assert again.name == "Валерий Петрович" and again.samples == 9
+assert len(store.list_people()) == 1, "обновление создало второго человека"
+print("[ok] повторное сохранение обновляет, а не дублирует")
+
+store.delete_person(p.id)
+assert store.get_person(p.id) is None
+print("[ok] удаление человека работает")
+
+# Повторное открытие уже мигрированной базы ничего не ломает
+store.close()
+store2 = Store(str(tmp))
+assert len(store2.list_segments(mid)) if mid else True
+store2.close()
+print("[ok] повторная миграция идемпотентна")
+
+print("\nМиграция прошла без потерь.")
