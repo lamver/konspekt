@@ -23,6 +23,10 @@ log = logging.getLogger(__name__)
 
 HF_BASE = "https://huggingface.co/{repo}/resolve/main/{name}"
 CHUNK = 1 << 16  # 64 КБ
+# Слабый интернет рвёт соединение посреди файла. Каждый обрыв это ещё
+# одна попытка с того места, где встали, а не потеря всей загрузки.
+RETRIES = 20
+RETRY_PAUSE = 3.0  # секунды между попытками
 
 # Колбэк прогресса: (имя файла, скачано байт, всего байт)
 ProgressCallback = Callable[[str, int, int], None]
@@ -81,7 +85,40 @@ class ModelDownloader:
             target = self.dest / name
             if target.exists():
                 continue
-            self._fetch(name, target, on_progress)
+            self._fetch_with_retries(name, target, on_progress)
+
+    def _fetch_with_retries(
+        self, name: str, target: Path, on_progress: ProgressCallback | None
+    ) -> None:
+        """Качать, пока не выйдет. Каждая попытка продолжает с места обрыва.
+
+        На слабом канале соединение рвётся посреди большого файла, и без
+        этого цикла двухсотмегабайтная модель почти никогда не докачается.
+        Прогресса ради считаем попытку неудачной только если она не сдвинула
+        файл ни на байт: тогда дело не в канале, а в чём-то постоянном.
+        """
+        part = target.with_suffix(target.suffix + ".part")
+        last_error: Exception | None = None
+        for attempt in range(1, RETRIES + 1):
+            before = part.stat().st_size if part.exists() else 0
+            try:
+                self._fetch(name, target, on_progress)
+                return
+            except DownloadCancelled:
+                raise
+            except Exception as exc:
+                last_error = exc
+                after = part.stat().st_size if part.exists() else 0
+                log.warning(
+                    "Обрыв на %s (попытка %d из %d, скачано %d байт): %s",
+                    name, attempt, RETRIES, after, exc,
+                )
+                if after <= before and attempt > 3:
+                    # Три попытки без единого нового байта: дальше бессмысленно.
+                    break
+                if self._cancel.wait(RETRY_PAUSE):
+                    raise DownloadCancelled(name) from exc
+        raise RuntimeError(f"Не удалось скачать {name}: {last_error}")
 
     def _fetch(self, name: str, target: Path, on_progress: ProgressCallback | None) -> None:
         part = target.with_suffix(target.suffix + ".part")
