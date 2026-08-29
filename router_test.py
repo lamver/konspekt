@@ -1,0 +1,119 @@
+"""Роутер языков: русский в GigaAM, английский в Whisper."""
+import subprocess
+import wave
+from pathlib import Path
+
+import numpy as np
+
+from app.asr.gigaam import MODEL_DIR_NAME as GIGAAM_DIR
+from app.asr.gigaam import GigaamTranscriber
+from app.asr.langid import MODEL_DIR_NAME as LANGID_DIR
+from app.asr.langid import LanguageDetector
+from app.asr.router import LanguageRouter
+from app.asr.whisper import MODEL_DIR_NAME as WHISPER_DIR
+from app.asr.whisper import WhisperTranscriber
+from app.core import paths
+
+tmp = Path("_voices_tmp")
+tmp.mkdir(exist_ok=True)
+
+
+def say_to_wav(text, path):
+    ps = (f'Add-Type -AssemblyName System.Speech; '
+          f'$s=New-Object System.Speech.Synthesis.SpeechSynthesizer; '
+          f'$s.SetOutputToWaveFile("{path.resolve()}"); $s.Speak("{text}"); $s.Dispose()')
+    subprocess.run(["powershell", "-Command", ps], capture_output=True)
+
+
+def read16k(path):
+    with wave.open(str(path), "rb") as w:
+        rate = w.getframerate()
+        d = np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16)
+        if w.getnchannels() == 2:
+            d = d.reshape(-1, 2).mean(axis=1).astype(np.int16)
+    x = d.astype(np.float32) / 32768.0
+    if rate != 16000:
+        n = int(x.size * 16000 / rate)
+        x = np.interp(np.linspace(0, x.size - 1, n), np.arange(x.size), x).astype(np.float32)
+    return x
+
+
+root = paths.models_dir()
+whisper = WhisperTranscriber(root / WHISPER_DIR)
+assert whisper.is_downloaded(), "Whisper не скачан"
+print("[ok] файлы Whisper на месте")
+
+gigaam = GigaamTranscriber(root / GIGAAM_DIR)
+detector = LanguageDetector(root / LANGID_DIR)
+router = LanguageRouter(gigaam, detector, whisper)
+
+# --- Английская фраза должна пойти в Whisper ------------------------------
+EN = "we should review the architecture before the release date of the product"
+p = tmp / "router-en.wav"
+if not p.exists():
+    say_to_wav(EN, p)
+wave_en = read16k(p)
+
+segs = list(router.transcribe(wave_en, 16000, "m1", 0.0, "them"))
+assert segs, "английская фраза не распознана"
+text_en = segs[0].text
+print(f"английская фраза -> {segs[0].lang}: {text_en!r}")
+assert segs[0].lang == "en", f"язык помечен как {segs[0].lang}"
+latin = sum(c.isascii() and c.isalpha() for c in text_en)
+cyrillic = sum('а' <= c.lower() <= 'я' for c in text_en)
+print(f"   латиница: {latin}, кириллица: {cyrillic}")
+assert latin > cyrillic, "английская фраза записана кириллицей, роутер не сработал"
+print("[ok] английская фраза записана латиницей, а не «холло дис из»")
+
+# Разумность текста: несколько ключевых слов должны найтись
+low = text_en.lower()
+hits = sum(w in low for w in ("architecture", "release", "review", "product"))
+print(f"   узнано ключевых слов: {hits} из 4")
+assert hits >= 2, f"текст не похож на сказанное: {text_en!r}"
+print("[ok] Whisper разобрал фразу по смыслу")
+
+# --- Русская фраза должна пойти в GigaAM ----------------------------------
+wavs = sorted(paths.audio_dir().rglob("*.wav"), key=lambda p: p.stat().st_size, reverse=True)
+ru_done = False
+for path in wavs[:6]:
+    with wave.open(str(path), "rb") as w:
+        rate = w.getframerate()
+        d = np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16)
+    if d.size < rate * 20:
+        continue
+    piece = d[rate * 5: rate * 15].astype(np.float32) / 32768.0
+    if float(np.sqrt(np.mean(piece ** 2))) < 0.015:
+        continue
+    segs = list(router.transcribe(piece, rate, "m2", 0.0, "me"))
+    if not segs:
+        continue
+    text = segs[0].text
+    print(f"\nрусская запись -> {segs[0].lang}: {text[:70]!r}")
+    assert segs[0].lang == "ru", f"русскую речь отправили в {segs[0].lang}"
+    cyr = sum('а' <= c.lower() <= 'я' for c in text)
+    lat = sum(c.isascii() and c.isalpha() for c in text)
+    assert cyr > lat, "русская речь записана латиницей"
+    print("[ok] русская запись осталась в GigaAM и записана кириллицей")
+    ru_done = True
+    break
+assert ru_done, "не нашлось русской записи для проверки"
+
+# --- Без определителя всё уходит в русский --------------------------------
+plain = LanguageRouter(gigaam)
+segs = list(plain.transcribe(wave_en, 16000, "m3", 0.0, "them"))
+assert segs and segs[0].lang == "ru"
+print("\n[ok] без определителя роутер ведёт себя как раньше: всё в GigaAM")
+
+# --- Неуверенный язык наследуется у той же дорожки -------------------------
+router.reset()
+router._last["them"] = False          # прошлая фраза была английской
+short = np.zeros(4000, dtype=np.float32)   # слишком коротко для определителя
+assert router._decide(short, 16000, "them") is False, "язык дорожки не унаследован"
+assert router._decide(short, 16000, "me") is True, "по умолчанию должен быть русский"
+print("[ok] на неразборчивой фразе берётся язык прошлой реплики той же дорожки")
+
+router.reset()
+assert router._decide(short, 16000, "them") is True, "reset не очистил языки"
+print("[ok] новая встреча начинается без памяти о языках")
+
+print("\nРоутер языков работает.")

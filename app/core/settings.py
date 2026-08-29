@@ -42,6 +42,10 @@ class AsrSettings:
     backend: str = "gigaam"      # null | gigaam
     language: str = "ru"
     enabled: bool = True         # распознавать прямо во время встречи
+    # Определять язык каждой фразы и отдавать нерусскую речь Whisper.
+    # Без этого английские реплики записываются кириллицей, как
+    # «холло дис из зе фест сентинс».
+    detect_language: bool = True
 
 
 @dataclass

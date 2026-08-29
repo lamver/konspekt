@@ -155,6 +155,10 @@ class GigaamTranscriber:
         if not text:
             # Тишина или шум: пустой сегмент в транскрипте не нужен.
             return []
+        if not any(ch.isalnum() for ch in text):
+            # Модель с пунктуацией на шуме отдаёт одинокую точку. В окне
+            # это выглядит как реплика, в которой человек ничего не сказал.
+            return []
 
         return [
             TranscriptSegment(

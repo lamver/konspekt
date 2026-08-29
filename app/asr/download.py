@@ -85,6 +85,10 @@ class ModelDownloader:
             target = self.dest / name
             if target.exists():
                 continue
+            # Имя файла может содержать путь, как «onnx/encoder.onnx» у
+            # моделей Hugging Face. Без этого запись падает на несуществующем
+            # каталоге.
+            target.parent.mkdir(parents=True, exist_ok=True)
             self._fetch_with_retries(name, target, on_progress)
 
     def _fetch_with_retries(

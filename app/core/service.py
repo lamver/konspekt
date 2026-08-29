@@ -28,6 +28,11 @@ from ..asr.embedder import MODEL_DIR_NAME as EMBEDDER_DIR_NAME
 from ..asr.embedder import MODEL_FILES as EMBEDDER_FILES
 from ..asr.embedder import MODEL_REPO as EMBEDDER_REPO
 from ..asr.embedder import VoiceEmbedder
+from ..asr.langid import MODEL_DIR_NAME as LANGID_DIR_NAME
+from ..asr.langid import LanguageDetector
+from ..asr.router import LanguageRouter
+from ..asr.whisper import MODEL_DIR_NAME as WHISPER_DIR_NAME
+from ..asr.whisper import WhisperTranscriber
 from ..asr.enroll import (
     MIN_SECONDS,
     PROMPTS,
@@ -103,9 +108,22 @@ class AppService:
         Модель здесь не грузится: только объект. Веса поднимутся сами
         при первом чанке, чтобы не тормозить старт приложения.
         """
-        if self.settings.asr.backend == "gigaam":
-            return GigaamTranscriber(paths.models_dir() / MODEL_DIR_NAME)
-        return NullTranscriber()
+        if self.settings.asr.backend != "gigaam":
+            return NullTranscriber()
+
+        russian = GigaamTranscriber(paths.models_dir() / MODEL_DIR_NAME)
+        if not self.settings.asr.detect_language:
+            return russian
+
+        # Определитель языка и Whisper подключаем, только если их веса на
+        # месте: без них русская речь распознаётся ровно как раньше, а
+        # иностранная останется кириллицей. Это хуже, но работает.
+        detector = LanguageDetector(paths.models_dir() / LANGID_DIR_NAME)
+        foreign = WhisperTranscriber(paths.models_dir() / WHISPER_DIR_NAME)
+        if not (detector.is_downloaded() and foreign.is_downloaded()):
+            log.info("Определение языка выключено: нет весов")
+            return russian
+        return LanguageRouter(russian, detector, foreign)
 
     def _build_capture(self) -> AudioCapture:
         """Настоящий захват, а при его недоступности — заглушка.
@@ -168,6 +186,10 @@ class AppService:
         try:
             self.roster.reset()
             self.roster.forget_all()
+            # Язык прошлой встречи к новой отношения не имеет.
+            reset = getattr(self.transcriber, "reset", None)
+            if callable(reset):
+                reset()
             for person in self.store.list_people():
                 if person.embedding:
                     self.roster.remember(person.id, person.name, np.asarray(person.embedding))
