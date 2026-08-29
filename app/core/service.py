@@ -10,19 +10,31 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from ..asr import NullTranscriber, Transcriber
+from ..asr import (
+    MODEL_FILES,
+    MODEL_REPO,
+    MODEL_TOTAL_BYTES,
+    GigaamTranscriber,
+    ModelDownloader,
+    NullTranscriber,
+    Transcriber,
+    TranscriptionQueue,
+)
 from ..audio import AudioCapture, NullCapture, WasapiCapture
 from ..audio import devices as audio_devices
+from ..core import paths
 from ..core import settings as settings_mod
 from ..core.events import (
     MEETINGS_CHANGED,
     MEETING_UPDATED,
+    MODEL_DOWNLOAD,
     RECORDING_ERROR,
     RECORDING_STARTED,
     RECORDING_STOPPED,
+    TRANSCRIPT_SEGMENT,
     bus,
 )
-from ..core.models import Meeting, MeetingStatus, NoteLine, now
+from ..core.models import Meeting, MeetingStatus, NoteLine, TranscriptSegment, now
 from ..storage import Store
 
 log = logging.getLogger(__name__)
@@ -37,10 +49,26 @@ class AppService:
     ) -> None:
         self.store = store or Store()
         self.settings = settings_mod.load()
+        self.transcriber = transcriber or self._build_transcriber()
+        # Очередь создаётся всегда: она дешёвая, а поток поднимается
+        # только когда реально приходит первый чанк.
+        self.asr_queue = TranscriptionQueue(self.transcriber, self._on_segment)
         self.capture = capture or self._build_capture()
-        self.transcriber = transcriber or NullTranscriber()
+        self.downloader = ModelDownloader(
+            MODEL_REPO, MODEL_FILES, paths.models_dir() / "gigaam-v3-ctc"
+        )
         self.active_meeting_id: str | None = None
         self._recover_stale_recordings()
+
+    def _build_transcriber(self) -> Transcriber:
+        """Движок распознавания по настройкам.
+
+        Модель здесь не грузится: только объект. Веса поднимутся сами
+        при первом чанке, чтобы не тормозить старт приложения.
+        """
+        if self.settings.asr.backend == "gigaam":
+            return GigaamTranscriber(paths.models_dir() / "gigaam-v3-ctc")
+        return NullTranscriber()
 
     def _build_capture(self) -> AudioCapture:
         """Настоящий захват, а при его недоступности — заглушка.
@@ -56,10 +84,75 @@ class AppService:
                 capture_mic=audio.capture_mic,
                 capture_system=audio.capture_system,
                 chunk_seconds=audio.chunk_seconds,
+                on_chunk=self._on_chunk,
             )
         except Exception:
             log.exception("Захват звука недоступен, работаем без записи")
             return NullCapture()
+
+    # --- распознавание ---------------------------------------------------
+
+    def _on_chunk(self, track: str, pcm, offset: float) -> None:
+        """Готовый кусок звука из потока захвата. Возвращаемся мгновенно."""
+        if not self.settings.asr.enabled:
+            return
+        meeting_id = self.active_meeting_id
+        if meeting_id is None:
+            return
+        self.asr_queue.submit(meeting_id, track, pcm, offset)
+
+    def _on_segment(self, segment: TranscriptSegment) -> None:
+        """Распознанный кусок: в базу и сразу во фронт."""
+        try:
+            self.store.add_segment(segment)
+        except Exception:
+            log.exception("Не удалось сохранить сегмент транскрипта")
+        bus.emit(TRANSCRIPT_SEGMENT, {"segment": segment.to_dict()})
+
+    # --- модель ----------------------------------------------------------
+
+    def model_status(self) -> dict[str, Any]:
+        """Состояние весов для UI: скачаны ли, сколько уже лежит."""
+        ready = getattr(self.transcriber, "is_downloaded", lambda: True)()
+        return {
+            "backend": self.settings.asr.backend,
+            "enabled": self.settings.asr.enabled,
+            "name": getattr(self.transcriber, "name", "null"),
+            "downloaded": bool(ready),
+            "loaded": bool(getattr(self.transcriber, "is_loaded", False)),
+            "downloading": self.downloader.is_running,
+            "bytes": self.downloader.downloaded_bytes(),
+            "total_bytes": MODEL_TOTAL_BYTES,
+        }
+
+    def download_model(self) -> dict[str, Any]:
+        """Скачать веса в фоне, отчитываясь в UI."""
+        if self.downloader.is_running:
+            return self.model_status()
+
+        def progress(name: str, done: int, total: int) -> None:
+            bus.emit(
+                MODEL_DOWNLOAD,
+                {"file": name, "bytes": done, "total": total, "state": "downloading"},
+            )
+
+        def finished(error: str | None) -> None:
+            bus.emit(
+                MODEL_DOWNLOAD,
+                {"state": "error" if error else "ready", "message": error or ""},
+            )
+
+        self.downloader.start(progress, finished)
+        return self.model_status()
+
+    def cancel_model_download(self) -> dict[str, Any]:
+        self.downloader.cancel()
+        return self.model_status()
+
+    def set_asr_enabled(self, enabled: bool) -> dict[str, Any]:
+        self.settings.asr.enabled = bool(enabled)
+        settings_mod.save(self.settings)
+        return self.model_status()
 
     def _recover_stale_recordings(self) -> None:
         """Чиним встречи, зависшие в статусе «идёт запись».
@@ -157,6 +250,9 @@ class AppService:
             return None
 
         audio_path = self.capture.stop()
+        # Даём распознаванию доделать хвост очереди: последние фразы
+        # встречи важнее пары секунд ожидания.
+        self.asr_queue.stop()
         self.active_meeting_id = None
         self.store.update_meeting(
             meeting_id,

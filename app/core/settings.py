@@ -32,14 +32,27 @@ class AudioSettings:
 
 
 @dataclass
+class AsrSettings:
+    """Распознавание речи.
+
+    `backend` = null отключает распознавание совсем: приложение остаётся
+    блокнотом с записью звука, а модель не занимает память.
+    """
+
+    backend: str = "gigaam"      # null | gigaam
+    language: str = "ru"
+    enabled: bool = True         # распознавать прямо во время встречи
+
+
+@dataclass
 class Settings:
     window: WindowGeometry = field(default_factory=WindowGeometry)
     audio: AudioSettings = field(default_factory=AudioSettings)
+    asr: AsrSettings = field(default_factory=AsrSettings)
     always_on_top: bool = True
     hotkey: str = "<ctrl>+<shift>+k"
     start_hidden: bool = False
-    # Заготовки под следующие этапы
-    asr_backend: str = "null"       # null | gigaam | whisper
+    # Заготовка под этап 4
     llm_backend: str = "null"       # null | openai | gigachat | local
     language: str = "ru"
 
@@ -54,16 +67,19 @@ def load() -> Settings:
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
         window = WindowGeometry(**raw.pop("window", {}))
-        audio_raw = raw.pop("audio", {})
-        audio = AudioSettings(
-            **{k: v for k, v in audio_raw.items() if k in AudioSettings.__dataclass_fields__}
-        )
+        audio = _section(AudioSettings, raw.pop("audio", {}))
+        asr = _section(AsrSettings, raw.pop("asr", {}))
         known = {k: v for k, v in raw.items() if k in Settings.__dataclass_fields__}
-        return Settings(window=window, audio=audio, **known)
+        return Settings(window=window, audio=audio, asr=asr, **known)
     except Exception:
         # Битый конфиг не повод не запуститься.
         log.exception("Не удалось прочитать настройки, берём значения по умолчанию")
         return Settings()
+
+
+def _section(cls, raw: dict[str, Any]):
+    """Собрать секцию, молча выбросив поля из старых версий конфига."""
+    return cls(**{k: v for k, v in raw.items() if k in cls.__dataclass_fields__})
 
 
 def save(settings: Settings) -> None:

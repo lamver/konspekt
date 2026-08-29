@@ -53,6 +53,16 @@ def audio_dir() -> Path:
 
 
 def models_dir() -> Path:
+    """Каталог весов моделей.
+
+    В режиме разработки удобнее держать их рядом с кодом: не надо лазить
+    в AppData и легко посмотреть, что скачалось. Если папки `models` в
+    репозитории нет (то есть мы внутри собранного бинарника), уходим в
+    пользовательские данные.
+    """
+    local = resource_dir() / "models"
+    if local.is_dir():
+        return local
     path = data_dir() / "models"
     path.mkdir(parents=True, exist_ok=True)
     return path

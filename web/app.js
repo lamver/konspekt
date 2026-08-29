@@ -14,6 +14,7 @@ const state = {
   recordingId: null,
   startedAt: null,
   filter: '',
+  model: {},
   pinned: true,
 };
 
@@ -94,6 +95,15 @@ window.__konspekt_event = function (payload) {
       if (payload.meeting && payload.meeting.id === state.currentId) {
         renderMeta(payload.meeting);
       }
+      break;
+    case 'transcript.segment':
+      // Реплика распознана: показываем сразу, если открыта её встреча.
+      if (payload.segment && payload.segment.meeting_id === state.currentId) {
+        appendSegment(payload.segment);
+      }
+      break;
+    case 'model.download':
+      onModelProgress(payload);
       break;
   }
 };
@@ -180,8 +190,153 @@ async function selectMeeting(id) {
   ui.title.value = meeting.title || '';
   ui.notes.value = meeting.notes || '';
   renderMeta(meeting);
+  renderTranscript(meeting.segments || []);
   renderMeetingList();
   toggleEmptyState();
+}
+
+/* --- Транскрипт --------------------------------------------------------- */
+
+/** Отрисовать транскрипт встречи целиком. */
+function renderTranscript(segments) {
+  ui.transcript.innerHTML = '';
+  for (const seg of segments) appendSegment(seg, false);
+  updateTranscriptEmpty();
+}
+
+/**
+ * Добавить реплику в конец транскрипта.
+ *
+ * Подряд идущие реплики одного источника склеиваем в один блок: иначе
+ * пятисекундные чанки рвут связную речь на нечитаемую лесенку.
+ */
+function appendSegment(seg, scroll = true) {
+  const isMe = seg.speaker === 'me';
+  const last = ui.transcript.lastElementChild;
+
+  if (last && last.dataset.speaker === seg.speaker) {
+    const body = last.querySelector('.turn__text');
+    body.textContent = `${body.textContent} ${seg.text}`.trim();
+    last.dataset.end = seg.end;
+  } else {
+    const turn = document.createElement('div');
+    turn.className = 'turn' + (isMe ? ' turn--me' : '');
+    turn.dataset.speaker = seg.speaker;
+    turn.dataset.end = seg.end;
+
+    const head = document.createElement('div');
+    head.className = 'turn__head';
+
+    const who = document.createElement('span');
+    who.className = 'turn__who';
+    who.textContent = isMe ? 'Я' : 'Собеседник';
+
+    const time = document.createElement('span');
+    time.className = 'turn__time';
+    time.textContent = fmtDuration(seg.start);
+
+    head.appendChild(who);
+    head.appendChild(time);
+
+    const text = document.createElement('div');
+    text.className = 'turn__text';
+    text.textContent = seg.text;
+
+    turn.appendChild(head);
+    turn.appendChild(text);
+    ui.transcript.appendChild(turn);
+  }
+
+  updateTranscriptEmpty();
+  // Прокручиваем к свежей реплике, но только если человек не листает выше.
+  if (scroll) {
+    const pane = ui.transcript.parentElement;
+    const nearBottom = pane.scrollHeight - pane.scrollTop - pane.clientHeight < 80;
+    if (nearBottom) pane.scrollTop = pane.scrollHeight;
+  }
+}
+
+function updateTranscriptEmpty() {
+  ui.transcriptEmpty.hidden = ui.transcript.childElementCount > 0;
+}
+
+/* --- Модель распознавания ------------------------------------------------ */
+
+function fmtMb(bytes) {
+  return (bytes / 1048576).toFixed(0);
+}
+
+/** Показать состояние весов: скачать, идёт загрузка или всё готово. */
+async function refreshModelStatus() {
+  let st;
+  try {
+    st = await api.model_status();
+  } catch (e) {
+    return;
+  }
+  state.model = st;
+
+  if (st.backend === 'null') {
+    ui.modelBar.hidden = true;
+    return;
+  }
+  ui.modelBar.hidden = false;
+
+  if (st.downloaded) {
+    ui.modelText.textContent = st.loaded
+      ? 'Распознавание готово (GigaAM v3)'
+      : 'Модель на месте, загрузится при первой записи';
+    ui.modelProgress.hidden = true;
+    ui.modelAction.hidden = true;
+    ui.modelBar.classList.add('is-ready');
+  } else if (st.downloading) {
+    ui.modelBar.classList.remove('is-ready');
+    ui.modelAction.hidden = false;
+    ui.modelAction.textContent = 'Отменить';
+    ui.modelAction.dataset.act = 'cancel';
+    setModelProgress(st.bytes, st.total_bytes);
+  } else {
+    ui.modelBar.classList.remove('is-ready');
+    ui.modelProgress.hidden = true;
+    ui.modelText.textContent = st.bytes
+      ? `Модель скачана частично (${fmtMb(st.bytes)} из ${fmtMb(st.total_bytes)} МБ)`
+      : `Для распознавания нужна модель, ${fmtMb(st.total_bytes)} МБ`;
+    ui.modelAction.hidden = false;
+    ui.modelAction.textContent = st.bytes ? 'Продолжить' : 'Скачать';
+    ui.modelAction.dataset.act = 'download';
+  }
+}
+
+function setModelProgress(done, total) {
+  ui.modelProgress.hidden = false;
+  const pct = total ? Math.min(100, Math.round((done / total) * 100)) : 0;
+  ui.modelFill.style.width = pct + '%';
+  ui.modelText.textContent = `Качаем модель: ${fmtMb(done)} из ${fmtMb(total)} МБ (${pct}%)`;
+}
+
+function onModelProgress(payload) {
+  if (payload.state === 'downloading') {
+    ui.modelBar.hidden = false;
+    ui.modelAction.hidden = false;
+    ui.modelAction.textContent = 'Отменить';
+    ui.modelAction.dataset.act = 'cancel';
+    setModelProgress(payload.bytes, payload.total || state.model.total_bytes);
+    return;
+  }
+  if (payload.state === 'error') {
+    showToast(payload.message || 'Не удалось скачать модель');
+  }
+  refreshModelStatus();
+}
+
+async function onModelAction() {
+  if (ui.modelAction.dataset.act === 'cancel') {
+    await api.cancel_model_download();
+  } else {
+    ui.modelText.textContent = 'Начинаем скачивание…';
+    await api.download_model();
+  }
+  refreshModelStatus();
 }
 
 function renderMeta(meeting) {
@@ -280,6 +435,7 @@ async function createMeeting() {
   const meeting = await api.create_meeting();
   if (!meeting) return;
   await loadMeetings();
+  refreshModelStatus();
   await selectMeeting(meeting.id);
   ui.title.focus();
   ui.title.select();
@@ -315,6 +471,62 @@ function setupDrag() {
   });
 
   window.addEventListener('mouseup', () => { dragging = false; });
+}
+
+/* --- Изменение размера окна --------------------------------------------- */
+
+/**
+ * Тянем окно за невидимые полосы по краям.
+ *
+ * Смещения копим и отправляем не чаще раза на кадр: каждый вызов идёт
+ * через мост в Python, и на каждом mousemove окно начинало дёргаться.
+ */
+function setupResize() {
+  let edge = null;
+  let lastX = 0;
+  let lastY = 0;
+  let pendingX = 0;
+  let pendingY = 0;
+  let frame = null;
+
+  const flush = () => {
+    frame = null;
+    const dx = pendingX;
+    const dy = pendingY;
+    pendingX = 0;
+    pendingY = 0;
+    if (!edge || (!dx && !dy)) return;
+    if (window.pywebview && window.pywebview.api && window.pywebview.api.resize_window) {
+      window.pywebview.api.resize_window(dx, dy, edge);
+    }
+  };
+
+  document.querySelectorAll('.rz').forEach((zone) => {
+    zone.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return;
+      edge = zone.dataset.edge;
+      lastX = e.screenX;
+      lastY = e.screenY;
+      document.body.classList.add('is-resizing');
+      e.preventDefault();
+    });
+  });
+
+  window.addEventListener('mousemove', (e) => {
+    if (!edge) return;
+    pendingX += e.screenX - lastX;
+    pendingY += e.screenY - lastY;
+    lastX = e.screenX;
+    lastY = e.screenY;
+    if (!frame) frame = requestAnimationFrame(flush);
+  });
+
+  window.addEventListener('mouseup', () => {
+    if (!edge) return;
+    flush();
+    edge = null;
+    document.body.classList.remove('is-resizing');
+  });
 }
 
 /* --- Плашка сообщений --------------------------------------------------- */
@@ -407,6 +619,13 @@ function bindUi() {
     loopbackSelect: el('loopback-select'),
     micEnabled: el('mic-enabled'),
     systemEnabled: el('system-enabled'),
+    transcript: el('transcript'),
+    transcriptEmpty: el('transcript-empty'),
+    modelBar: el('model-bar'),
+    modelText: el('model-text'),
+    modelProgress: el('model-progress'),
+    modelFill: el('model-fill'),
+    modelAction: el('model-action'),
   });
 
   el('btn-new').addEventListener('click', createMeeting);
@@ -420,6 +639,7 @@ function bindUi() {
   el('audio-close').addEventListener('click', () => { ui.audioSheet.hidden = true; });
   el('audio-save').addEventListener('click', saveAudioSheet);
   el('toast-close').addEventListener('click', hideToast);
+  ui.modelAction.addEventListener('click', onModelAction);
   // Клик по затемнению закрывает панель, как принято в подобных окнах.
   ui.audioSheet.addEventListener('click', (e) => {
     if (e.target === ui.audioSheet) ui.audioSheet.hidden = true;
@@ -480,6 +700,7 @@ function bindUi() {
 async function init() {
   bindUi();
   setupDrag();
+  setupResize();
 
   const settings = await api.get_settings();
   if (settings) {

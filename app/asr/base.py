@@ -12,6 +12,9 @@ from typing import Iterable, Protocol, runtime_checkable
 
 from ..core.models import TranscriptSegment
 
+# Все модели, на которые мы целимся, обучены на 16 кГц.
+SAMPLE_RATE = 16000
+
 
 @runtime_checkable
 class Transcriber(Protocol):

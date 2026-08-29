@@ -18,6 +18,10 @@ from ..core.service import AppService
 
 log = logging.getLogger(__name__)
 
+# Тот же минимум, что задан окну при создании.
+MIN_WIDTH = 360
+MIN_HEIGHT = 420
+
 
 class Api:
     def __init__(self, service: AppService) -> None:
@@ -67,6 +71,20 @@ class Api:
     def save_audio_settings(self, fields: dict[str, Any]) -> dict[str, Any]:
         return self._service.save_audio_settings(**fields)
 
+    # --- распознавание ---------------------------------------------------
+
+    def model_status(self) -> dict[str, Any]:
+        return self._service.model_status()
+
+    def download_model(self) -> dict[str, Any]:
+        return self._service.download_model()
+
+    def cancel_model_download(self) -> dict[str, Any]:
+        return self._service.cancel_model_download()
+
+    def set_asr_enabled(self, enabled: bool) -> dict[str, Any]:
+        return self._service.set_asr_enabled(enabled)
+
     # --- заметки ---------------------------------------------------------
 
     def save_notes(self, meeting_id: str, notes: str) -> bool:
@@ -103,6 +121,46 @@ class Api:
     def quit_app(self) -> bool:
         bus.emit(APP_QUIT)
         return True
+
+    def resize_window(self, dx: int, dy: int, edge: str = "se") -> dict[str, Any]:
+        """Растянуть окно за край.
+
+        frameless-окно лишено системных рамок, поэтому тянем сами: фронт
+        шлёт смещение мыши, а мы превращаем его в новый размер. При тяге
+        за левый или верхний край окно ещё и двигается, иначе
+        противоположная сторона уезжала бы вместе с курсором.
+        """
+        if not self._window:
+            return {}
+        try:
+            width, height = self._window.width, self._window.height
+            x, y = self._window.x, self._window.y
+            dx, dy = int(dx), int(dy)
+
+            if "e" in edge:
+                width += dx
+            if "w" in edge:
+                width -= dx
+                x += dx
+            if "s" in edge:
+                height += dy
+            if "n" in edge:
+                height -= dy
+                y += dy
+
+            # Тот же минимум, что задан окну при создании: без него окно
+            # схлопывается в полоску, из которой его не вернуть.
+            width = max(MIN_WIDTH, width)
+            height = max(MIN_HEIGHT, height)
+
+            self._window.resize(width, height)
+            if "w" in edge or "n" in edge:
+                self._window.move(x, y)
+            self._service.save_window_geometry(x, y, width, height)
+            return {"width": width, "height": height}
+        except Exception:
+            log.debug("Не удалось изменить размер окна", exc_info=True)
+            return {}
 
     def toggle_pin(self, pinned: bool) -> bool:
         """Закрепить окно поверх остальных."""

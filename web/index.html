@@ -7,6 +7,16 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <!-- Невидимые полосы по краям: за них тянем frameless-окно -->
+  <div class="rz rz--n" data-edge="n"></div>
+  <div class="rz rz--s" data-edge="s"></div>
+  <div class="rz rz--w" data-edge="w"></div>
+  <div class="rz rz--e" data-edge="e"></div>
+  <div class="rz rz--nw" data-edge="nw"></div>
+  <div class="rz rz--ne" data-edge="ne"></div>
+  <div class="rz rz--sw" data-edge="sw"></div>
+  <div class="rz rz--se" data-edge="se"></div>
+
   <!-- Заголовок окна: за него таскаем frameless-окно -->
   <header class="titlebar" id="titlebar">
     <div class="titlebar__brand">
@@ -101,9 +111,19 @@
           </div>
 
           <div class="pane" data-pane="transcript">
-            <div class="placeholder">
+            <!-- Полоса состояния модели: скачать / грузится / готово -->
+            <div class="model-bar" id="model-bar" hidden>
+              <span class="model-bar__text" id="model-text"></span>
+              <div class="model-bar__progress" id="model-progress" hidden>
+                <div class="model-bar__fill" id="model-fill"></div>
+              </div>
+              <button class="btn-small" id="model-action" hidden></button>
+            </div>
+            <div class="transcript" id="transcript"></div>
+            <div class="placeholder" id="transcript-empty">
               <h3>Транскрипт появится здесь</h3>
-              <p>Распознавание речи через GigaAM — этап 3. Реплики будут разделены на «я» и «собеседник».</p>
+              <p>Начните запись, и распознанная речь будет появляться сразу.
+              Реплики разделены по источнику звука: микрофон — вы, системный звук — собеседник.</p>
             </div>
           </div>
         </div>
