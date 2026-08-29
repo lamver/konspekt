@@ -288,7 +288,7 @@ function appendSegment(seg, scroll = true) {
  * этот же человек определится сам.
  */
 function renameVoice(button, voiceId) {
-  if (!state.meetingId || !voiceId || button.dataset.editing === '1') return;
+  if (!state.currentId || !voiceId || button.dataset.editing === '1') return;
 
   // Правим прямо на месте, а не через window.prompt: системный диалог
   // внутри webview блокирует поток UI и на окне поверх всех выглядит
@@ -316,7 +316,7 @@ function renameVoice(button, voiceId) {
 
     button.textContent = name;
     try {
-      await api().name_voice(state.meetingId, voiceId, name);
+      await api.name_voice(state.currentId, voiceId, name);
     } catch (err) {
       console.error('Не удалось назвать говорящего', err);
       button.textContent = current;
