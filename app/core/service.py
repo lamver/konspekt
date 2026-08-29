@@ -58,6 +58,9 @@ class AppService:
             MODEL_REPO, MODEL_FILES, paths.models_dir() / "gigaam-v3-ctc"
         )
         self.active_meeting_id: str | None = None
+        # Сдвиг времени для второго и последующих включений записи в одной
+        # встрече: без него каждый заход начинался бы с нуля.
+        self.time_offset: float = 0.0
         self._recover_stale_recordings()
 
     def _build_transcriber(self) -> Transcriber:
@@ -99,7 +102,16 @@ class AppService:
         meeting_id = self.active_meeting_id
         if meeting_id is None:
             return
-        self.asr_queue.submit(meeting_id, track, pcm, offset)
+        self.asr_queue.submit(meeting_id, track, pcm, offset + self.time_offset)
+
+    def _last_segment_end(self, meeting_id: str) -> float:
+        """Докуда уже дошёл транскрипт этой встречи, в секундах."""
+        try:
+            segments = self.store.list_segments(meeting_id)
+        except Exception:
+            log.exception("Не удалось прочитать транскрипт встречи %s", meeting_id)
+            return 0.0
+        return max((s.end for s in segments), default=0.0)
 
     def _on_segment(self, segment: TranscriptSegment) -> None:
         """Распознанный кусок: в базу и сразу во фронт."""
@@ -222,6 +234,12 @@ class AppService:
             return None
 
         started = now()
+        # Время сегментов отсчитывается от начала куска записи, а не от
+        # начала встречи. Если запись останавливали и включали снова,
+        # второй заход начался бы опять с нуля и лёг поверх первого:
+        # реплики перемешивались и склеивались в кашу. Поэтому запоминаем,
+        # сколько уже записано, и сдвигаем на эту величину.
+        self.time_offset = self._last_segment_end(meeting_id)
         self.store.update_meeting(
             meeting_id, started_at=started, status=MeetingStatus.RECORDING
         )

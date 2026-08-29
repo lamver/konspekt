@@ -21,6 +21,10 @@ const state = {
 const el = (id) => document.getElementById(id);
 const ui = {};
 
+// Пауза, после которой реплика считается новой, в секундах. Полторы
+// секунды это уже отчётливая остановка, а не вдох посреди фразы.
+const TURN_GAP = 1.5;
+
 let saveTimer = null;
 let timerInterval = null;
 let levelResetTimer = null;
@@ -207,14 +211,19 @@ function renderTranscript(segments) {
 /**
  * Добавить реплику в конец транскрипта.
  *
- * Подряд идущие реплики одного источника склеиваем в один блок: иначе
- * пятисекундные чанки рвут связную речь на нечитаемую лесенку.
+ * Реплики одного источника склеиваем в один блок, но только пока между
+ * ними нет заметной паузы: без склейки связная речь рвётся на лесенку,
+ * а со склейкой напролом весь разговор превращается в одну простыню.
  */
 function appendSegment(seg, scroll = true) {
   const isMe = seg.speaker === 'me';
   const last = ui.transcript.lastElementChild;
 
-  if (last && last.dataset.speaker === seg.speaker) {
+  // Склеиваем только то, что человек сказал подряд. Если между репликами
+  // была заметная пауза, это уже новая мысль и новый абзац, иначе весь
+  // монолог слипается в одну простыню без единого разрыва.
+  const gap = last ? seg.start - Number(last.dataset.end || 0) : Infinity;
+  if (last && last.dataset.speaker === seg.speaker && gap < TURN_GAP) {
     const body = last.querySelector('.turn__text');
     body.textContent = `${body.textContent} ${seg.text}`.trim();
     last.dataset.end = seg.end;
