@@ -1,0 +1,330 @@
+/* Konspekt — визуальный язык: тёплая бумага, серифные заголовки,
+   терракотовый акцент. Минимум хрома, максимум текста. */
+
+:root {
+  --paper:      #FAF9F7;
+  --paper-2:    #F3F1ED;
+  --paper-3:    #EAE7E1;
+  --ink:        #2B2926;
+  --ink-2:      #57534E;
+  --ink-3:      #8B857D;
+  --line:       #E2DED7;
+  --accent:     #D65A3F;
+  --accent-soft:#FBEDE9;
+  --rec:        #DC3545;
+  --radius:     10px;
+  --font-ui:    -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --font-serif: Georgia, "Iowan Old Style", "Times New Roman", serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* Атрибут hidden обязан побеждать любые display из классов ниже. */
+[hidden] { display: none !important; }
+
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+body { display: flex; flex-direction: column; }
+
+/* --- Заголовок окна ---------------------------------------------------- */
+
+.titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 34px;
+  padding: 0 6px 0 12px;
+  background: var(--paper-2);
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+  cursor: default;
+}
+
+.titlebar__brand { display: flex; align-items: center; gap: 7px; }
+
+.logo {
+  width: 13px; height: 15px;
+  border-radius: 2px;
+  background: var(--ink);
+  border-left: 4px solid var(--accent);
+  display: inline-block;
+}
+
+.brand-name {
+  font-family: var(--font-serif);
+  font-size: 13px;
+  letter-spacing: 0.2px;
+  color: var(--ink);
+}
+
+.titlebar__actions { display: flex; gap: 1px; }
+
+.icon-btn {
+  width: 26px; height: 24px;
+  display: grid; place-items: center;
+  border: none; background: transparent;
+  color: var(--ink-3);
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background .12s, color .12s;
+}
+.icon-btn:hover { background: var(--paper-3); color: var(--ink); }
+.icon-btn--close:hover { background: var(--rec); color: #fff; }
+.icon-btn[aria-pressed="true"] { color: var(--accent); background: var(--accent-soft); }
+
+/* --- Раскладка --------------------------------------------------------- */
+
+.layout { flex: 1; display: flex; min-height: 0; }
+
+.sidebar {
+  width: 168px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--paper-2);
+  border-right: 1px solid var(--line);
+  min-height: 0;
+}
+
+.sidebar__head { padding: 8px; }
+
+.btn-new {
+  width: 100%;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 7px 10px;
+  background: var(--ink);
+  color: var(--paper);
+  border: none; border-radius: var(--radius);
+  font-size: 12px; font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background .12s, transform .08s;
+}
+.btn-new:hover { background: #403C37; }
+.btn-new:active { transform: scale(.98); }
+
+.sidebar__search { padding: 0 8px 8px; }
+
+#search {
+  width: 100%;
+  padding: 6px 9px;
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  outline: none;
+  user-select: text;
+}
+#search:focus { border-color: var(--accent); }
+#search::placeholder { color: var(--ink-3); }
+
+.meeting-list { flex: 1; overflow-y: auto; padding: 0 6px 8px; min-height: 0; }
+
+.meeting-item {
+  padding: 8px 9px;
+  border-radius: 8px;
+  cursor: pointer;
+  margin-bottom: 2px;
+  transition: background .1s;
+}
+.meeting-item:hover { background: var(--paper-3); }
+.meeting-item.is-active { background: var(--paper); box-shadow: inset 2px 0 0 var(--accent); }
+
+.meeting-item__title {
+  font-size: 12px; font-weight: 500;
+  color: var(--ink);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  margin-bottom: 2px;
+}
+.meeting-item__meta {
+  font-size: 10.5px;
+  color: var(--ink-3);
+  display: flex; align-items: center; gap: 5px;
+}
+.meeting-item__dot {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--rec);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .3 } }
+
+/* --- Рабочая область ---------------------------------------------------- */
+
+.content { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+
+.empty {
+  flex: 1;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  text-align: center;
+  padding: 24px;
+  gap: 8px;
+}
+.empty__icon {
+  width: 38px; height: 44px;
+  border-radius: 4px;
+  background: var(--paper-3);
+  border-left: 8px solid var(--accent);
+  margin-bottom: 6px;
+}
+.empty h2 { font-family: var(--font-serif); font-size: 17px; font-weight: 400; }
+.empty p { font-size: 12px; color: var(--ink-3); max-width: 250px; line-height: 1.5; }
+
+.btn-primary {
+  margin-top: 10px;
+  padding: 8px 16px;
+  background: var(--accent);
+  color: #fff;
+  border: none; border-radius: var(--radius);
+  font-size: 12px; font-weight: 500; font-family: inherit;
+  cursor: pointer;
+}
+.btn-primary:hover { background: #C24E35; }
+
+.editor { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+
+.editor__head { padding: 14px 18px 8px; }
+
+.meeting-title {
+  width: 100%;
+  font-family: var(--font-serif);
+  font-size: 19px; font-weight: 400;
+  color: var(--ink);
+  background: transparent;
+  border: none; outline: none;
+  padding: 0;
+  user-select: text;
+}
+.meeting-title::placeholder { color: var(--ink-3); }
+
+.meeting-meta { font-size: 11px; color: var(--ink-3); margin-top: 3px; }
+
+/* --- Панель записи ------------------------------------------------------ */
+
+.record-bar {
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 18px 10px;
+}
+
+.btn-record {
+  display: flex; align-items: center; gap: 7px;
+  padding: 6px 13px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 100px;
+  font-size: 12px; font-weight: 500; font-family: inherit;
+  color: var(--ink);
+  cursor: pointer;
+  transition: all .14s;
+  flex-shrink: 0;
+}
+.btn-record:hover { border-color: var(--ink-3); }
+.btn-record.is-recording { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+
+.rec-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--rec);
+  flex-shrink: 0;
+}
+.btn-record.is-recording .rec-dot { animation: pulse 1.2s ease-in-out infinite; }
+
+.levels { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+.level { display: flex; align-items: center; gap: 6px; }
+.level__name { font-size: 10px; color: var(--ink-3); width: 20px; flex-shrink: 0; }
+.level__track {
+  flex: 1; height: 3px;
+  background: var(--paper-3);
+  border-radius: 2px; overflow: hidden;
+}
+.level__fill {
+  height: 100%; width: 0%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width .1s linear;
+}
+.level__fill--them { background: var(--ink-2); }
+
+.timer {
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  color: var(--ink-2);
+  flex-shrink: 0;
+}
+
+/* --- Вкладки ------------------------------------------------------------ */
+
+.tabs {
+  display: flex; gap: 2px;
+  padding: 0 18px;
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+
+.tab {
+  padding: 7px 10px;
+  background: transparent; border: none;
+  border-bottom: 2px solid transparent;
+  font-size: 12px; font-family: inherit;
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: color .12s, border-color .12s;
+}
+.tab:hover { color: var(--ink-2); }
+.tab.is-active { color: var(--ink); border-bottom-color: var(--accent); font-weight: 500; }
+
+.panes { flex: 1; position: relative; min-height: 0; }
+.pane { position: absolute; inset: 0; display: none; flex-direction: column; }
+.pane.is-active { display: flex; }
+
+.notes {
+  flex: 1;
+  width: 100%;
+  padding: 16px 18px;
+  background: transparent;
+  border: none; outline: none; resize: none;
+  font-family: var(--font-serif);
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--ink);
+  user-select: text;
+}
+.notes::placeholder { color: var(--ink-3); font-style: italic; }
+
+.save-hint {
+  padding: 0 18px 8px;
+  font-size: 10.5px;
+  color: var(--ink-3);
+  height: 18px;
+  opacity: 0;
+  transition: opacity .2s;
+}
+.save-hint.is-visible { opacity: 1; }
+
+.placeholder {
+  flex: 1;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  text-align: center; padding: 24px; gap: 6px;
+}
+.placeholder h3 { font-family: var(--font-serif); font-size: 15px; font-weight: 400; color: var(--ink-2); }
+.placeholder p { font-size: 11.5px; color: var(--ink-3); max-width: 260px; line-height: 1.5; }
+
+/* --- Скроллбары --------------------------------------------------------- */
+
+::-webkit-scrollbar { width: 7px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--paper-3); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #D6D1C8; }

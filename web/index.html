@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Konspekt</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Заголовок окна: за него таскаем frameless-окно -->
+  <header class="titlebar" id="titlebar">
+    <div class="titlebar__brand">
+      <span class="logo"></span>
+      <span class="brand-name">Konspekt</span>
+    </div>
+    <div class="titlebar__actions no-drag">
+      <button class="icon-btn" id="btn-pin" title="Поверх всех окон" aria-pressed="true">
+        <svg viewBox="0 0 16 16" width="14" height="14"><path d="M9.5 1.5 14.5 6.5 12 7l-1 4-3-3-4 4.5L4.5 12l4-4L5.5 5 9.5 4.5z" fill="currentColor"/></svg>
+      </button>
+      <button class="icon-btn" id="btn-minimize" title="Свернуть">
+        <svg viewBox="0 0 16 16" width="14" height="14"><rect x="3" y="7.5" width="10" height="1.4" fill="currentColor"/></svg>
+      </button>
+      <button class="icon-btn icon-btn--close" id="btn-hide" title="Скрыть в трей">
+        <svg viewBox="0 0 16 16" width="14" height="14"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.4" fill="none"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <!-- Список встреч -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar__head">
+        <button class="btn-new" id="btn-new">
+          <svg viewBox="0 0 16 16" width="13" height="13"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>
+          Новая встреча
+        </button>
+      </div>
+      <div class="sidebar__search">
+        <input type="search" id="search" placeholder="Поиск по встречам" autocomplete="off">
+      </div>
+      <div class="meeting-list" id="meeting-list"></div>
+    </aside>
+
+    <!-- Рабочая область -->
+    <section class="content" id="content">
+      <div class="empty" id="empty-state">
+        <div class="empty__icon"></div>
+        <h2>Пока пусто</h2>
+        <p>Создайте встречу и пишите тезисы. Konspekt превратит их в готовые заметки.</p>
+        <button class="btn-primary" id="btn-empty-new">Начать встречу</button>
+      </div>
+
+      <div class="editor" id="editor" hidden>
+        <div class="editor__head">
+          <input class="meeting-title" id="meeting-title" placeholder="Название встречи" spellcheck="false">
+          <div class="meeting-meta" id="meeting-meta"></div>
+        </div>
+
+        <!-- Панель записи -->
+        <div class="record-bar" id="record-bar">
+          <button class="btn-record" id="btn-record">
+            <span class="rec-dot"></span>
+            <span class="rec-label" id="rec-label">Начать запись</span>
+          </button>
+          <div class="levels" id="levels" hidden>
+            <div class="level">
+              <span class="level__name">Я</span>
+              <div class="level__track"><div class="level__fill" id="level-me"></div></div>
+            </div>
+            <div class="level">
+              <span class="level__name">Они</span>
+              <div class="level__track"><div class="level__fill level__fill--them" id="level-them"></div></div>
+            </div>
+          </div>
+          <div class="timer" id="timer" hidden>00:00</div>
+        </div>
+
+        <!-- Вкладки -->
+        <div class="tabs">
+          <button class="tab is-active" data-tab="notes">Мои заметки</button>
+          <button class="tab" data-tab="summary">Саммари</button>
+          <button class="tab" data-tab="transcript">Транскрипт</button>
+        </div>
+
+        <div class="panes">
+          <div class="pane is-active" data-pane="notes">
+            <textarea class="notes" id="notes"
+              placeholder="Пишите короткие тезисы прямо во время встречи.&#10;&#10;Konspekt запомнит момент каждой строки и после встречи развернёт их в полноценные заметки."
+              spellcheck="false"></textarea>
+            <div class="save-hint" id="save-hint"></div>
+          </div>
+
+          <div class="pane" data-pane="summary">
+            <div class="placeholder">
+              <h3>Саммари появится здесь</h3>
+              <p>Синтез заметок из ваших тезисов и транскрипта — этап 4.</p>
+            </div>
+          </div>
+
+          <div class="pane" data-pane="transcript">
+            <div class="placeholder">
+              <h3>Транскрипт появится здесь</h3>
+              <p>Распознавание речи через GigaAM — этап 3. Реплики будут разделены на «я» и «собеседник».</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+__pycache__/
+*.py[cod]
+.venv/
+uv.lock
+
+# Локальные данные и веса моделей
+models/
+*.db
+*.db-wal
+*.db-shm
+*.log
+
+# Сборка
+build/
+dist/
+*.spec
+
+# Временные файлы отладки
+_*.ps1
+_*.py
+_*.png
+_*.log
+
+.vscode/
+.idea/
+.DS_Store
