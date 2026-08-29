@@ -11,6 +11,7 @@ import logging
 from typing import Any
 
 from ..asr import (
+    MODEL_DIR_NAME,
     MODEL_FILES,
     MODEL_REPO,
     MODEL_TOTAL_BYTES,
@@ -55,7 +56,7 @@ class AppService:
         self.asr_queue = TranscriptionQueue(self.transcriber, self._on_segment)
         self.capture = capture or self._build_capture()
         self.downloader = ModelDownloader(
-            MODEL_REPO, MODEL_FILES, paths.models_dir() / "gigaam-v3-ctc"
+            MODEL_REPO, MODEL_FILES, paths.models_dir() / MODEL_DIR_NAME
         )
         self.active_meeting_id: str | None = None
         # Сдвиг времени для второго и последующих включений записи в одной
@@ -70,7 +71,7 @@ class AppService:
         при первом чанке, чтобы не тормозить старт приложения.
         """
         if self.settings.asr.backend == "gigaam":
-            return GigaamTranscriber(paths.models_dir() / "gigaam-v3-ctc")
+            return GigaamTranscriber(paths.models_dir() / MODEL_DIR_NAME)
         return NullTranscriber()
 
     def _build_capture(self) -> AudioCapture:

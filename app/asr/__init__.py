@@ -3,6 +3,7 @@
 from .base import NullTranscriber, Transcriber, SAMPLE_RATE
 from .download import ModelDownloader
 from .gigaam import (
+    MODEL_DIR_NAME,
     MODEL_FILES,
     MODEL_REPO,
     MODEL_TOTAL_BYTES,
@@ -18,6 +19,7 @@ __all__ = [
     "TranscriptionQueue",
     "ModelDownloader",
     "ModelMissing",
+    "MODEL_DIR_NAME",
     "MODEL_REPO",
     "MODEL_FILES",
     "MODEL_TOTAL_BYTES",
