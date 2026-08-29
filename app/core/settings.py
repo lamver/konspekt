@@ -50,6 +50,7 @@ class Settings:
     audio: AudioSettings = field(default_factory=AudioSettings)
     asr: AsrSettings = field(default_factory=AsrSettings)
     always_on_top: bool = True
+    theme: str = "system"          # system | light | dark
     hotkey: str = "<ctrl>+<shift>+k"
     start_hidden: bool = False
     # Заготовка под этап 4

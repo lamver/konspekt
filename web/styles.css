@@ -566,3 +566,79 @@ body { display: flex; flex-direction: column; }
 /* Во время растягивания гасим выделение текста, иначе окно тянется
    вместе с подсветкой половины заметок. */
 body.is-resizing { user-select: none; cursor: inherit; }
+
+
+/* --- Тёмная тема --------------------------------------------------------- */
+
+/*
+ * Тема переключается атрибутом на <html>: data-theme="dark" или "light".
+ * Значение "system" атрибут не ставит вовсе, и тогда работает медиазапрос
+ * ниже, то есть решает сама Windows.
+ *
+ * Тёмная палитра не инвертирована механически: бумага становится тёплым
+ * углём, а терракотовый акцент осветлён, иначе на тёмном фоне он гаснет
+ * и перестаёт читаться.
+ */
+:root[data-theme="dark"] {
+  --paper:      #1C1B19;
+  --paper-2:    #232220;
+  --paper-3:    #2E2C29;
+  --ink:        #EDEAE4;
+  --ink-2:      #B5AFA6;
+  --ink-3:      #837D74;
+  --line:       #35322E;
+  --accent:     #E8785C;
+  --accent-soft:#3A2620;
+  --rec:        #F06A75;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]):not([data-theme="dark"]) {
+    --paper:      #1C1B19;
+    --paper-2:    #232220;
+    --paper-3:    #2E2C29;
+    --ink:        #EDEAE4;
+    --ink-2:      #B5AFA6;
+    --ink-3:      #837D74;
+    --line:       #35322E;
+    --accent:     #E8785C;
+    --accent-soft:#3A2620;
+    --rec:        #F06A75;
+  }
+}
+
+/* Своя реплика в транскрипте: в светлой теме рамка была задана цветом
+   напрямую, в тёмной это выглядело бы как светлая царапина. */
+:root[data-theme="dark"] .turn--me .turn__text { border-color: #4A3128; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .turn--me .turn__text { border-color: #4A3128; }
+}
+
+/* --- Переключатель темы -------------------------------------------------- */
+
+.theme-switch {
+  display: flex;
+  gap: 4px;
+  background: var(--paper-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 3px;
+}
+
+.theme-switch button {
+  flex: 1;
+  font-family: inherit;
+  font-size: 11px;
+  padding: 5px 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-3);
+  cursor: pointer;
+}
+.theme-switch button:hover { color: var(--ink); }
+.theme-switch button.is-active {
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .08);
+}

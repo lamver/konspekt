@@ -319,6 +319,14 @@ class AppService:
     def get_settings(self) -> dict[str, Any]:
         return self.settings.to_dict()
 
+    def set_theme(self, theme: str) -> str:
+        """Сохранить тему оформления."""
+        if theme not in ("system", "light", "dark"):
+            theme = "system"
+        self.settings.theme = theme
+        settings_mod.save(self.settings)
+        return theme
+
     def save_window_geometry(self, x: int, y: int, width: int, height: int) -> None:
         self.settings.window.x = int(x)
         self.settings.window.y = int(y)

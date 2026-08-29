@@ -15,6 +15,7 @@ from typing import Any
 
 from ..core.events import APP_QUIT, WINDOW_HIDE, bus
 from ..core.service import AppService
+from . import win32
 
 log = logging.getLogger(__name__)
 
@@ -102,7 +103,8 @@ class Api:
 
     def minimize_window(self) -> bool:
         if self._window:
-            self._window.minimize()
+            if not (win32.AVAILABLE and win32.minimize(self._window)):
+                self._window.minimize()
         return True
 
     def move_window(self, dx: int, dy: int) -> bool:
@@ -113,7 +115,12 @@ class Api:
         """
         if self._window:
             try:
-                self._window.move(self._window.x + int(dx), self._window.y + int(dy))
+                rect = win32.get_rect(self._window) if win32.AVAILABLE else None
+                if rect:
+                    x, y, w, h = rect
+                    win32.set_geometry(self._window, x + int(dx), y + int(dy), w, h)
+                else:
+                    self._window.move(self._window.x + int(dx), self._window.y + int(dy))
             except Exception:
                 log.debug("Не удалось переместить окно", exc_info=True)
         return True
@@ -133,8 +140,12 @@ class Api:
         if not self._window:
             return {}
         try:
-            width, height = self._window.width, self._window.height
-            x, y = self._window.x, self._window.y
+            rect = win32.get_rect(self._window) if win32.AVAILABLE else None
+            if rect:
+                x, y, width, height = rect
+            else:
+                width, height = self._window.width, self._window.height
+                x, y = self._window.x, self._window.y
             dx, dy = int(dx), int(dy)
 
             if "e" in edge:
@@ -153,9 +164,12 @@ class Api:
             width = max(MIN_WIDTH, width)
             height = max(MIN_HEIGHT, height)
 
-            self._window.resize(width, height)
-            if "w" in edge or "n" in edge:
-                self._window.move(x, y)
+            # Один вызов вместо resize+move: иначе окно дёргается, а на
+            # WinForms эти методы ещё и ждут UI-поток и вешают мост.
+            if not (win32.AVAILABLE and win32.set_geometry(self._window, x, y, width, height)):
+                self._window.resize(width, height)
+                if "w" in edge or "n" in edge:
+                    self._window.move(x, y)
             self._service.save_window_geometry(x, y, width, height)
             return {"width": width, "height": height}
         except Exception:
@@ -165,7 +179,10 @@ class Api:
     def toggle_pin(self, pinned: bool) -> bool:
         """Закрепить окно поверх остальных."""
         if self._window:
-            self._window.on_top = bool(pinned)
+            # Через pywebview этот вызов уходил в UI-поток и намертво вешал
+            # окно, потому что тот в это время ждал ответа от моста.
+            if not (win32.AVAILABLE and win32.set_on_top(self._window, bool(pinned))):
+                self._window.on_top = bool(pinned)
         self._service.settings.always_on_top = bool(pinned)
         return bool(pinned)
 
@@ -175,3 +192,7 @@ class Api:
 
     def get_settings(self) -> dict[str, Any]:
         return self._service.get_settings()
+
+    def set_theme(self, theme: str) -> str:
+        """Запомнить выбранную тему. Применяет её сам фронт."""
+        return self._service.set_theme(theme)

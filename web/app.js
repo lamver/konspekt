@@ -533,6 +533,33 @@ function setupResize() {
 
 let toastTimer = null;
 
+/* --- Тема оформления ----------------------------------------------------- */
+
+// "system" снимает атрибут вовсе: дальше решает медиазапрос prefers-color-scheme.
+function applyTheme(theme) {
+  state.theme = theme;
+  if (theme === 'light' || theme === 'dark') {
+    document.documentElement.setAttribute('data-theme', theme);
+  } else {
+    document.documentElement.removeAttribute('data-theme');
+  }
+  try { localStorage.setItem('konspekt.theme', theme); } catch (e) {}
+
+  const box = document.getElementById('theme-switch');
+  if (box) {
+    box.querySelectorAll('button').forEach((b) => {
+      b.classList.toggle('is-active', b.dataset.theme === theme);
+    });
+  }
+}
+
+async function onThemeClick(event) {
+  const btn = event.target.closest('button[data-theme]');
+  if (!btn) return;
+  applyTheme(btn.dataset.theme);
+  await api.set_theme(btn.dataset.theme);
+}
+
 function showToast(text, ms = 7000) {
   if (!ui.toast) return;
   ui.toastText.textContent = text;
@@ -637,6 +664,7 @@ function bindUi() {
 
   el('btn-audio').addEventListener('click', openAudioSheet);
   el('audio-close').addEventListener('click', () => { ui.audioSheet.hidden = true; });
+  el('theme-switch').addEventListener('click', onThemeClick);
   el('audio-save').addEventListener('click', saveAudioSheet);
   el('toast-close').addEventListener('click', hideToast);
   ui.modelAction.addEventListener('click', onModelAction);
@@ -706,6 +734,7 @@ async function init() {
   if (settings) {
     state.pinned = Boolean(settings.always_on_top);
     ui.pin.setAttribute('aria-pressed', String(state.pinned));
+    applyTheme(settings.theme || 'system');
   }
 
   await loadMeetings();

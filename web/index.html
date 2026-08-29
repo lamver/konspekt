@@ -5,6 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Konspekt</title>
   <link rel="stylesheet" href="styles.css">
+  <script>
+    // Тему ставим до первой отрисовки, иначе на запуске мигнёт белым.
+    // Настоящее значение лежит в файле настроек, но ждать мост долго,
+    // поэтому копию держим в localStorage и сверяем её позже.
+    try {
+      var t = localStorage.getItem('konspekt.theme');
+      if (t === 'light' || t === 'dark') {
+        document.documentElement.setAttribute('data-theme', t);
+      }
+    } catch (e) {}
+  </script>
 </head>
 <body>
   <!-- Невидимые полосы по краям: за них тянем frameless-окно -->
@@ -168,6 +179,15 @@
       <p class="hint">Системный звук берётся с того же устройства, куда идёт
       воспроизведение. Если собеседника не слышно, выберите то устройство,
       в котором вы его слушаете.</p>
+
+      <label class="field">
+        <span class="field__label">Оформление</span>
+        <div class="theme-switch" id="theme-switch">
+          <button type="button" data-theme="light">Светлая</button>
+          <button type="button" data-theme="dark">Тёмная</button>
+          <button type="button" data-theme="system">Как в системе</button>
+        </div>
+      </label>
 
       <div class="sheet__foot">
         <button class="btn-primary" id="audio-save">Готово</button>
