@@ -1065,3 +1065,6 @@ body.is-resizing { user-select: none; cursor: inherit; }
 body.is-resizing { cursor: col-resize; }
 body.is-resizing * { user-select: none !important; }
 
+/* Текст встречи выделяется и копируется: окно таскается только за шапку,
+   поэтому запрещать выделение во всём приложении незачем. */
+.transcript, .summary__body, .chat__list { user-select: text; cursor: auto; }
