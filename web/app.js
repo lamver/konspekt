@@ -19,6 +19,8 @@ const state = {
   imports: [],
   llm: {},
   llmBusy: false,
+  // Какую встречу сейчас разбирает модель.
+  busyMeetingId: null,
   summaryText: '',
 };
 
@@ -125,10 +127,9 @@ window.__konspekt_event = function (payload) {
       break;
     case 'summary.status':
       // Длинная встреча разбирается по частям: без этой строки
-      // экран молчит минутами и выглядит зависшим.
-      if (payload.meeting_id === state.currentId) {
-        ui.summaryBody.innerHTML = `<p class="muted">${payload.text}</p>`;
-      }
+      // экран молчит минутами и выглядит зависшим. Пишем в шапку, а не
+      // в тело: тело к этому моменту может уже печатать текст.
+      if (payload.meeting_id === state.currentId) setSummaryStatus(payload.text);
       break;
     case 'summary.ready':
       onSummaryReady(payload);
@@ -189,14 +190,33 @@ function renderSummary(text) {
   ui.summaryBody.hidden = !has;
   ui.summaryEmpty.hidden = has;
   ui.summaryRun.textContent = has ? 'Пересобрать' : 'Сделать заметки';
+  setSummaryStatus('');
 }
 
-/** Идёт ли сейчас генерация: пока идёт, второй запрос не пустим. */
-function setBusy(busy) {
+/** Ход разбора в шапке саммари: чем занята модель прямо сейчас. */
+function setSummaryStatus(text) {
+  ui.summaryTitle.textContent = text || '';
+}
+
+/**
+ * Идёт ли сейчас генерация: пока идёт, второй запрос не пустим.
+ *
+ * Модель одна на всю программу, но считается конкретная встреча.
+ * Запоминаем какая: иначе человек перешёл на соседнюю запись и видит
+ * там «Остановить», будто считается она.
+ */
+function setBusy(busy, meetingId) {
   state.llmBusy = busy;
-  ui.summaryRun.disabled = busy;
-  ui.summaryStop.hidden = !busy;
-  ui.chatSend.disabled = busy;
+  state.busyMeetingId = busy ? (meetingId || state.currentId) : null;
+  syncBusyUi();
+}
+
+/** Привести кнопки в соответствие с тем, считается ли открытая встреча. */
+function syncBusyUi() {
+  const mine = state.llmBusy && state.busyMeetingId === state.currentId;
+  ui.summaryRun.disabled = state.llmBusy;
+  ui.summaryStop.hidden = !mine;
+  ui.chatSend.disabled = state.llmBusy;
 }
 
 async function runSummary() {
@@ -231,7 +251,8 @@ async function startSummary() {
   ui.summaryBody.innerHTML = '';
   ui.summaryBody.hidden = false;
   ui.summaryEmpty.hidden = true;
-  setBusy(true);
+  setBusy(true, state.currentId);
+  setSummaryStatus('Читаем расшифровку…');
   const res = await api.generate_summary(state.currentId);
   if (!res || !res.ok) {
     setBusy(false);
@@ -242,7 +263,7 @@ async function startSummary() {
 
 function onSummaryChunk(payload) {
   if (payload.meeting_id !== state.currentId) return;
-  // Первый кусок затирает строку прогресса: дальше идёт сам текст.
+  if (!state.summaryText) setSummaryStatus('Печатаем заметки…');
   state.summaryText = (state.summaryText || '') + payload.text;
   ui.summaryBody.innerHTML = renderMarkdown(state.summaryText);
   ui.summaryBody.scrollTop = ui.summaryBody.scrollHeight;
@@ -250,6 +271,7 @@ function onSummaryChunk(payload) {
 
 function onSummaryReady(payload) {
   setBusy(false);
+  setSummaryStatus('');
   if (payload.meeting_id !== state.currentId) return;
   if (state.current) state.current.summary = payload.summary || '';
   renderSummary(payload.summary || state.summaryText);
@@ -329,7 +351,7 @@ async function sendQuestion() {
   if (!text || !state.currentId || state.llmBusy) return;
   ui.chatText.value = '';
   resizeChatInput();
-  setBusy(true);
+  setBusy(true, state.currentId);
   const res = await api.ask(state.currentId, text);
   if (!res || !res.ok) {
     setBusy(false);
@@ -489,6 +511,12 @@ async function selectMeeting(id) {
   renderTranscript(meeting.segments || []);
   renderSummary(meeting.summary || '');
   state.summaryText = meeting.summary || '';
+  // Разбор мог остаться на другой встрече: кнопки должны говорить
+  // правду про ту запись, которая открыта сейчас.
+  if (state.llmBusy && state.busyMeetingId === id) {
+    setSummaryStatus('Заметки ещё собираются…');
+  }
+  syncBusyUi();
   // Переписка своя у каждой встречи, поэтому тянем её при каждом
   // переключении, а не держим всё в памяти.
   renderChat((await api.list_chat_messages(id)) || []);
@@ -1346,6 +1374,7 @@ function bindUi() {
     importsList: el('imports-list'),
     dropzone: el('dropzone'),
     summaryBody: el('summary-body'),
+  summaryTitle: el('summary-title'),
     summaryEmpty: el('summary-empty'),
     summaryRun: el('summary-run'),
     summaryStop: el('summary-stop'),
