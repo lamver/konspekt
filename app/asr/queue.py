@@ -97,18 +97,31 @@ class TranscriptionQueue:
         self._thread.start()
         log.info("Очередь распознавания запущена")
 
-    def submit(self, meeting_id: str, speaker: str, pcm: np.ndarray, offset: float) -> None:
+    def submit(
+        self,
+        meeting_id: str,
+        speaker: str,
+        pcm: np.ndarray,
+        offset: float,
+        block: bool = False,
+    ) -> None:
         """Положить чанк в очередь. Вызывается из потоков захвата.
 
         Здесь же ищем речь: копейка процессора на пару арифметических
         действий, зато модель не жуёт тишину, а фразы приходят целыми, а
         не разрезанными по границе чанка.
+
+        block решает судьбу чанка, когда очередь забита. У живой записи
+        выбора нет: поток обязан вернуться к звуковой карте немедленно, и
+        лучше потерять кусок, чем порвать запись. А при разборе файла
+        спешить некуда: там надо ждать, иначе чтение убегает вперёд
+        распознавания и речь молча пропадает.
         """
         with self._lock:
             self._start_locked()
 
         if not self.use_vad:
-            self._put(Job(meeting_id, speaker, pcm, offset))
+            self._put(Job(meeting_id, speaker, pcm, offset), block)
             return
 
         try:
@@ -123,9 +136,9 @@ class TranscriptionQueue:
             # чанк как есть, как это было до появления VAD.
             log.exception("Поиск речи упал, отдаём чанк целиком")
             pieces = []
-            self._put(Job(meeting_id, speaker, pcm, offset))
+            self._put(Job(meeting_id, speaker, pcm, offset), block)
         for piece in pieces:
-            self._put(Job(meeting_id, speaker, piece.pcm, piece.offset))
+            self._put(Job(meeting_id, speaker, piece.pcm, piece.offset), block)
 
     @staticmethod
     def _as_float(pcm: np.ndarray) -> np.ndarray:
@@ -135,7 +148,12 @@ class TranscriptionQueue:
             return arr.astype(np.float32) / 32768.0
         return arr.astype(np.float32, copy=False)
 
-    def _put(self, job: Job) -> None:
+    def _put(self, job: Job, block: bool = False) -> None:
+        if block:
+            # Разбор файла: ждём места сколько надо. Терять речь тут нельзя:
+            # файл никуда не убежит, в отличие от живого звука.
+            self._queue.put(job)
+            return
         try:
             self._queue.put_nowait(job)
         except queue.Full:
@@ -147,7 +165,7 @@ class TranscriptionQueue:
                 self._dropped,
             )
 
-    def flush(self, meeting_id: str) -> None:
+    def flush(self, meeting_id: str, block: bool = False) -> None:
         """Дослать недоговорённые фразы. Зовём по кнопке «стоп».
 
         Без этого последняя фраза встречи оставалась бы внутри VAD и
@@ -159,7 +177,7 @@ class TranscriptionQueue:
         for speaker, vad in items:
             try:
                 for piece in vad.flush():
-                    self._put(Job(meeting_id, speaker, piece.pcm, piece.offset))
+                    self._put(Job(meeting_id, speaker, piece.pcm, piece.offset), block)
             except Exception:
                 log.exception("Не удалось дослать хвост дорожки %s", speaker)
 

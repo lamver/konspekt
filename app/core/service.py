@@ -736,14 +736,17 @@ class AppService:
         """
         if not self.settings.asr.enabled:
             return
-        self.asr_queue.submit(meeting_id, track, pcm, offset)
+        # block=True: чтение файла идёт в десятки раз быстрее распознавания,
+        # и без ожидания очередь переполняется, а речь молча теряется. На
+        # живой 25-минутной записи так пропал 421 фрагмент речи.
+        self.asr_queue.submit(meeting_id, track, pcm, offset, block=True)
 
     def _import_finished(self, meeting_id: str, duration: float) -> None:
         """Файл дочитан: дождаться распознавания и закрыть встречу."""
         try:
             # Последняя фраза сидит внутри VAD и ждёт паузу, которой уже
             # не будет: выталкиваем, иначе потеряем конец записи.
-            self.asr_queue.flush(meeting_id)
+            self.asr_queue.flush(meeting_id, block=True)
             self.asr_queue.wait_idle()
             self._remember_voices(meeting_id)
         except Exception:
