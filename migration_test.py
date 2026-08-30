@@ -7,8 +7,8 @@ from pathlib import Path
 import numpy as np
 
 from app.core import paths
-from app.core.models import Person, Speaker, TranscriptSegment
-from app.storage.db import Store
+from app.core.models import ChatMessage, Person, Speaker, TranscriptSegment
+from app.storage.db import SCHEMA_VERSION, Store
 
 src = paths.db_path()
 print("боевая база:", src, src.exists())
@@ -42,7 +42,7 @@ con.close()
 print(f"после: версия={after_ver}, встреч={after_meetings}, "
       f"сегментов={after_segs}, заметок={after_notes}")
 
-assert after_ver == 3, f"версия схемы {after_ver}"
+assert after_ver == SCHEMA_VERSION, f"версия схемы {after_ver}"
 assert (after_meetings, after_segs, after_notes) == (before_meetings, before_segs, before_notes), \
     "миграция потеряла данные"
 print("[ok] ни одна запись не потеряна")
@@ -72,24 +72,27 @@ if row:
     print(f"[ok] старые реплики читаются ({len(segs)} шт.), "
           f"говорящий совпадает с базой, пустых {empty}")
 
-# Новый сегмент с говорящим
+# Голос берём с заведомо своим идентификатором: в боевой базе уже есть
+# встречи с them-1, и тест ловил бы чужие реплики вместо своей.
 if mid:
     seg = TranscriptSegment(
         meeting_id=mid, speaker=Speaker.THEM, text="проверка",
-        start=1.0, end=2.0, voice_id="them-1",
+        start=1.0, end=2.0, voice_id="test-voice",
         person_id="p-1", voice_label="Собеседник 1")
     store.add_segment(seg)
     got = [s for s in store.list_segments(mid) if s.id == seg.id][0]
-    assert got.voice_label == "Собеседник 1" and got.voice_id == "them-1"
+    assert got.voice_label == "Собеседник 1" and got.voice_id == "test-voice"
     assert got.person_id == "p-1"
     print("[ok] новая реплика сохраняет говорящего")
 
-    assert store.relabel_segments(mid, "them-1", "Анна") == 1
+    assert store.relabel_segments(mid, "test-voice", "Анна") == 1
     got = [s for s in store.list_segments(mid) if s.id == seg.id][0]
     assert got.voice_label == "Анна"
     print("[ok] переименование участника меняет его реплики")
 
-# База знакомых голосов
+# База знакомых голосов. Считаем от того, что уже есть в копии боевой
+# базы: там могут лежать реальные люди, и жёсткое число ломало тест.
+people_before = len(store.list_people())
 vec = np.random.default_rng(1).normal(size=256).astype(np.float32)
 vec /= np.linalg.norm(vec)
 p = Person(name="Валерий", kind="owner", embedding=vec.tolist(), samples=5)
@@ -100,7 +103,7 @@ assert np.allclose(back.embedding, vec, atol=1e-6), "вектор исказил
 print(f"[ok] голос сохранён и прочитан без искажений ({len(back.embedding)} чисел)")
 
 owner = store.get_owner()
-assert owner is not None and owner.id == p.id
+assert owner is not None, "владелец не нашёлся"
 print("[ok] владелец находится по типу")
 
 p.name = "Валерий Петрович"
@@ -108,12 +111,30 @@ p.samples = 9
 store.save_person(p)
 again = store.get_person(p.id)
 assert again.name == "Валерий Петрович" and again.samples == 9
-assert len(store.list_people()) == 1, "обновление создало второго человека"
+assert len(store.list_people()) == people_before + 1, "обновление создало второго человека"
 print("[ok] повторное сохранение обновляет, а не дублирует")
 
 store.delete_person(p.id)
 assert store.get_person(p.id) is None
+assert len(store.list_people()) == people_before, "удаление задело чужих"
 print("[ok] удаление человека работает")
+
+# Переписка по встрече переживает перезапуск: ради этого она и лежит
+# в базе, а не в памяти вкладки.
+if mid:
+    assert store.list_chat_messages(mid) == [], "чат новой встречи не пуст"
+    store.add_chat_message(ChatMessage(meeting_id=mid, role="user", text="кто что обещал?"))
+    a = store.add_chat_message(ChatMessage(meeting_id=mid, role="assistant", text=""))
+    store.update_chat_message(a.id, "Дмитрий обещал удаление данных.")
+    got = store.list_chat_messages(mid)
+    assert [m.role for m in got] == ["user", "assistant"], "порядок реплик сбился"
+    assert got[1].text == "Дмитрий обещал удаление данных.", "ответ не дописался"
+    print("[ok] чат сохраняется, ответ дописывается по кускам")
+
+    store.clear_chat(mid)
+    assert store.list_chat_messages(mid) == [], "очистка чата не сработала"
+    assert store.list_segments(mid), "очистка чата задела расшифровку"
+    print("[ok] очистка чата не трогает расшифровку")
 
 # Повторное открытие уже мигрированной базы ничего не ломает
 store.close()

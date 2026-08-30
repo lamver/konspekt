@@ -54,16 +54,35 @@ class AsrSettings:
 
 
 @dataclass
+class LlmSettings:
+    """Кто пишет саммари и отвечает в чате.
+
+    `backend` = null отключает LLM: остаётся расшифровка и свои пометки.
+    `local` поднимает модель на этой машине, наружу ничего не уходит.
+    `remote` ходит в совместимый с OpenAI сервис по своему адресу.
+    """
+
+    backend: str = "local"        # null | local | remote
+    # Для remote. Ключ лежит в настройках рядом с базой, а не в коде.
+    base_url: str = ""
+    api_key: str = ""
+    model: str = ""
+    # Шаблон саммари под тип встречи, см. TEMPLATE_HINTS.
+    template: str = ""           # "" | one_on_one | sales | standup | interview
+    # Делать саммари сразу после остановки записи.
+    auto_summary: bool = True
+
+
+@dataclass
 class Settings:
     window: WindowGeometry = field(default_factory=WindowGeometry)
     audio: AudioSettings = field(default_factory=AudioSettings)
     asr: AsrSettings = field(default_factory=AsrSettings)
+    llm: LlmSettings = field(default_factory=LlmSettings)
     always_on_top: bool = True
     theme: str = "system"          # system | light | dark
     hotkey: str = "<ctrl>+<shift>+k"
     start_hidden: bool = False
-    # Заготовка под этап 4
-    llm_backend: str = "null"       # null | openai | gigachat | local
     language: str = "ru"
 
     def to_dict(self) -> dict[str, Any]:
@@ -79,8 +98,9 @@ def load() -> Settings:
         window = WindowGeometry(**raw.pop("window", {}))
         audio = _section(AudioSettings, raw.pop("audio", {}))
         asr = _section(AsrSettings, raw.pop("asr", {}))
+        llm = _section(LlmSettings, raw.pop("llm", {}))
         known = {k: v for k, v in raw.items() if k in Settings.__dataclass_fields__}
-        return Settings(window=window, audio=audio, asr=asr, **known)
+        return Settings(window=window, audio=audio, asr=asr, llm=llm, **known)
     except Exception:
         # Битый конфиг не повод не запуститься.
         log.exception("Не удалось прочитать настройки, берём значения по умолчанию")

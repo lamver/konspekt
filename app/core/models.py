@@ -102,6 +102,24 @@ class TranscriptSegment:
 
 
 @dataclass
+class ChatMessage:
+    """Реплика в чате по встрече.
+
+    Роли те же, что у языковой модели, чтобы отдавать историю в запрос
+    без перекладывания полей.
+    """
+
+    id: str = field(default_factory=new_id)
+    meeting_id: str = ""
+    role: str = "user"      # user | assistant
+    text: str = ""
+    created_at: float = field(default_factory=now)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
 class Person:
     """Знакомый голос: узнаём его между встречами.
 

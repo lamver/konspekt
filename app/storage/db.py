@@ -15,6 +15,7 @@ import numpy as np
 
 from ..core import paths
 from ..core.models import (
+    ChatMessage,
     Meeting,
     MeetingStatus,
     NoteLine,
@@ -26,7 +27,7 @@ from ..core.models import (
 
 log = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS meetings (
@@ -90,6 +91,18 @@ CREATE TABLE IF NOT EXISTS meeting_voices (
     PRIMARY KEY (meeting_id, voice_id)
 );
 
+-- Переписка по встрече. Храним и вопросы, и ответы, чтобы диалог
+-- переживал перезапуск: человек возвращается к встрече через неделю
+-- и должен видеть, о чём уже спрашивал.
+CREATE TABLE IF NOT EXISTS chat_messages (
+    id          TEXT PRIMARY KEY,
+    meeting_id  TEXT NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,
+    role        TEXT NOT NULL DEFAULT 'user',  -- user | assistant
+    text        TEXT NOT NULL DEFAULT '',
+    created_at  REAL NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_chat_meeting ON chat_messages(meeting_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_notes_meeting ON note_lines(meeting_id);
 CREATE INDEX IF NOT EXISTS idx_segments_meeting ON transcript_segments(meeting_id, start_s);
 CREATE INDEX IF NOT EXISTS idx_meetings_created ON meetings(created_at DESC);
@@ -231,6 +244,47 @@ class Store:
             )
             for r in rows
         ]
+
+    # --- чат по встрече --------------------------------------------------
+
+    def add_chat_message(self, msg: ChatMessage) -> ChatMessage:
+        with self._lock:
+            self._conn.execute(
+                """INSERT INTO chat_messages (id, meeting_id, role, text, created_at)
+                   VALUES (?,?,?,?,?)""",
+                (msg.id, msg.meeting_id, msg.role, msg.text, msg.created_at),
+            )
+            self._conn.commit()
+        return msg
+
+    def list_chat_messages(self, meeting_id: str) -> list[ChatMessage]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM chat_messages WHERE meeting_id=? ORDER BY created_at",
+                (meeting_id,),
+            ).fetchall()
+        return [
+            ChatMessage(
+                id=r["id"], meeting_id=r["meeting_id"], role=r["role"],
+                text=r["text"], created_at=r["created_at"],
+            )
+            for r in rows
+        ]
+
+    def update_chat_message(self, message_id: str, text: str) -> None:
+        """Дописать ответ, который собирался по кускам во время потока."""
+        with self._lock:
+            self._conn.execute(
+                "UPDATE chat_messages SET text=? WHERE id=?", (text, message_id)
+            )
+            self._conn.commit()
+
+    def clear_chat(self, meeting_id: str) -> None:
+        with self._lock:
+            self._conn.execute(
+                "DELETE FROM chat_messages WHERE meeting_id=?", (meeting_id,)
+            )
+            self._conn.commit()
 
     # --- транскрипт (этап 3) ---------------------------------------------
 
