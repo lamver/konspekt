@@ -17,6 +17,9 @@ const state = {
   model: {},
   pinned: true,
   imports: [],
+  llm: {},
+  llmBusy: false,
+  summaryText: '',
 };
 
 const el = (id) => document.getElementById(id);
@@ -83,6 +86,7 @@ window.__konspekt_event = function (payload) {
       // Именно refreshMeta, а не selectMeeting: перезагрузка встречи
       // затёрла бы текст, который пользователь печатает прямо сейчас.
       if (state.currentId) refreshMeta(state.currentId);
+      maybeAutoSummary(payload.meeting_id);
       break;
     case 'recording.level':
       renderLevels(payload.me, payload.them);
@@ -116,8 +120,289 @@ window.__konspekt_event = function (payload) {
     case 'import.progress':
       onImportProgress(payload.task);
       break;
+    case 'summary.chunk':
+      onSummaryChunk(payload);
+      break;
+    case 'summary.status':
+      // Длинная встреча разбирается по частям: без этой строки
+      // экран молчит минутами и выглядит зависшим.
+      if (payload.meeting_id === state.currentId) {
+        ui.summaryBody.innerHTML = `<p class="muted">${payload.text}</p>`;
+      }
+      break;
+    case 'summary.ready':
+      onSummaryReady(payload);
+      break;
+    case 'summary.error':
+      setBusy(false);
+      renderSummary(state.current ? state.current.summary : '');
+      showToast(payload.error || 'Не удалось сделать заметки');
+      break;
+    case 'chat.chunk':
+      onChatChunk(payload);
+      break;
+    case 'chat.message':
+      onChatMessage(payload);
+      break;
+    case 'chat.error':
+      onChatError(payload);
+      break;
   }
 };
+
+/* --- Саммари и чат ------------------------------------------------------ */
+
+/**
+ * Разметка саммари.
+ *
+ * Модель отвечает markdown, но тащить ради этого библиотеку в билд
+ * незачем: нам нужны только жирный текст, списки и абзацы. Всё остальное
+ * показываем как есть.
+ */
+function renderMarkdown(text) {
+  const esc = (s) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+  const out = [];
+  let list = null;
+
+  for (const raw of String(text || '').split('\n')) {
+    const line = raw.trim();
+    if (!line) { if (list) { out.push(`<ul>${list.join('')}</ul>`); list = null; } continue; }
+
+    const bold = esc(line).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    const item = bold.match(/^[-*•]\s+(.*)$/);
+    if (item) {
+      (list = list || []).push(`<li>${item[1]}</li>`);
+      continue;
+    }
+    if (list) { out.push(`<ul>${list.join('')}</ul>`); list = null; }
+    // Строка целиком жирная — это заголовок раздела.
+    if (/^<strong>[^<]*<\/strong>$/.test(bold)) out.push(`<h4>${bold}</h4>`);
+    else out.push(`<p>${bold}</p>`);
+  }
+  if (list) out.push(`<ul>${list.join('')}</ul>`);
+  return out.join('');
+}
+
+function renderSummary(text) {
+  const has = Boolean((text || '').trim());
+  ui.summaryBody.innerHTML = has ? renderMarkdown(text) : '';
+  ui.summaryBody.hidden = !has;
+  ui.summaryEmpty.hidden = has;
+  ui.summaryRun.textContent = has ? 'Пересобрать' : 'Сделать заметки';
+}
+
+/** Идёт ли сейчас генерация: пока идёт, второй запрос не пустим. */
+function setBusy(busy) {
+  state.llmBusy = busy;
+  ui.summaryRun.disabled = busy;
+  ui.summaryStop.hidden = !busy;
+  ui.chatSend.disabled = busy;
+}
+
+async function runSummary() {
+  if (!state.currentId || state.llmBusy) return;
+  await startSummary();
+}
+
+/**
+ * Саммари сразу после остановки записи.
+ *
+ * Смысл программы в том, чтобы заметки появлялись сами: человек
+ * закрывает звонок и видит готовый разбор, а не ещё одну кнопку.
+ */
+async function maybeAutoSummary(meetingId) {
+  if (!meetingId || meetingId !== state.currentId) return;
+  if (state.llmBusy) return;
+  const status = state.llm && state.llm.backend ? state.llm : await api.llm_status();
+  if (status) state.llm = status;
+  if (!status || !status.enabled || !status.auto_summary) return;
+  // Последние реплики ещё доезжают из распознавания, а без них
+  // саммари потеряет концовку встречи.
+  setTimeout(() => {
+    if (meetingId === state.currentId && !state.llmBusy) startSummary();
+  }, 1500);
+}
+
+async function startSummary() {
+  // Заметки могли быть только что напечатаны: они важнее расшифровки,
+  // и уходить в модель должны вместе с ней.
+  flushNotes();
+  state.summaryText = '';
+  ui.summaryBody.innerHTML = '';
+  ui.summaryBody.hidden = false;
+  ui.summaryEmpty.hidden = true;
+  setBusy(true);
+  const res = await api.generate_summary(state.currentId);
+  if (!res || !res.ok) {
+    setBusy(false);
+    renderSummary(state.current ? state.current.summary : '');
+    showToast((res && res.error) || 'Не удалось сделать заметки');
+  }
+}
+
+function onSummaryChunk(payload) {
+  if (payload.meeting_id !== state.currentId) return;
+  // Первый кусок затирает строку прогресса: дальше идёт сам текст.
+  state.summaryText = (state.summaryText || '') + payload.text;
+  ui.summaryBody.innerHTML = renderMarkdown(state.summaryText);
+  ui.summaryBody.scrollTop = ui.summaryBody.scrollHeight;
+}
+
+function onSummaryReady(payload) {
+  setBusy(false);
+  if (payload.meeting_id !== state.currentId) return;
+  if (state.current) state.current.summary = payload.summary || '';
+  renderSummary(payload.summary || state.summaryText);
+}
+
+/* --- Переписка ---------------------------------------------------------- */
+
+function renderChat(messages) {
+  ui.chatList.innerHTML = '';
+  for (const msg of messages) appendChatMessage(msg);
+  ui.chatHint.hidden = messages.length > 0;
+  ui.chatClear.hidden = messages.length === 0;
+}
+
+function appendChatMessage(msg) {
+  // Пустая заготовка под ответ уже могла быть отрисована: обновляем её,
+  // а не плодим вторую с тем же идентификатором.
+  let node = ui.chatList.querySelector(`[data-msg="${msg.id}"]`);
+  if (!node) {
+    node = document.createElement('div');
+    node.className = `bubble bubble--${msg.role === 'user' ? 'me' : 'bot'}`;
+    node.dataset.msg = msg.id;
+    ui.chatList.appendChild(node);
+  }
+  setBubbleText(node, msg.text || '');
+  ui.chatHint.hidden = true;
+  ui.chatClear.hidden = false;
+  scrollChat();
+}
+
+function setBubbleText(node, text) {
+  if (text.trim()) {
+    node.classList.remove('is-waiting');
+    node.innerHTML = renderMarkdown(text);
+  } else {
+    // Пустой ответ значит, что модель ещё думает: показываем это,
+    // иначе на экране просто пустой прямоугольник.
+    node.classList.add('is-waiting');
+    node.innerHTML = '<span class="dots"><i></i><i></i><i></i></span>';
+  }
+}
+
+function onChatChunk(payload) {
+  if (payload.meeting_id !== state.currentId) return;
+  const node = ui.chatList.querySelector(`[data-msg="${payload.message_id}"]`);
+  if (!node) return;
+  const text = (node.dataset.text || '') + payload.text;
+  node.dataset.text = text;
+  setBubbleText(node, text);
+  scrollChat();
+}
+
+function onChatMessage(payload) {
+  if (payload.meeting_id !== state.currentId) return;
+  const msg = payload.message || {};
+  if (payload.done) setBusy(false);
+  const node = ui.chatList.querySelector(`[data-msg="${msg.id}"]`);
+  if (node) node.dataset.text = msg.text || '';
+  appendChatMessage(msg);
+}
+
+function onChatError(payload) {
+  setBusy(false);
+  showToast(payload.error || 'Не удалось получить ответ');
+  if (payload.meeting_id !== state.currentId) return;
+  // Пустой пузырь без ответа выглядит как зависшая программа: убираем.
+  const node = ui.chatList.querySelector(`[data-msg="${payload.message_id}"]`);
+  if (node) node.remove();
+}
+
+function scrollChat() {
+  ui.chatList.scrollTop = ui.chatList.scrollHeight;
+}
+
+async function sendQuestion() {
+  const text = ui.chatText.value.trim();
+  if (!text || !state.currentId || state.llmBusy) return;
+  ui.chatText.value = '';
+  resizeChatInput();
+  setBusy(true);
+  const res = await api.ask(state.currentId, text);
+  if (!res || !res.ok) {
+    setBusy(false);
+    showToast((res && res.error) || 'Не удалось задать вопрос');
+  }
+}
+
+/** Поле ввода растёт под текст, но не больше трети экрана. */
+function resizeChatInput() {
+  ui.chatText.style.height = 'auto';
+  ui.chatText.style.height = Math.min(ui.chatText.scrollHeight, 120) + 'px';
+}
+
+async function clearChat() {
+  if (!state.currentId) return;
+  await api.clear_chat(state.currentId);
+  renderChat([]);
+}
+
+/* --- Настройки модели --------------------------------------------------- */
+
+const LLM_HINTS = {
+  local: 'Заметки считаются на этом компьютере. Ничего не уходит в сеть, но первый ответ ждёт загрузки модели.',
+  remote: 'Запись уходит на указанный сервер. Быстрее и умнее, но это уже не приватно.',
+  'null': 'Заметки и ответы выключены. Останутся запись, расшифровка и ваши пометки.',
+};
+
+function renderLlmSettings(status) {
+  if (!status) return;
+  state.llm = status;
+  ui.llmBackend.value = status.backend || 'local';
+  ui.llmRemote.hidden = status.backend !== 'remote';
+  ui.llmUrl.value = status.base_url || '';
+  ui.llmModel.value = status.model || '';
+  ui.llmAuto.checked = Boolean(status.auto_summary);
+
+  let hint = LLM_HINTS[status.backend] || '';
+  if (status.backend === 'local' && !status.model_ready) {
+    hint += ' Модель ещё не скачана: это произойдёт при первом запросе.';
+  }
+  ui.llmHint.textContent = hint;
+  ui.llmCheckResult.textContent = '';
+}
+
+async function refreshLlmStatus() {
+  renderLlmSettings(await api.llm_status());
+}
+
+async function saveLlmSettings() {
+  const fields = {
+    backend: ui.llmBackend.value,
+    auto_summary: ui.llmAuto.checked,
+  };
+  if (ui.llmBackend.value === 'remote') {
+    fields.base_url = ui.llmUrl.value.trim();
+    fields.model = ui.llmModel.value.trim();
+    // Пустое поле ключа значит «не менять»: мы его обратно не показываем,
+    // и затирать сохранённый ключ пустотой нельзя.
+    if (ui.llmKey.value) fields.api_key = ui.llmKey.value;
+  }
+  renderLlmSettings(await api.save_llm_settings(fields));
+}
+
+async function checkLlm() {
+  ui.llmCheckResult.textContent = 'Проверяем…';
+  await saveLlmSettings();
+  const res = await api.check_llm();
+  if (res && res.ok) {
+    ui.llmCheckResult.textContent = 'Связь есть, модель отвечает';
+  } else {
+    ui.llmCheckResult.textContent = (res && res.error) || 'Связи нет';
+  }
+}
 
 /* --- Утилиты ------------------------------------------------------------ */
 
@@ -202,6 +487,11 @@ async function selectMeeting(id) {
   ui.notes.value = meeting.notes || '';
   renderMeta(meeting);
   renderTranscript(meeting.segments || []);
+  renderSummary(meeting.summary || '');
+  state.summaryText = meeting.summary || '';
+  // Переписка своя у каждой встречи, поэтому тянем её при каждом
+  // переключении, а не держим всё в памяти.
+  renderChat((await api.list_chat_messages(id)) || []);
   renderMeetingList();
   toggleEmptyState();
 }
@@ -692,6 +982,7 @@ async function openAudioSheet() {
   ui.systemEnabled.checked = sel.capture_system !== false;
   refreshEnrollment();
   refreshPeople();
+  refreshLlmStatus();
   ui.audioSheet.hidden = false;
 }
 
@@ -1054,6 +1345,24 @@ function bindUi() {
     imports: el('imports'),
     importsList: el('imports-list'),
     dropzone: el('dropzone'),
+    summaryBody: el('summary-body'),
+    summaryEmpty: el('summary-empty'),
+    summaryRun: el('summary-run'),
+    summaryStop: el('summary-stop'),
+    chatList: el('chat-list'),
+    chatHint: el('chat-hint'),
+    chatText: el('chat-text'),
+    chatSend: el('chat-send'),
+    chatClear: el('chat-clear'),
+    llmBackend: el('llm-backend'),
+    llmRemote: el('llm-remote'),
+    llmUrl: el('llm-url'),
+    llmKey: el('llm-key'),
+    llmModel: el('llm-model'),
+    llmAuto: el('llm-auto'),
+    llmHint: el('llm-hint'),
+    llmCheck: el('llm-check'),
+    llmCheckResult: el('llm-check-result'),
   });
 
   el('btn-new').addEventListener('click', createMeeting);
@@ -1077,6 +1386,24 @@ function bindUi() {
   el('enroll-forget').addEventListener('click', onForgetOwner);
   el('toast-close').addEventListener('click', hideToast);
   ui.modelAction.addEventListener('click', onModelAction);
+
+  ui.summaryRun.addEventListener('click', runSummary);
+  ui.summaryStop.addEventListener('click', () => api.stop_generation());
+  ui.chatSend.addEventListener('click', sendQuestion);
+  ui.chatClear.addEventListener('click', clearChat);
+  ui.chatText.addEventListener('input', resizeChatInput);
+  ui.chatText.addEventListener('keydown', (e) => {
+    // Enter отправляет, Shift+Enter переносит строку: вопросы
+    // короткие, и тянуться к кнопке каждый раз утомительно.
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendQuestion(); }
+  });
+
+  ui.llmBackend.addEventListener('change', saveLlmSettings);
+  ui.llmAuto.addEventListener('change', saveLlmSettings);
+  ui.llmUrl.addEventListener('change', saveLlmSettings);
+  ui.llmKey.addEventListener('change', saveLlmSettings);
+  ui.llmModel.addEventListener('change', saveLlmSettings);
+  ui.llmCheck.addEventListener('click', checkLlm);
   // Клик по затемнению закрывает панель, как принято в подобных окнах.
   ui.audioSheet.addEventListener('click', (e) => {
     if (e.target === ui.audioSheet) ui.audioSheet.hidden = true;

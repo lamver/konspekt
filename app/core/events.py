@@ -61,6 +61,9 @@ SUMMARY_READY = "summary.ready"
 # экране невыносимо, а текст, который печатается на глазах, ощущается
 # быстрым даже при той же общей задержке.
 SUMMARY_CHUNK = "summary.chunk"
+# Длинная встреча разбирается по частям, и это минуты молчания.
+# Сообщаем словами, что происходит, иначе это читается как зависание.
+SUMMARY_STATUS = "summary.status"
 SUMMARY_ERROR = "summary.error"
 CHAT_CHUNK = "chat.chunk"
 CHAT_MESSAGE = "chat.message"

@@ -62,6 +62,7 @@ from ..core.events import (
     SUMMARY_CHUNK,
     SUMMARY_ERROR,
     SUMMARY_READY,
+    SUMMARY_STATUS,
     TRANSCRIPT_SEGMENT,
     bus,
 )
@@ -77,9 +78,18 @@ from ..core.models import (
     now,
 )
 from ..llm import LlmError, LlmManager, chat_messages, summary_messages
+from ..llm.chunking import estimate_tokens, fits, split_transcript
+from ..llm.prompts import chunk_messages, merge_messages
 from ..storage import Store
 
 log = logging.getLogger(__name__)
+
+# Сколько токенов отдаём под расшифровку. Окно модели 32k, но в нём
+# живёт ещё и ответ, и промпт, и заметки человека. Цифры взяты с
+# запасом: отказ сервера хуже, чем лишняя часть при разборе.
+TRANSCRIPT_BUDGET = 24000
+# В чате места меньше: туда же идёт саммари и вся переписка.
+CHAT_BUDGET = 20000
 
 
 class AppService:
@@ -868,7 +878,16 @@ class AppService:
             def on_chunk(piece: str) -> None:
                 bus.emit(SUMMARY_CHUNK, {"meeting_id": meeting_id, "text": piece})
 
-            text = self.llm.client().stream(
+            client = self.llm.client()
+            if not fits(transcript, TRANSCRIPT_BUDGET):
+                # Полуторачасовая встреча в окно не влезает, и сервер
+                # отвечает отказом. Разбираем по частям, а потом сводим:
+                # человеку это видно только как чуть более долгое ожидание.
+                messages = self._summary_by_parts(
+                    meeting, transcript, client, meeting_id
+                )
+
+            text = client.stream(
                 messages, on_chunk=on_chunk, should_stop=lambda: self._llm_cancel
             )
             # Пустой результат не затирает прежнее саммари: человек мог
@@ -886,6 +905,52 @@ class AppService:
         finally:
             with self._llm_lock:
                 self._llm_busy = False
+
+    def _summary_by_parts(self, meeting, transcript, client, meeting_id):
+        """Разобрать длинную встречу по частям и вернуть запрос на сводку.
+
+        Каждая часть превращается в черновик, и уже черновики сводятся в
+        готовые заметки. Прогресс показываем словами: молчание на две
+        минуты человек читает как зависание.
+        """
+        parts = split_transcript(transcript, TRANSCRIPT_BUDGET)
+        log.info("Встреча длинная, разбираем по частям: %d", len(parts))
+        drafts: list[str] = []
+        for i, part in enumerate(parts, 1):
+            if self._llm_cancel:
+                break
+            bus.emit(SUMMARY_STATUS, {
+                "meeting_id": meeting_id,
+                "text": f"Встреча длинная, разбираем часть {i} из {len(parts)}…",
+            })
+            drafts.append(client.complete(chunk_messages(part), max_tokens=700))
+
+        bus.emit(SUMMARY_STATUS, {"meeting_id": meeting_id,
+                                  "text": "Сводим части вместе…"})
+        return merge_messages(
+            title=meeting.title,
+            drafts=drafts,
+            notes=meeting.notes,
+            template=self.settings.llm.template or meeting.template,
+        )
+
+    def _chat_transcript(self, meeting_id: str, summary: str) -> str:
+        """Расшифровка для чата, урезанная под окно контекста.
+
+        В чате места меньше, чем в саммари: туда же идут заметки и вся
+        переписка. Если встреча не влезает, берём её конец: обычно
+        спрашивают про договорённости, а они звучат ближе к концу.
+        Начало при этом не теряется совсем, потому что саммари уже
+        лежит в том же запросе.
+        """
+        text = self.transcript_text(meeting_id)
+        budget = CHAT_BUDGET - estimate_tokens(summary or "")
+        if fits(text, budget):
+            return text
+        parts = split_transcript(text, budget)
+        log.info("Расшифровка не влезла в чат, берём последнюю часть из %d", len(parts))
+        return ("(начало встречи опущено, оно есть в заметках выше)\n\n"
+                + parts[-1])
 
     def stop_generation(self) -> dict[str, Any]:
         """Прервать генерацию: ответ уже не нужен или пошёл не туда."""
@@ -948,7 +1013,7 @@ class AppService:
 
             messages = chat_messages(
                 title=meeting.title,
-                transcript=self.transcript_text(meeting_id),
+                transcript=self._chat_transcript(meeting_id, meeting.summary),
                 history=history,
                 question=question,
                 summary=meeting.summary,

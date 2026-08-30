@@ -130,9 +130,41 @@
           </div>
 
           <div class="pane" data-pane="summary">
-            <div class="placeholder">
-              <h3>Саммари появится здесь</h3>
-              <p>Синтез заметок из ваших тезисов и транскрипта — этап 4.</p>
+            <!-- Саммари закреплено сверху, переписка идёт под ним:
+                 заметки нужны постоянно, а вопросы приходят по ходу. -->
+            <div class="summary" id="summary">
+              <div class="summary__head">
+                <span class="summary__title">Саммари</span>
+                <div class="summary__actions">
+                  <button class="btn-small" id="summary-run">Сделать заметки</button>
+                  <button class="btn-small" id="summary-stop" hidden>Остановить</button>
+                </div>
+              </div>
+              <div class="summary__body" id="summary-body"></div>
+              <div class="placeholder placeholder--tight" id="summary-empty">
+                <h3>Заметок пока нет</h3>
+                <p>Нажмите «Сделать заметки», и Konspekt соберёт из записи
+                решения, задачи и открытые вопросы.</p>
+              </div>
+            </div>
+
+            <div class="chat" id="chat">
+              <div class="chat__head">
+                <span>Вопросы по встрече</span>
+                <button class="btn-link" id="chat-clear" hidden>Очистить</button>
+              </div>
+              <div class="chat__list" id="chat-list"></div>
+              <div class="chat__hint" id="chat-hint">
+                Спросите что угодно об этой встрече: кто что обещал,
+                о чём договорились, что осталось нерешённым.
+              </div>
+              <div class="chat__input">
+                <textarea id="chat-text" rows="1" placeholder="Спросить о встрече…"
+                  spellcheck="false"></textarea>
+                <button class="btn-send" id="chat-send" title="Отправить">
+                  <svg viewBox="0 0 16 16" width="14" height="14"><path d="M2 8h11M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -229,6 +261,41 @@
           </div>
         </div>
       </label>
+
+      <label class="field">
+        <span class="field__label">Заметки и ответы</span>
+        <select id="llm-backend">
+          <option value="local">На этом компьютере</option>
+          <option value="remote">На своём сервере</option>
+          <option value="null">Выключить</option>
+        </select>
+      </label>
+      <p class="hint" id="llm-hint"></p>
+
+      <div class="llm-remote" id="llm-remote" hidden>
+        <label class="field">
+          <span class="field__label">Адрес сервера</span>
+          <input type="text" id="llm-url" placeholder="https://api.example.com/v1" spellcheck="false">
+        </label>
+        <label class="field">
+          <span class="field__label">Ключ доступа</span>
+          <input type="password" id="llm-key" placeholder="Ключ хранится только на этом компьютере" spellcheck="false">
+        </label>
+        <label class="field">
+          <span class="field__label">Модель</span>
+          <input type="text" id="llm-model" placeholder="gpt-4o-mini" spellcheck="false">
+        </label>
+      </div>
+
+      <label class="check">
+        <input type="checkbox" id="llm-auto" checked>
+        <span>Делать заметки сразу после остановки записи</span>
+      </label>
+
+      <div class="voice-enroll__row">
+        <button class="btn-secondary" type="button" id="llm-check">Проверить связь</button>
+        <span class="hint" id="llm-check-result"></span>
+      </div>
 
       <label class="field" id="people-field" hidden>
         <span class="field__label">Знакомые голоса</span>

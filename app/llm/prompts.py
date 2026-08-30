@@ -142,6 +142,66 @@ def chat_messages(
     return messages
 
 
+CHUNK_SYSTEM = """Ты выписываешь главное из куска записи встречи.
+
+Правила:
+- Только то, что сказано в этом куске. Ничего не додумывай.
+- Короткими пунктами: решения, взятые обязательства, открытые вопросы.
+- Сохраняй имена и названные сроки дословно.
+- Это черновик, а не готовые заметки: не подводи итогов.
+- Отвечай на русском языке."""
+
+MERGE_SYSTEM = """Ты собираешь заметки о встрече из черновиков её частей.
+
+Правила:
+- Черновики идут по порядку, от начала встречи к концу.
+- Объединяй повторы: одно и то же обсуждали в нескольких частях.
+- Если в конце решение отменили или изменили, верным считается позднее.
+- Не добавляй ничего, чего нет в черновиках.
+- Отвечай на русском языке. Без вступлений и заключений."""
+
+
+def chunk_messages(text: str) -> list[Message]:
+    """Выжимка из куска длинной встречи."""
+    return [
+        {"role": "system", "content": CHUNK_SYSTEM},
+        {"role": "user", "content": text.strip()},
+    ]
+
+
+def merge_messages(
+    title: str,
+    drafts: list[str],
+    notes: str = "",
+    template: str = "general",
+) -> list[Message]:
+    """Собрать итоговые заметки из черновиков частей.
+
+    Работает по тому же шаблону вывода, что и обычное саммари: человеку
+    не должно быть видно, что длинную встречу разбирали по частям.
+    """
+    system = MERGE_SYSTEM
+    extra = TEMPLATE_HINTS.get(template, "")
+    if extra:
+        system = f"{system}\n\n{extra}"
+
+    body = "\n\n".join(
+        f"Часть {i + 1}:\n{d.strip()}" for i, d in enumerate(drafts) if d.strip()
+    )
+    notes_block = ""
+    if notes.strip():
+        notes_block = NOTES_BLOCK.format(notes=notes.strip())
+
+    user = SUMMARY_TEMPLATE.format(notes_block=notes_block, transcript=body)
+    user = user.replace("Вот запись встречи.", "Вот черновики частей встречи.")
+    if title.strip():
+        user = f"Название встречи: {title.strip()}\n\n{user}"
+    return [
+        {"role": "system", "content": system},
+        {"role": "user", "content": user},
+    ]
+
+
 def title_messages(transcript: str) -> list[Message]:
     return [
         {"role": "system", "content": TITLE_SYSTEM},
