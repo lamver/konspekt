@@ -11,6 +11,7 @@ dependencies = [
     "soundcard>=0.4.3",
     "numpy>=2.0",
     "onnx-asr[cpu,hub]>=0.12.0",
+    "av>=18.1.0",
 ]
 
 [project.scripts]

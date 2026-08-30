@@ -1,4 +1,4 @@
-__pycache__/
+﻿__pycache__/
 *.py[cod]
 .venv/
 uv.lock
@@ -27,4 +27,8 @@ dist/
 .vscode/
 .idea/
 .DS_Store
-_voices_tmp/ 
+_voices_tmp/
+
+# Примеры записей для проверок: 12 МБ звука, в репозитории им не место.
+# Проверки, которым они нужны, пропускают недостающие файлы молча.
+audio_examples/

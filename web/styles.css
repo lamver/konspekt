@@ -96,10 +96,10 @@ body { display: flex; flex-direction: column; }
   min-height: 0;
 }
 
-.sidebar__head { padding: 8px; }
+.sidebar__head { padding: 8px; display: flex; gap: 6px; align-items: center; }
 
 .btn-new {
-  width: 100%;
+  flex: 1;
   display: flex; align-items: center; justify-content: center; gap: 6px;
   padding: 7px 10px;
   background: var(--ink);
@@ -112,6 +112,129 @@ body { display: flex; flex-direction: column; }
 }
 .btn-new:hover { background: #403C37; }
 .btn-new:active { transform: scale(.98); }
+
+/* --- Загрузка готовых записей ------------------------------------------- */
+
+/* Кнопка выбора файлов стоит рядом с «Новой встречей» и не должна с ней
+   соревноваться: запись встречи главнее, импорт реже. */
+#btn-import {
+  flex-shrink: 0;
+  width: 30px; height: 30px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+#btn-import:hover { background: var(--paper-3); color: var(--ink); }
+
+.imports {
+  padding: 0 8px 8px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 8px;
+}
+
+.imports__head {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 11px; color: var(--ink-3);
+  padding: 2px 2px 6px;
+}
+
+.imports__list { display: flex; flex-direction: column; gap: 5px; }
+
+.import-item {
+  padding: 6px 8px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 11px;
+}
+
+.import-item__row { display: flex; align-items: center; gap: 6px; }
+
+.import-item__name {
+  flex: 1;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  color: var(--ink-2);
+}
+
+.import-item__state { color: var(--ink-3); font-size: 10px; flex-shrink: 0; }
+.import-item--failed .import-item__state { color: var(--rec); }
+.import-item--running .import-item__state { color: var(--accent); }
+
+/* Полоска прогресса нужна только тому файлу, который разбирается сейчас:
+   у остальных она была бы шумом. */
+.import-item__bar {
+  height: 3px;
+  margin-top: 5px;
+  background: var(--paper-3);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.import-item__fill {
+  height: 100%;
+  width: 0;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width .2s linear;
+}
+
+.import-item__error {
+  margin-top: 4px;
+  color: var(--ink-3);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.import-item__cancel {
+  flex-shrink: 0;
+  border: none; background: none;
+  color: var(--ink-3);
+  cursor: pointer;
+  font-size: 14px; line-height: 1;
+  padding: 0 2px;
+}
+.import-item__cancel:hover { color: var(--ink); }
+
+.btn-link {
+  border: none; background: none;
+  color: var(--accent);
+  font-family: inherit; font-size: inherit;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.btn-link:hover { opacity: .8; }
+
+/* Подсказка поверх всего окна, пока над ним тащат файлы. */
+.dropzone {
+  position: fixed; inset: 0;
+  z-index: 60;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(43, 41, 38, .35);
+  pointer-events: none;
+}
+
+.dropzone__box {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 26px 34px;
+  background: var(--paper);
+  border: 2px dashed var(--accent);
+  border-radius: 14px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .18);
+  text-align: center;
+}
+
+.dropzone__icon { color: var(--accent); display: flex; }
+.dropzone__title { font-size: 14px; font-weight: 500; color: var(--ink); }
+.dropzone__hint { font-size: 11px; color: var(--ink-3); }
+
+.empty__hint {
+  margin-top: 10px;
+  font-size: 11px !important;
+  color: var(--ink-3);
+  line-height: 1.5;
+}
 
 .sidebar__search { padding: 0 8px 8px; }
 

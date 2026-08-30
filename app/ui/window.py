@@ -21,6 +21,8 @@ import webview
 from ..core import paths
 from ..core.events import (
     APP_QUIT,
+    IMPORT_CHANGED,
+    IMPORT_PROGRESS,
     MEETINGS_CHANGED,
     MEETING_UPDATED,
     MODEL_DOWNLOAD,
@@ -50,6 +52,8 @@ FORWARDED_EVENTS = (
     RECORDING_ERROR,
     TRANSCRIPT_SEGMENT,
     MODEL_DOWNLOAD,
+    IMPORT_CHANGED,
+    IMPORT_PROGRESS,
 )
 
 
@@ -88,9 +92,48 @@ class MainWindow:
         self.window.events.closing += self._on_closing
         self.window.events.moved += self._on_geometry_changed
         self.window.events.resized += self._on_geometry_changed
+        # Пути брошенных файлов знает только питон: браузеру из
+        # соображений безопасности видно лишь имя. pywebview дописывает
+        # настоящий путь в объект файла, но делает это, только если drop
+        # слушает питон, поэтому подписка живёт здесь, а не во фронте.
+        self.window.events.loaded += self._on_loaded
 
         self._subscribe()
         return self.window
+
+    def _on_loaded(self) -> None:
+        """Подписаться на брошенные файлы, когда документ готов."""
+        if self.window is None:
+            return
+        try:
+            body = self.window.dom.get_element("body")
+            if body is None:
+                log.warning("Не нашли body: перетаскивание файлов не заработает")
+                return
+            body.events.drop += self._on_files_dropped
+            log.info("Перетаскивание файлов в окно включено")
+        except Exception:
+            # Без этого приложение остаётся полностью рабочим, просто
+            # файлы придётся выбирать кнопкой.
+            log.exception("Не удалось включить перетаскивание файлов")
+
+    def _on_files_dropped(self, event: Any) -> None:
+        """Файлы бросили в окно: отдать их сервису на разбор."""
+        try:
+            data = (event or {}).get("dataTransfer") or {}
+            files = data.get("files") or []
+            paths = [f.get("pywebviewFullPath") for f in files if f.get("pywebviewFullPath")]
+            skipped = len(files) - len(paths)
+            if skipped:
+                # Так бывает с файлами из архивов и облачных папок,
+                # которых физически нет на диске.
+                log.warning("У %d брошенных файлов нет пути на диске", skipped)
+            if not paths:
+                return
+            log.info("Брошено файлов: %d", len(paths))
+            self.service.import_files(paths)
+        except Exception:
+            log.exception("Не удалось принять брошенные файлы")
 
     # --- реакция на события шины ----------------------------------------
 

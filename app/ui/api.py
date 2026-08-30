@@ -86,6 +86,49 @@ class Api:
     def set_asr_enabled(self, enabled: bool) -> dict[str, Any]:
         return self._service.set_asr_enabled(enabled)
 
+    # --- импорт готовых записей -------------------------------------------
+
+    def import_files(self, paths: list[str]) -> list[dict[str, Any]]:
+        """Разобрать готовые записи: на каждый файл своя встреча."""
+        return self._service.import_files(list(paths or []))
+
+    def pick_and_import(self) -> list[dict[str, Any]]:
+        """Выбрать файлы через системный диалог и поставить в очередь.
+
+        Фильтр по расширениям тут только подсказка для глаз: сам разбор
+        смотрит внутрь файла, поэтому запись с потерянным расширением
+        тоже пройдёт, её достаточно выбрать через «Все файлы».
+        """
+        if not self._window:
+            return []
+        try:
+            import webview  # noqa: PLC0415
+
+            picked = self._window.create_file_dialog(
+                webview.OPEN_DIALOG,
+                allow_multiple=True,
+                file_types=(
+                    "Аудио и видео (*.mp3;*.wav;*.m4a;*.ogg;*.opus;*.flac;*.aac;"
+                    "*.wma;*.mp4;*.mkv;*.mov;*.webm;*.avi)",
+                    "Все файлы (*.*)",
+                ),
+            )
+        except Exception:
+            log.exception("Не удалось открыть диалог выбора файлов")
+            return []
+        if not picked:
+            return []
+        return self._service.import_files([str(p) for p in picked])
+
+    def import_status(self) -> dict[str, Any]:
+        return self._service.import_status()
+
+    def cancel_import(self, task_id: str) -> dict[str, Any]:
+        return self._service.cancel_import(task_id)
+
+    def clear_imports(self) -> dict[str, Any]:
+        return self._service.clear_imports()
+
     # --- заметки ---------------------------------------------------------
 
     def save_notes(self, meeting_id: str, notes: str) -> bool:

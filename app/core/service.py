@@ -47,6 +47,8 @@ from ..audio import devices as audio_devices
 from ..core import paths
 from ..core import settings as settings_mod
 from ..core.events import (
+    IMPORT_CHANGED,
+    IMPORT_PROGRESS,
     MEETINGS_CHANGED,
     MEETING_UPDATED,
     MODEL_DOWNLOAD,
@@ -56,6 +58,7 @@ from ..core.events import (
     TRANSCRIPT_SEGMENT,
     bus,
 )
+from ..core.importer import ImportQueue
 from ..core.models import (
     Meeting,
     MeetingStatus,
@@ -91,6 +94,15 @@ class AppService:
             roster=self.roster,
         )
         self.capture = capture or self._build_capture()
+        # Разбор готовых записей. Поток поднимается только когда человек
+        # действительно бросит файлы в окно.
+        self.importer = ImportQueue(
+            transcribe_chunk=self._import_chunk,
+            create_meeting=self._import_meeting,
+            finish_meeting=self._import_finished,
+            prepare_meeting=self._prepare_voices,
+            on_change=self._on_import_change,
+        )
         self.downloader = ModelDownloader(
             MODEL_REPO, MODEL_FILES, paths.models_dir() / MODEL_DIR_NAME
         )
@@ -678,6 +690,77 @@ class AppService:
         self.store.add_note_line(line)
         return line.to_dict()
 
+    # --- импорт файлов ----------------------------------------------------
+
+    def import_files(self, paths: list[str]) -> list[dict[str, Any]]:
+        """Поставить готовые записи в очередь разбора.
+
+        На каждый файл заводится своя встреча, названная по имени файла:
+        пачка записей превращается в пачку встреч, а не в одну кашу.
+        """
+        if not paths:
+            return []
+        tasks = self.importer.add(paths)
+        bus.emit(IMPORT_CHANGED, {"tasks": self.importer.tasks()})
+        return tasks
+
+    def import_status(self) -> dict[str, Any]:
+        return {"tasks": self.importer.tasks(), "busy": self.importer.busy}
+
+    def cancel_import(self, task_id: str) -> dict[str, Any]:
+        self.importer.cancel(task_id)
+        return self.import_status()
+
+    def clear_imports(self) -> dict[str, Any]:
+        self.importer.clear_finished()
+        return self.import_status()
+
+    def _import_meeting(self, title: str) -> str:
+        """Встреча под импортируемый файл.
+
+        Помечаем её как идущую обработку: в списке сразу видно, что
+        транскрипт ещё дописывается.
+        """
+        meeting = Meeting(title=title or _default_title(), status=MeetingStatus.PROCESSING)
+        meeting.started_at = now()
+        self.store.create_meeting(meeting)
+        bus.emit(MEETINGS_CHANGED)
+        return meeting.id
+
+    def _import_chunk(self, meeting_id: str, track: str, pcm, offset: float) -> None:
+        """Кусок звука из файла в то же распознавание, что и живая речь.
+
+        Никакого отдельного пути: файл проходит через тот же VAD, ту же
+        очередь и то же определение говорящих, поэтому импортированная
+        встреча выглядит ровно как записанная.
+        """
+        if not self.settings.asr.enabled:
+            return
+        self.asr_queue.submit(meeting_id, track, pcm, offset)
+
+    def _import_finished(self, meeting_id: str, duration: float) -> None:
+        """Файл дочитан: дождаться распознавания и закрыть встречу."""
+        try:
+            # Последняя фраза сидит внутри VAD и ждёт паузу, которой уже
+            # не будет: выталкиваем, иначе потеряем конец записи.
+            self.asr_queue.flush(meeting_id)
+            self.asr_queue.wait_idle()
+            self._remember_voices(meeting_id)
+        except Exception:
+            log.exception("Не удалось завершить импорт встречи %s", meeting_id)
+        started = now() - max(0.0, duration)
+        self.store.update_meeting(
+            meeting_id,
+            started_at=started,
+            ended_at=now(),
+            status=MeetingStatus.READY,
+        )
+        bus.emit(MEETINGS_CHANGED)
+        bus.emit(MEETING_UPDATED, {"meeting_id": meeting_id})
+
+    def _on_import_change(self, task: Any) -> None:
+        bus.emit(IMPORT_PROGRESS, {"task": task.to_dict()})
+
     # --- настройки -------------------------------------------------------
 
     def get_settings(self) -> dict[str, Any]:
@@ -701,6 +784,9 @@ class AppService:
     def shutdown(self) -> None:
         if self.capture.is_recording:
             self.stop_recording()
+        # Разбор файлов может идти долго: при выходе бросаем его, а
+        # недоделанные встречи остаются с тем, что успели распознать.
+        self.importer.stop()
         settings_mod.save(self.settings)
         self.store.close()
 

@@ -16,6 +16,7 @@ const state = {
   filter: '',
   model: {},
   pinned: true,
+  imports: [],
 };
 
 const el = (id) => document.getElementById(id);
@@ -108,6 +109,12 @@ window.__konspekt_event = function (payload) {
       break;
     case 'model.download':
       onModelProgress(payload);
+      break;
+    case 'import.changed':
+      renderImports(payload.tasks || []);
+      break;
+    case 'import.progress':
+      onImportProgress(payload.task);
       break;
   }
 };
@@ -808,6 +815,202 @@ async function saveAudioSheet() {
   ui.audioSheet.hidden = true;
 }
 
+/* --- Загрузка готовых записей ------------------------------------------- */
+
+/**
+ * Перетаскивание файлов в окно.
+ *
+ * Тонкость pywebview: настоящий путь к файлу браузеру недоступен, движок
+ * дописывает его отдельным полем, но только если на элементе висит
+ * python-обработчик drop. Поэтому саму подписку ставит бэкенд, а здесь
+ * мы показываем подсказку и подчищаем состояние.
+ */
+function setupDropzone() {
+  let depth = 0;   // dragenter/dragleave сыплются и от дочерних узлов
+
+  const hide = () => { depth = 0; ui.dropzone.hidden = true; };
+
+  window.addEventListener('dragenter', (e) => {
+    if (!hasFiles(e)) return;
+    depth += 1;
+    ui.dropzone.hidden = false;
+  });
+
+  window.addEventListener('dragover', (e) => {
+    if (!hasFiles(e)) return;
+    // Без этого браузер откроет файл вместо того, чтобы отдать его нам.
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  });
+
+  window.addEventListener('dragleave', (e) => {
+    if (!hasFiles(e)) return;
+    depth -= 1;
+    if (depth <= 0) hide();
+  });
+
+  window.addEventListener('drop', (e) => {
+    e.preventDefault();
+    hide();
+    // Пути придут из питона: браузеру их не видно. Здесь только сообщаем
+    // человеку, что бросок принят.
+    const count = e.dataTransfer && e.dataTransfer.files
+      ? e.dataTransfer.files.length : 0;
+    if (count > 0) {
+      setImportsTitle(`Читаем ${count} ${plural(count, 'файл', 'файла', 'файлов')}…`);
+    }
+  });
+}
+
+function hasFiles(e) {
+  const dt = e.dataTransfer;
+  if (!dt) return false;
+  if (dt.types && dt.types.includes) return dt.types.includes('Files');
+  return true;
+}
+
+function plural(n, one, few, many) {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return one;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few;
+  return many;
+}
+
+function setImportsTitle(text) {
+  ui.imports.hidden = false;
+  el('imports-title').textContent = text;
+}
+
+/** Выбор файлов через системный диалог: запасной путь к тому же импорту. */
+async function pickFiles() {
+  setImportsTitle('Выбор файлов…');
+  await api.pick_and_import();
+  await refreshImports();
+}
+
+/** Полный список очереди: после броска файлов и при запуске окна. */
+async function refreshImports() {
+  const status = await api.import_status();
+  renderImports(status && status.tasks ? status.tasks : []);
+}
+
+function renderImports(tasks) {
+  state.imports = tasks || [];
+  if (state.imports.length === 0) {
+    ui.imports.hidden = true;
+    ui.importsList.textContent = '';
+    return;
+  }
+
+  ui.imports.hidden = false;
+  const left = state.imports.filter(
+    (t) => t.status === 'running' || t.status === 'waiting').length;
+  el('imports-title').textContent = left > 0
+    ? `Разбор записей: осталось ${left}`
+    : 'Разбор записей';
+  // Кнопка очистки нужна, только когда есть что убирать.
+  el('imports-clear').hidden = !state.imports.some(
+    (t) => t.status === 'done' || t.status === 'failed' || t.status === 'cancelled');
+
+  ui.importsList.textContent = '';
+  state.imports.forEach((task) => ui.importsList.appendChild(importRow(task)));
+}
+
+function importRow(task) {
+  const node = document.createElement('div');
+  node.className = `import-item import-item--${task.status}`;
+
+  const row = document.createElement('div');
+  row.className = 'import-item__row';
+
+  const name = document.createElement('span');
+  name.className = 'import-item__name';
+  name.textContent = task.name;
+  name.title = task.name;
+  row.appendChild(name);
+
+  const label = document.createElement('span');
+  label.className = 'import-item__state';
+  label.textContent = importStateText(task);
+  row.appendChild(label);
+
+  // Отменить можно только то, что ещё не доработало.
+  if (task.status === 'waiting' || task.status === 'running') {
+    const cancel = document.createElement('button');
+    cancel.className = 'import-item__cancel';
+    cancel.textContent = '×';
+    cancel.title = 'Отменить';
+    cancel.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const status = await api.cancel_import(task.id);
+      renderImports(status && status.tasks ? status.tasks : []);
+    });
+    row.appendChild(cancel);
+  }
+
+  node.appendChild(row);
+
+  if (task.status === 'running') {
+    const bar = document.createElement('div');
+    bar.className = 'import-item__bar';
+    const fill = document.createElement('div');
+    fill.className = 'import-item__fill';
+    fill.style.width = `${Math.round((task.progress || 0) * 100)}%`;
+    bar.appendChild(fill);
+    node.appendChild(bar);
+  }
+
+  if (task.status === 'failed' && task.error) {
+    const err = document.createElement('div');
+    err.className = 'import-item__error';
+    err.textContent = task.error;
+    node.appendChild(err);
+  }
+
+  // Готовую встречу открываем кликом: человек только что её ждал.
+  if (task.meeting_id) {
+    node.style.cursor = 'pointer';
+    node.title = 'Открыть встречу';
+    node.addEventListener('click', () => selectMeeting(task.meeting_id));
+  }
+
+  return node;
+}
+
+function importStateText(task) {
+  switch (task.status) {
+    case 'waiting':
+      return 'в очереди';
+    case 'running': {
+      const pct = Math.round((task.progress || 0) * 100);
+      return `${pct}%${task.stereo_split ? ', 2 канала' : ''}`;
+    }
+    case 'done':
+      return 'готово';
+    case 'failed':
+      return 'не аудио';
+    case 'cancelled':
+      return 'отменён';
+    default:
+      return task.status;
+  }
+}
+
+/** Прогресс одного файла: правим список точечно. */
+function onImportProgress(task) {
+  if (!task) return;
+  const list = (state.imports || []).slice();
+  const idx = list.findIndex((t) => t.id === task.id);
+  if (idx === -1) list.push(task); else list[idx] = task;
+  renderImports(list);
+
+  // Открытая встреча меняется по ходу разбора: обновим её шапку.
+  if (task.meeting_id && task.meeting_id === state.currentId) {
+    refreshMeta(task.meeting_id);
+  }
+}
+
 /* --- Инициализация ------------------------------------------------------ */
 
 function bindUi() {
@@ -848,10 +1051,19 @@ function bindUi() {
     modelProgress: el('model-progress'),
     modelFill: el('model-fill'),
     modelAction: el('model-action'),
+    imports: el('imports'),
+    importsList: el('imports-list'),
+    dropzone: el('dropzone'),
   });
 
   el('btn-new').addEventListener('click', createMeeting);
   el('btn-empty-new').addEventListener('click', createMeeting);
+  el('btn-import').addEventListener('click', pickFiles);
+  el('btn-empty-import').addEventListener('click', pickFiles);
+  el('imports-clear').addEventListener('click', async () => {
+    const status = await api.clear_imports();
+    renderImports(status && status.tasks ? status.tasks : []);
+  });
   ui.record.addEventListener('click', toggleRecording);
 
   el('btn-hide').addEventListener('click', () => api.hide_window());
@@ -926,6 +1138,7 @@ async function init() {
   bindUi();
   setupDrag();
   setupResize();
+  setupDropzone();
 
   const settings = await api.get_settings();
   if (settings) {
@@ -935,6 +1148,8 @@ async function init() {
   }
 
   await loadMeetings();
+  // Разбор файлов мог продолжаться, пока окно было скрыто в трее.
+  await refreshImports();
 
   // Восстанавливаем состояние записи, если окно открыли посреди встречи.
   const rec = await api.recording_state();

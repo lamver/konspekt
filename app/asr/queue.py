@@ -14,6 +14,7 @@ from __future__ import annotations
 import logging
 import queue
 import threading
+import time
 from dataclasses import dataclass
 from typing import Callable
 
@@ -161,6 +162,26 @@ class TranscriptionQueue:
                     self._put(Job(meeting_id, speaker, piece.pcm, piece.offset))
             except Exception:
                 log.exception("Не удалось дослать хвост дорожки %s", speaker)
+
+    def wait_idle(self, timeout: float = 600.0) -> bool:
+        """Дождаться, пока очередь разберут, не останавливая поток.
+
+        Нужно импорту файлов: там встречи идут одна за другой, и закрыть
+        встречу можно только когда её последняя реплика уже распознана.
+        Останавливать ради этого поток нельзя, следующий файл поднимал бы
+        его заново. Ждём с потолком: если распознавание намертво встало,
+        лучше закрыть встречу с тем, что есть, чем висеть вечно.
+        """
+        deadline = time.monotonic() + timeout
+        while not self._queue.empty():
+            if time.monotonic() > deadline:
+                log.warning("Очередь не разобралась за %.0f с, идём дальше", timeout)
+                return False
+            time.sleep(0.05)
+        # Последний чанк уже вынут из очереди, но ещё считается: без этой
+        # паузы его реплики попали бы в следующую встречу.
+        self._queue.join()
+        return True
 
     def stop(self, timeout: float = 30.0) -> None:
         """Дождаться разбора очереди и остановить поток.
