@@ -1,19 +1,19 @@
 """Распознавание нерусской речи через Whisper base в ONNX.
 
 Зачем отдельная модель. GigaAM знает только русский, а на встречах
-случаются английские фразы и целые англоязычные участники. Whisper base
-знает 99 языков, в int8 весит около 80 МБ вместе с декодером и на
-процессоре работает достаточно быстро для коротких фраз.
+случаются чужие фразы и целые иноязычные участники. Whisper знает
+99 языков и в int8 работает на процессоре достаточно быстро.
 
 Не только английский. Язык мы модели не навязываем: Whisper сам слышит,
 что звучит, и немецкая или французская реплика распознаётся так же
 хорошо, как английская. Код языка для пометки приходит снаружи, от
 роутера, который всё равно спрашивал определителя языка.
 
-Почему base, а не small. Small точнее, но весит 250 МБ в int8 и на
-процессоре обрабатывает фразу в несколько раз дольше. Для реплики на
-чужом языке посреди русской встречи важнее, чтобы она вообще появилась в
-транскрипте латиницей, а не была записана кириллицей как «холло дис из».
+Почему small. base весит 79 МБ и быстрее, но на коротких фразах и на
+языках кроме английского ошибается слишком часто: испанское «Hola,
+buenos días» он записал как «Hla Vonos dios», а на тишине выдавал
+«Thanks for watching!». small весит 250 МБ в int8 и работает заметно
+точнее. Размер меняется в настройках (asr.whisper_size).
 
 Грузится лениво, при первой нерусской фразе: на встрече целиком по-русски
 он не нужен вовсе.
@@ -34,10 +34,27 @@ from .base import SAMPLE_RATE
 log = logging.getLogger(__name__)
 
 MODEL_NAME = "whisper"
-MODEL_REPO = "onnx-community/whisper-base"
-MODEL_DIR_NAME = "whisper-base"
+# Два размера на выбор. base быстрый и лёгкий, но на коротких фразах
+# и на языках кроме английского ошибается заметно чаще: испанское
+# «Hola, buenos días» у него превращалось в «Hla Vonos dios».
+SIZES = {
+    "base": {
+        "repo": "onnx-community/whisper-base",
+        "dir": "whisper-base",
+        "bytes": 79_000_000,
+    },
+    "small": {
+        "repo": "onnx-community/whisper-small",
+        "dir": "whisper-small",
+        "bytes": 250_000_000,
+    },
+}
+DEFAULT_SIZE = "small"
+
+MODEL_REPO = SIZES[DEFAULT_SIZE]["repo"]
+MODEL_DIR_NAME = SIZES[DEFAULT_SIZE]["dir"]
 QUANTIZATION = "int8"
-MODEL_TOTAL_BYTES = 79_000_000
+MODEL_TOTAL_BYTES = SIZES[DEFAULT_SIZE]["bytes"]
 
 MODEL_FILES = (
     "onnx/encoder_model_int8.onnx",
@@ -65,10 +82,9 @@ class WhisperMissing(RuntimeError):
 class WhisperTranscriber:
     """Распознавание нерусской речи."""
 
-    name = "whisper-base"
     # Что модель умеет разбирать уверенно. Список ничего не ограничивает:
     # Whisper знает 99 языков и определяет язык сам, это просто те, что
-    # встречаются чаще всего и на которых base держится прилично.
+    # встречаются чаще всего.
     languages = ("en", "de", "fr", "es", "it", "pt", "nl", "pl", "tr", "zh", "ja")
 
     def __init__(self, model_dir: Path, auto_load: bool = True) -> None:
@@ -77,6 +93,11 @@ class WhisperTranscriber:
         self._model: Any = None
         self._lock = threading.Lock()
         self._load_failed: str | None = None
+
+    @property
+    def name(self) -> str:
+        """По каталогу видно, какой размер взят: это видно в логах."""
+        return self.model_dir.name or "whisper"
 
     def is_downloaded(self) -> bool:
         return all((self.model_dir / f).exists() for f in MODEL_FILES)

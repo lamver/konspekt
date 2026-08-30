@@ -1,4 +1,4 @@
-"""Сервис приложения: вся логика встреч в одном месте.
+﻿"""Сервис приложения: вся логика встреч в одном месте.
 
 UI и трей ходят только сюда и ничего не знают ни про SQLite, ни про
 аудиодвижок. Это позволит на этапе 2 подменить NullCapture на настоящий
@@ -31,7 +31,8 @@ from ..asr.embedder import VoiceEmbedder
 from ..asr.langid import MODEL_DIR_NAME as LANGID_DIR_NAME
 from ..asr.langid import LanguageDetector
 from ..asr.router import LanguageRouter
-from ..asr.whisper import MODEL_DIR_NAME as WHISPER_DIR_NAME
+from ..asr.whisper import DEFAULT_SIZE as WHISPER_DEFAULT_SIZE
+from ..asr.whisper import SIZES as WHISPER_SIZES
 from ..asr.whisper import WhisperTranscriber
 from ..asr.enroll import (
     MIN_SECONDS,
@@ -119,11 +120,36 @@ class AppService:
         # месте: без них русская речь распознаётся ровно как раньше, а
         # иностранная останется кириллицей. Это хуже, но работает.
         detector = LanguageDetector(paths.models_dir() / LANGID_DIR_NAME)
-        foreign = WhisperTranscriber(paths.models_dir() / WHISPER_DIR_NAME)
+        foreign = WhisperTranscriber(paths.models_dir() / self._whisper_dir())
         if not (detector.is_downloaded() and foreign.is_downloaded()):
             log.info("Определение языка выключено: нет весов")
             return russian
+        log.info("Нерусская речь идёт в %s", foreign.name)
         return LanguageRouter(russian, detector, foreign)
+
+    def _whisper_dir(self) -> str:
+        """Каталог Whisper по настройке, с откатом на тот, что скачан.
+
+        Человек мог попросить small, но не докачать его на слабом
+        интернете. Лучше распознавать через base, чем не распознавать
+        вовсе и писать чужую речь кириллицей.
+        """
+        want = getattr(self.settings.asr, "whisper_size", WHISPER_DEFAULT_SIZE)
+        if want not in WHISPER_SIZES:
+            log.info("Размер Whisper %r незнаком, берём %s", want, WHISPER_DEFAULT_SIZE)
+            want = WHISPER_DEFAULT_SIZE
+        order = [want, WHISPER_DEFAULT_SIZE] + list(WHISPER_SIZES)
+        seen: set[str] = set()
+        for size in order:
+            if size in seen:
+                continue
+            seen.add(size)
+            name = WHISPER_SIZES[size]["dir"]
+            if WhisperTranscriber(paths.models_dir() / name).is_downloaded():
+                if size != want:
+                    log.info("Whisper %s не скачан, берём %s", want, size)
+                return name
+        return WHISPER_SIZES[want]["dir"]
 
     def _build_capture(self) -> AudioCapture:
         """Настоящий захват, а при его недоступности — заглушка.

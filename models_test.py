@@ -20,6 +20,17 @@ MODELS = {
                   ["voxceleb_resnet34_LM.onnx"]),
     "voxlingua": ("beginning-ai/speechbrain-lang-id-voxlingua107-ecapa-onnx",
                   ["model.onnx"]),
+    # Whisper лежит на диске в двух размерах: рабочий small и запасной
+    # base. Оба нужно проверять, иначе битый файл всплывёт посреди
+    # встречи, когда кто-то заговорит не по-русски.
+    "whisper-small": ("onnx-community/whisper-small",
+                      ["onnx/encoder_model_int8.onnx",
+                       "onnx/decoder_model_merged_int8.onnx",
+                       "config.json", "vocab.json"]),
+    "whisper-base": ("onnx-community/whisper-base",
+                     ["onnx/encoder_model_int8.onnx",
+                      "onnx/decoder_model_merged_int8.onnx",
+                      "config.json", "vocab.json"]),
 }
 
 root = paths.models_dir()

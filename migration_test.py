@@ -51,17 +51,26 @@ print("[ok] тексты старых реплик на месте")
 assert {"voice_id", "person_id", "voice_label"} <= cols, f"колонок нет: {cols}"
 print("[ok] новые колонки добавлены к существующей таблице")
 
-# Старые сегменты читаются, просто без говорящего
+# Старые сегменты читаются, и говорящий у них ровно тот, что лежит в
+# базе. Раньше здесь стояло «у первой реплики говорящий пуст», но в
+# боевой базе давно есть встречи с распознанными голосами, и проверка
+# падала не от поломки, а от того, что жизнь ушла вперёд.
 mid = None
 con = sqlite3.connect(tmp)
 row = con.execute("SELECT meeting_id FROM transcript_segments LIMIT 1").fetchone()
+labels = dict(con.execute(
+    "SELECT id, COALESCE(voice_label, '') FROM transcript_segments").fetchall())
 con.close()
 if row:
     mid = row[0]
     segs = store.list_segments(mid)
     assert segs, "старые сегменты не читаются"
-    assert segs[0].voice_label == "", "у старой реплики взялся говорящий"
-    print(f"[ok] старые реплики читаются ({len(segs)} шт.), говорящий пуст")
+    for s in segs:
+        assert s.voice_label == labels[s.id], \
+            f"говорящий разошёлся с базой: {s.voice_label!r} вместо {labels[s.id]!r}"
+    empty = sum(1 for s in segs if not s.voice_label)
+    print(f"[ok] старые реплики читаются ({len(segs)} шт.), "
+          f"говорящий совпадает с базой, пустых {empty}")
 
 # Новый сегмент с говорящим
 if mid:
