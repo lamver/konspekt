@@ -57,6 +57,14 @@ MODEL_DOWNLOAD = "model.download"
 IMPORT_CHANGED = "import.changed"
 IMPORT_PROGRESS = "import.progress"
 SUMMARY_READY = "summary.ready"
+# Саммари и ответы чата приходят по кускам: ждать минуту на пустом
+# экране невыносимо, а текст, который печатается на глазах, ощущается
+# быстрым даже при той же общей задержке.
+SUMMARY_CHUNK = "summary.chunk"
+SUMMARY_ERROR = "summary.error"
+CHAT_CHUNK = "chat.chunk"
+CHAT_MESSAGE = "chat.message"
+CHAT_ERROR = "chat.error"
 WINDOW_SHOW = "window.show"
 WINDOW_HIDE = "window.hide"
 WINDOW_TOGGLE = "window.toggle"

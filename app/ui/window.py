@@ -21,6 +21,9 @@ import webview
 from ..core import paths
 from ..core.events import (
     APP_QUIT,
+    CHAT_CHUNK,
+    CHAT_ERROR,
+    CHAT_MESSAGE,
     IMPORT_CHANGED,
     IMPORT_PROGRESS,
     MEETINGS_CHANGED,
@@ -30,6 +33,9 @@ from ..core.events import (
     RECORDING_ERROR,
     RECORDING_STARTED,
     RECORDING_STOPPED,
+    SUMMARY_CHUNK,
+    SUMMARY_ERROR,
+    SUMMARY_READY,
     TRANSCRIPT_SEGMENT,
     WINDOW_HIDE,
     WINDOW_SHOW,
@@ -54,6 +60,12 @@ FORWARDED_EVENTS = (
     MODEL_DOWNLOAD,
     IMPORT_CHANGED,
     IMPORT_PROGRESS,
+    SUMMARY_CHUNK,
+    SUMMARY_READY,
+    SUMMARY_ERROR,
+    CHAT_CHUNK,
+    CHAT_MESSAGE,
+    CHAT_ERROR,
 )
 
 

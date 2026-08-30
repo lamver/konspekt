@@ -138,6 +138,32 @@ class Api:
     def add_note_line(self, meeting_id: str, text: str) -> dict[str, Any]:
         return self._service.add_note_line(meeting_id, text)
 
+    # --- саммари и чат ----------------------------------------------------
+
+    def llm_status(self) -> dict[str, Any]:
+        return self._service.llm_status()
+
+    def save_llm_settings(self, fields: dict[str, Any]) -> dict[str, Any]:
+        return self._service.save_llm_settings(**(fields or {}))
+
+    def check_llm(self) -> dict[str, Any]:
+        return self._service.check_llm()
+
+    def generate_summary(self, meeting_id: str) -> dict[str, Any]:
+        return self._service.generate_summary(meeting_id)
+
+    def stop_generation(self) -> dict[str, Any]:
+        return self._service.stop_generation()
+
+    def list_chat_messages(self, meeting_id: str) -> list[dict[str, Any]]:
+        return self._service.list_chat_messages(meeting_id)
+
+    def ask(self, meeting_id: str, question: str) -> dict[str, Any]:
+        return self._service.ask(meeting_id, question)
+
+    def clear_chat(self, meeting_id: str) -> dict[str, Any]:
+        return self._service.clear_chat(meeting_id)
+
     # --- голоса -----------------------------------------------------------
 
     def meeting_voices(self, meeting_id: str) -> list[dict[str, Any]]:

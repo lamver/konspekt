@@ -8,6 +8,7 @@ UI и трей ходят только сюда и ничего не знают 
 from __future__ import annotations
 
 import logging
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -47,6 +48,9 @@ from ..audio import devices as audio_devices
 from ..core import paths
 from ..core import settings as settings_mod
 from ..core.events import (
+    CHAT_CHUNK,
+    CHAT_ERROR,
+    CHAT_MESSAGE,
     IMPORT_CHANGED,
     IMPORT_PROGRESS,
     MEETINGS_CHANGED,
@@ -55,18 +59,24 @@ from ..core.events import (
     RECORDING_ERROR,
     RECORDING_STARTED,
     RECORDING_STOPPED,
+    SUMMARY_CHUNK,
+    SUMMARY_ERROR,
+    SUMMARY_READY,
     TRANSCRIPT_SEGMENT,
     bus,
 )
 from ..core.importer import ImportQueue
 from ..core.models import (
+    ChatMessage,
     Meeting,
     MeetingStatus,
     NoteLine,
     Person,
+    Speaker,
     TranscriptSegment,
     now,
 )
+from ..llm import LlmError, LlmManager, chat_messages, summary_messages
 from ..storage import Store
 
 log = logging.getLogger(__name__)
@@ -107,6 +117,14 @@ class AppService:
             MODEL_REPO, MODEL_FILES, paths.models_dir() / MODEL_DIR_NAME
         )
         self.active_meeting_id: str | None = None
+        # Модель для саммари и чата. Сервер поднимается только когда
+        # человек действительно что-то спросит.
+        self.llm = LlmManager(lambda: self.settings.llm)
+        # Модель считает один запрос за раз: параллельные запросы к
+        # локальному серверу просто замедляют друг друга.
+        self._llm_lock = threading.RLock()
+        self._llm_busy = False
+        self._llm_cancel = False
         # Запись эталона голоса: живёт только пока человек читает фразы.
         self._enrollment: VoiceEnrollment | None = None
         self._enroll_capture: WasapiCapture | None = None
@@ -764,6 +782,206 @@ class AppService:
     def _on_import_change(self, task: Any) -> None:
         bus.emit(IMPORT_PROGRESS, {"task": task.to_dict()})
 
+    # --- саммари и чат ----------------------------------------------------
+
+    def llm_status(self) -> dict[str, Any]:
+        return self.llm.status()
+
+    def save_llm_settings(self, **fields: Any) -> dict[str, Any]:
+        """Сохранить настройки модели.
+
+        Смена бэкенда гасит локальный сервер: держать его в памяти после
+        переезда в облако незачем, а при возврате он поднимется заново.
+        """
+        cfg = self.settings.llm
+        backend_was = cfg.backend
+        for key, value in fields.items():
+            if hasattr(cfg, key):
+                setattr(cfg, key, value)
+        settings_mod.save(self.settings)
+        if cfg.backend != backend_was:
+            self.llm.shutdown()
+        return self.llm_status()
+
+    def check_llm(self) -> dict[str, Any]:
+        """Проверить связь с моделью по кнопке в настройках."""
+        try:
+            return self.llm.client().check()
+        except LlmError as exc:
+            return {"ok": False, "error": str(exc)}
+
+    def transcript_text(self, meeting_id: str) -> str:
+        """Расшифровка в виде «Кто: что».
+
+        Имя говорящего важнее дорожки: модели нужно понять, кто на себя
+        что взял, а «микрофон» и «системный звук» ей об этом не скажут.
+        """
+        lines: list[str] = []
+        for seg in self.store.list_segments(meeting_id):
+            text = seg.text.strip()
+            if not text:
+                continue
+            who = seg.voice_label.strip()
+            if not who:
+                who = "Я" if seg.speaker == Speaker.ME else "Собеседник"
+            lines.append(f"{who}: {text}")
+        return "\n".join(lines)
+
+    def generate_summary(self, meeting_id: str) -> dict[str, Any]:
+        """Запустить синтез заметок. Возвращается сразу, текст идёт событиями."""
+        if not self.llm.enabled:
+            return {"ok": False, "error": "Синтез выключен в настройках"}
+        with self._llm_lock:
+            if self._llm_busy:
+                return {"ok": False, "error": "Модель уже занята"}
+            self._llm_busy = True
+            self._llm_cancel = False
+
+        thread = threading.Thread(
+            target=self._run_summary, args=(meeting_id,),
+            name="summary", daemon=True,
+        )
+        thread.start()
+        return {"ok": True, "started": True}
+
+    def _run_summary(self, meeting_id: str) -> None:
+        try:
+            meeting = self.store.get_meeting(meeting_id)
+            if meeting is None:
+                bus.emit(SUMMARY_ERROR, {"meeting_id": meeting_id,
+                                         "error": "Встреча не найдена"})
+                return
+
+            transcript = self.transcript_text(meeting_id)
+            if not transcript.strip() and not meeting.notes.strip():
+                bus.emit(SUMMARY_ERROR, {"meeting_id": meeting_id,
+                                         "error": "Нечего обрабатывать: нет ни расшифровки, ни заметок"})
+                return
+
+            messages = summary_messages(
+                title=meeting.title,
+                transcript=transcript,
+                notes=meeting.notes,
+                template=self.settings.llm.template or meeting.template,
+            )
+
+            def on_chunk(piece: str) -> None:
+                bus.emit(SUMMARY_CHUNK, {"meeting_id": meeting_id, "text": piece})
+
+            text = self.llm.client().stream(
+                messages, on_chunk=on_chunk, should_stop=lambda: self._llm_cancel
+            )
+            # Пустой результат не затирает прежнее саммари: человек мог
+            # прервать генерацию, и терять готовый текст обиднее всего.
+            if text.strip():
+                self.store.update_meeting(meeting_id, summary=text.strip())
+            bus.emit(SUMMARY_READY, {"meeting_id": meeting_id, "summary": text.strip()})
+            bus.emit(MEETINGS_CHANGED)
+        except LlmError as exc:
+            bus.emit(SUMMARY_ERROR, {"meeting_id": meeting_id, "error": str(exc)})
+        except Exception:
+            log.exception("Синтез заметок упал")
+            bus.emit(SUMMARY_ERROR, {"meeting_id": meeting_id,
+                                     "error": "Не удалось сделать заметки"})
+        finally:
+            with self._llm_lock:
+                self._llm_busy = False
+
+    def stop_generation(self) -> dict[str, Any]:
+        """Прервать генерацию: ответ уже не нужен или пошёл не туда."""
+        self._llm_cancel = True
+        return {"ok": True}
+
+    def list_chat_messages(self, meeting_id: str) -> list[dict[str, Any]]:
+        return [m.to_dict() for m in self.store.list_chat_messages(meeting_id)]
+
+    def clear_chat(self, meeting_id: str) -> dict[str, Any]:
+        self.store.clear_chat(meeting_id)
+        return {"ok": True}
+
+    def ask(self, meeting_id: str, question: str) -> dict[str, Any]:
+        """Вопрос по встрече. Ответ приходит событиями по кускам."""
+        question = (question or "").strip()
+        if not question:
+            return {"ok": False, "error": "Пустой вопрос"}
+        if not self.llm.enabled:
+            return {"ok": False, "error": "Синтез выключен в настройках"}
+        with self._llm_lock:
+            if self._llm_busy:
+                return {"ok": False, "error": "Модель уже занята"}
+            self._llm_busy = True
+            self._llm_cancel = False
+
+        # Вопрос кладём в базу сразу, до ответа: если модель не ответит,
+        # человек хотя бы увидит, о чём спрашивал.
+        asked = self.store.add_chat_message(
+            ChatMessage(meeting_id=meeting_id, role="user", text=question)
+        )
+        answer = self.store.add_chat_message(
+            ChatMessage(meeting_id=meeting_id, role="assistant", text="")
+        )
+        bus.emit(CHAT_MESSAGE, {"meeting_id": meeting_id, "message": asked.to_dict()})
+        bus.emit(CHAT_MESSAGE, {"meeting_id": meeting_id, "message": answer.to_dict()})
+
+        thread = threading.Thread(
+            target=self._run_chat, args=(meeting_id, question, answer.id),
+            name="chat", daemon=True,
+        )
+        thread.start()
+        return {"ok": True, "message_id": answer.id}
+
+    def _run_chat(self, meeting_id: str, question: str, answer_id: str) -> None:
+        try:
+            meeting = self.store.get_meeting(meeting_id)
+            if meeting is None:
+                bus.emit(CHAT_ERROR, {"meeting_id": meeting_id,
+                                      "error": "Встреча не найдена"})
+                return
+
+            # История без нашей пустой заготовки под ответ: модель не
+            # должна видеть пустую реплику ассистента в конце.
+            history = [
+                {"role": m.role, "content": m.text}
+                for m in self.store.list_chat_messages(meeting_id)
+                if m.id != answer_id and m.text.strip()
+            ][:-1]
+
+            messages = chat_messages(
+                title=meeting.title,
+                transcript=self.transcript_text(meeting_id),
+                history=history,
+                question=question,
+                summary=meeting.summary,
+            )
+
+            def on_chunk(piece: str) -> None:
+                bus.emit(CHAT_CHUNK, {"meeting_id": meeting_id,
+                                      "message_id": answer_id, "text": piece})
+
+            text = self.llm.client().stream(
+                messages, on_chunk=on_chunk, should_stop=lambda: self._llm_cancel
+            )
+            self.store.update_chat_message(answer_id, text.strip())
+            bus.emit(CHAT_MESSAGE, {
+                "meeting_id": meeting_id,
+                "message": {"id": answer_id, "meeting_id": meeting_id,
+                            "role": "assistant", "text": text.strip()},
+                "done": True,
+            })
+        except LlmError as exc:
+            self.store.update_chat_message(answer_id, "")
+            bus.emit(CHAT_ERROR, {"meeting_id": meeting_id,
+                                  "message_id": answer_id, "error": str(exc)})
+        except Exception:
+            log.exception("Ответ на вопрос по встрече упал")
+            self.store.update_chat_message(answer_id, "")
+            bus.emit(CHAT_ERROR, {"meeting_id": meeting_id,
+                                  "message_id": answer_id,
+                                  "error": "Не удалось получить ответ"})
+        finally:
+            with self._llm_lock:
+                self._llm_busy = False
+
     # --- настройки -------------------------------------------------------
 
     def get_settings(self) -> dict[str, Any]:
@@ -787,6 +1005,9 @@ class AppService:
     def shutdown(self) -> None:
         if self.capture.is_recording:
             self.stop_recording()
+        # Недосчитанный ответ всё равно некому показать.
+        self._llm_cancel = True
+        self.llm.shutdown()
         # Разбор файлов может идти долго: при выходе бросаем его, а
         # недоделанные встречи остаются с тем, что успели распознать.
         self.importer.stop()

@@ -6,12 +6,15 @@
 """
 
 from .client import LlmClient, LlmError, Message
-from .prompts import summary_messages, chat_messages
+from .manager import LlmManager
+from .prompts import summary_messages, chat_messages, title_messages
 
 __all__ = [
     "LlmClient",
     "LlmError",
+    "LlmManager",
     "Message",
     "summary_messages",
     "chat_messages",
+    "title_messages",
 ]
