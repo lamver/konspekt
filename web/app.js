@@ -1348,6 +1348,8 @@ function bindUi() {
   Object.assign(ui, {
     titlebar: el('titlebar'),
     list: el('meeting-list'),
+    sidebar: el('sidebar'),
+    sidebarGrip: el('sidebar-grip'),
     search: el('search'),
     empty: el('empty-state'),
     editor: el('editor'),
@@ -1502,10 +1504,73 @@ function bindUi() {
   window.addEventListener('beforeunload', flushNotes);
 }
 
+/* --- Ширина боковой колонки --------------------------------------------- */
+
+const SIDEBAR_MIN = 150;
+const SIDEBAR_MAX = 420;
+
+/**
+ * Колонка со списком встреч тянется мышью.
+ *
+ * В 168 пикселей название встречи почти всегда обрезается многоточием,
+ * а на широком экране та же колонка выглядит узкой полоской.
+ * Ширина живёт в localStorage: выбранный размер не должен слетать при
+ * каждом запуске.
+ */
+function setSidebarWidth(px) {
+  const width = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, Math.round(px)));
+  document.documentElement.style.setProperty('--sidebar-width', `${width}px`);
+  return width;
+}
+
+function setupSidebarGrip() {
+  const grip = ui.sidebarGrip;
+  if (!grip) return;
+
+  grip.addEventListener('mousedown', (event) => {
+    event.preventDefault();
+    grip.classList.add('is-dragging');
+    document.body.classList.add('is-resizing');
+
+    const move = (e) => {
+      // Считаем от левого края колонки, а не от смещения курсора:
+      // так граница не убегает от мыши на упорах.
+      setSidebarWidth(e.clientX - ui.sidebar.getBoundingClientRect().left);
+    };
+
+    const up = () => {
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', up);
+      grip.classList.remove('is-dragging');
+      document.body.classList.remove('is-resizing');
+      // Ширину хранит бэкенд: localStorage в webview очищается между
+      // запусками, и выбранный размер каждый раз слетал к исходному.
+      api.set_sidebar_width(currentSidebarWidth());
+    };
+
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+  });
+
+  // Двойной щелчок возвращает исходную ширину: утащить колонку
+  // в край легко, а вернуть ровно как было глазом уже нет.
+  grip.addEventListener('dblclick', () => {
+    api.set_sidebar_width(setSidebarWidth(240));
+  });
+}
+
+/** Текущая ширина колонки в пикселях. */
+function currentSidebarWidth() {
+  const raw = getComputedStyle(document.documentElement)
+    .getPropertyValue('--sidebar-width').trim();
+  return parseInt(raw, 10) || 240;
+}
+
 async function init() {
   bindUi();
   setupDrag();
   setupResize();
+  setupSidebarGrip();
   setupDropzone();
 
   const settings = await api.get_settings();
@@ -1513,6 +1578,9 @@ async function init() {
     state.pinned = Boolean(settings.always_on_top);
     ui.pin.setAttribute('aria-pressed', String(state.pinned));
     applyTheme(settings.theme || 'system');
+    if (settings.window && settings.window.sidebar_width) {
+      setSidebarWidth(settings.window.sidebar_width);
+    }
   }
 
   await loadMeetings();

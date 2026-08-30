@@ -17,6 +17,14 @@ dependencies = [
 [project.scripts]
 konspekt = "app.__main__:main"
 
+# Нужны только тестам. В приложение не попадают: fonttools читает шрифты
+# ради проверки кириллицы, самой программе это не требуется.
+[dependency-groups]
+dev = [
+    "fonttools>=4.60",
+    "brotli>=1.1",
+]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

@@ -54,6 +54,30 @@ def main() -> int:
         assert f".{cls}" in css, f"класс .{cls} создаётся в JS, но не описан в стилях"
     print("[ok] классы, которые создаёт JS, описаны в стилях")
 
+    # --- шрифты ----------------------------------------------------------
+    # Файл шрифта легко забыть при переносе или сборке, и тогда русский
+    # текст молча нарисуется системным: заголовки поедут, а ошибки не
+    # будет нигде.
+    for name in re.findall(r'url\("(fonts/[^"]+)"\)', css):
+        assert (WEB / name).exists(), f"стили ссылаются на {name}, а файла нет"
+        assert (WEB / name).stat().st_size > 10_000, f"{name} подозрительно мал"
+    fonts = re.findall(r'url\("(fonts/[^"]+)"\)', css)
+    assert fonts, "свои шрифты не подключены, интерфейс поедет на чужой машине"
+    # Латинская сборка шрифта весит столько же и выглядит так же: подмену
+    # видно только на экране, когда русский текст рисуется системным.
+    try:
+        from fontTools.ttLib import TTFont
+    except ImportError:
+        print(f"[skip] все {len(fonts)} шрифтов на месте, кириллица не проверена")
+    else:
+        for name in set(fonts):
+            chars = set()
+            for table in TTFont(WEB / name)["cmap"].tables:
+                chars |= set(table.cmap)
+            for letter in "АЯЁабяё":
+                assert ord(letter) in chars, f"в {name} нет буквы {letter}"
+        print(f"[ok] все {len(set(fonts))} шрифтов на месте и знают кириллицу")
+
     # --- вызовы моста против методов Api ---------------------------------
     api_py = Path("app/ui/api.py").read_text(encoding="utf-8")
     methods = set(re.findall(r"^    def (\w+)", api_py, re.M))

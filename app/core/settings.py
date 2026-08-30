@@ -18,6 +18,10 @@ class WindowGeometry:
     y: int | None = None
     width: int = 460
     height: int = 640
+    # Ширина боковой колонки. Живёт здесь, а не в localStorage:
+    # хранилище webview очищается между запусками, и выбранная
+    # ширина каждый раз слетала бы к исходной.
+    sidebar_width: int = 240
 
 
 @dataclass

@@ -301,3 +301,7 @@ class Api:
     def set_theme(self, theme: str) -> str:
         """Запомнить выбранную тему. Применяет её сам фронт."""
         return self._service.set_theme(theme)
+
+    def set_sidebar_width(self, width: int) -> int:
+        """Запомнить ширину боковой колонки после перетаскивания."""
+        return self._service.set_sidebar_width(width)

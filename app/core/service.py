@@ -1116,6 +1116,17 @@ class AppService:
         settings_mod.save(self.settings)
         return theme
 
+    def set_sidebar_width(self, width: int) -> int:
+        """Запомнить ширину боковой колонки.
+
+        Границы проверяем здесь тоже: файл настроек могли править
+        руками, а колонка в три пикселя делает окно нерабочим.
+        """
+        value = max(150, min(420, int(width)))
+        self.settings.window.sidebar_width = value
+        settings_mod.save(self.settings)
+        return value
+
     def save_window_geometry(self, x: int, y: int, width: int, height: int) -> None:
         self.settings.window.x = int(x)
         self.settings.window.y = int(y)
