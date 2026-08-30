@@ -15,8 +15,18 @@ from __future__ import annotations
 import logging
 import threading
 
+from ..asr.download import ModelDownloader
 from .client import LlmClient, LlmError
-from .local import LocalServer, default_binary, find_model
+from .local import (
+    MODEL_DIR_NAME,
+    MODEL_FILE,
+    MODEL_REPO,
+    MODEL_TOTAL_BYTES,
+    LocalServer,
+    default_binary,
+    find_model,
+    llm_dir,
+)
 
 log = logging.getLogger(__name__)
 
@@ -39,6 +49,14 @@ class LlmManager:
         self._settings = settings_provider
         self._server: LocalServer | None = None
         self._lock = threading.RLock()
+        # Веса приезжают по требованию: полтора гигабайта в установщике
+        # ради человека, который выберет облако, никому не нужны.
+        self.downloader = ModelDownloader(
+            MODEL_REPO, (MODEL_FILE,), llm_dir() / MODEL_DIR_NAME
+        )
+        # Саммари и чат могут попроситься одновременно: качать один файл
+        # в два потока значит получить склейку вместо модели.
+        self._download_lock = threading.RLock()
 
     # --- состояние -------------------------------------------------------
 
@@ -61,6 +79,9 @@ class LlmManager:
             "model_ready": model is not None,
             "engine_ready": default_binary().exists(),
             "server_running": self._server is not None and self._server.is_running,
+            "downloading": self.downloader.is_running,
+            "bytes": self.downloader.downloaded_bytes(),
+            "total_bytes": MODEL_TOTAL_BYTES,
             "base_url": cfg.base_url,
             "model": cfg.model,
             "template": cfg.template,
@@ -109,6 +130,35 @@ class LlmManager:
                 # из запуска процесса человеку ничего не говорят.
                 log.exception("Не удалось поднять локальную модель")
                 raise LlmError(f"Локальная модель не запустилась: {exc}") from exc
+
+    # --- веса ------------------------------------------------------------
+
+    def download(
+        self,
+        on_progress=None,
+        on_done=None,
+    ) -> None:
+        """Скачать веса в фоне. Уже скачанные не трогаем."""
+        if find_model() is not None or self.downloader.is_running:
+            return
+        self.downloader.start(on_progress, on_done)
+
+    def cancel_download(self) -> None:
+        self.downloader.cancel()
+
+    def ensure_model(self, on_progress=None) -> None:
+        """Дождаться весов, скачав их при необходимости.
+
+        Человек нажал «Сделать заметки», а модели на диске нет. Отправлять
+        его в настройки за отдельной кнопкой значит ломать работу на
+        ровном месте: качаем прямо здесь и говорим, сколько осталось.
+        """
+        if self.backend != "local" or find_model() is not None:
+            return
+        with self._download_lock:
+            if find_model() is not None:
+                return
+            self.downloader.run_blocking(on_progress)
 
     def shutdown(self) -> None:
         with self._lock:

@@ -65,6 +65,8 @@ SUMMARY_CHUNK = "summary.chunk"
 # Сообщаем словами, что происходит, иначе это читается как зависание.
 SUMMARY_STATUS = "summary.status"
 SUMMARY_ERROR = "summary.error"
+# Веса модели приезжают по требованию, как и веса распознавания.
+LLM_DOWNLOAD = "llm.download"
 CHAT_CHUNK = "chat.chunk"
 CHAT_MESSAGE = "chat.message"
 CHAT_ERROR = "chat.error"

@@ -52,6 +52,7 @@ from ..core.events import (
     CHAT_ERROR,
     CHAT_MESSAGE,
     IMPORT_CHANGED,
+    LLM_DOWNLOAD,
     IMPORT_PROGRESS,
     MEETINGS_CHANGED,
     MEETING_UPDATED,
@@ -797,6 +798,58 @@ class AppService:
     def llm_status(self) -> dict[str, Any]:
         return self.llm.status()
 
+    def download_llm(self) -> dict[str, Any]:
+        """Скачать веса модели в фоне, отчитываясь в UI."""
+
+        def progress(name: str, done: int, total: int) -> None:
+            bus.emit(
+                LLM_DOWNLOAD,
+                {"file": name, "bytes": done, "total": total, "state": "downloading"},
+            )
+
+        def finished(error: str | None) -> None:
+            bus.emit(
+                LLM_DOWNLOAD,
+                {"state": "error" if error else "ready", "message": error or ""},
+            )
+
+        self.llm.download(progress, finished)
+        return self.llm.status()
+
+    def cancel_llm_download(self) -> dict[str, Any]:
+        self.llm.cancel_download()
+        return self.llm.status()
+
+    def _ensure_llm_model(self) -> None:
+        """Дождаться весов, скачав их при необходимости.
+
+        Первый запрос к модели упирается в полтора гигабайта загрузки.
+        Молчать всё это время нельзя: без прогресса это читается как
+        зависание, и человек закроет программу на полпути.
+        """
+        if self.llm.status().get("model_ready"):
+            return
+        shown = -1
+
+        def progress(name: str, done: int, total: int) -> None:
+            nonlocal shown
+            if not total:
+                return
+            percent = done * 100 // total
+            # Событие на каждые 64 КБ забьёт мост в окно бесполезной
+            # работой: глазу хватает целых процентов.
+            if percent == shown:
+                return
+            shown = percent
+            bus.emit(
+                LLM_DOWNLOAD,
+                {"file": name, "bytes": done, "total": total,
+                 "percent": percent, "state": "downloading"},
+            )
+
+        self.llm.ensure_model(progress)
+        bus.emit(LLM_DOWNLOAD, {"state": "ready", "message": ""})
+
     def save_llm_settings(self, **fields: Any) -> dict[str, Any]:
         """Сохранить настройки модели.
 
@@ -816,6 +869,7 @@ class AppService:
     def check_llm(self) -> dict[str, Any]:
         """Проверить связь с моделью по кнопке в настройках."""
         try:
+            self._ensure_llm_model()
             return self.llm.client().check()
         except LlmError as exc:
             return {"ok": False, "error": str(exc)}
@@ -878,6 +932,7 @@ class AppService:
             def on_chunk(piece: str) -> None:
                 bus.emit(SUMMARY_CHUNK, {"meeting_id": meeting_id, "text": piece})
 
+            self._ensure_llm_model()
             client = self.llm.client()
             if not fits(transcript, TRANSCRIPT_BUDGET):
                 # Полуторачасовая встреча в окно не влезает, и сервер
@@ -1023,6 +1078,7 @@ class AppService:
                 bus.emit(CHAT_CHUNK, {"meeting_id": meeting_id,
                                       "message_id": answer_id, "text": piece})
 
+            self._ensure_llm_model()
             text = self.llm.client().stream(
                 messages, on_chunk=on_chunk, should_stop=lambda: self._llm_cancel
             )

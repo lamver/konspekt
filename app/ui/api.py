@@ -149,6 +149,12 @@ class Api:
     def check_llm(self) -> dict[str, Any]:
         return self._service.check_llm()
 
+    def download_llm(self) -> dict[str, Any]:
+        return self._service.download_llm()
+
+    def cancel_llm_download(self) -> dict[str, Any]:
+        return self._service.cancel_llm_download()
+
     def generate_summary(self, meeting_id: str) -> dict[str, Any]:
         return self._service.generate_summary(meeting_id)
 

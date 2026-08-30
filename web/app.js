@@ -116,6 +116,18 @@ window.__konspekt_event = function (payload) {
     case 'model.download':
       onModelProgress(payload);
       break;
+    case 'llm.download':
+      // Модель приезжает при первом запросе, и это полтора гигабайта.
+      // Без процентов ожидание неотличимо от зависания.
+      if (payload.state === 'downloading') {
+        setSummaryStatus(`Скачиваем модель… ${payload.percent}%`);
+      } else if (payload.state === 'error') {
+        showToast(payload.message || 'Не удалось скачать модель');
+      } else {
+        setSummaryStatus('Модель готова, запускаем…');
+        refreshLlmStatus();
+      }
+      break;
     case 'import.changed':
       renderImports(payload.tasks || []);
       break;
@@ -390,7 +402,7 @@ function renderLlmSettings(status) {
 
   let hint = LLM_HINTS[status.backend] || '';
   if (status.backend === 'local' && !status.model_ready) {
-    hint += ' Модель ещё не скачана: это произойдёт при первом запросе.';
+    hint += ' Модель ещё не скачана: полтора гигабайта приедут при первом запросе.';
   }
   ui.llmHint.textContent = hint;
   ui.llmCheckResult.textContent = '';
