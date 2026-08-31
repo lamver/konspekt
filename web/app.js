@@ -87,6 +87,9 @@ window.__konspekt_event = function (payload) {
     case 'recording.stopped':
       state.isRecording = false;
       state.recordingId = null;
+      // Запись только что появилась, значит и переслушивать теперь есть
+      // что: иначе кнопки не было бы до перехода на другую встречу.
+      if (payload.meeting_id === state.currentId) state.hasAudio = true;
       renderRecordingState();
       stopTimer();
       // Именно refreshMeta, а не selectMeeting: перезагрузка встречи
@@ -715,6 +718,10 @@ async function selectMeeting(id, jumpTo = null) {
 
   state.currentId = id;
   state.current = meeting;
+  // Есть ли что переслушивать. У встреч, загруженных файлом до
+  // появления этой возможности, звук не сохранялся: кнопка там только
+  // обманывала бы.
+  state.hasAudio = meeting.has_audio !== false;
 
   ui.title.value = meeting.title || '';
   ui.notes.value = meeting.notes || '';
@@ -908,6 +915,9 @@ function appendSegment(seg, scroll = true) {
     play.title = 'Переслушать фразу';
     play.innerHTML = ICON_PLAY;
     play.addEventListener('click', () => playTurn(play, turn));
+    // У встреч без записи кнопки нет вовсе: лучше её отсутствие,
+    // чем кнопка, которая всегда отвечает «записи нет».
+    play.hidden = state.hasAudio === false;
 
     head.appendChild(who);
     head.appendChild(time);
@@ -1052,10 +1062,21 @@ function onModelProgress(payload) {
     ui.modelAction.textContent = 'Отменить';
     ui.modelAction.dataset.act = 'cancel';
     setModelProgress(payload.bytes, payload.total || state.model.total_bytes);
+    // Плашка живёт во вкладке «Транскрипт», а человек в этот момент
+    // обычно смотрит на список загруженных файлов и не понимает, почему
+    // расшифровки нет. Поэтому о первой загрузке говорим на всё окно.
+    if (!state.modelToastShown) {
+      state.modelToastShown = true;
+      showToast('Качаем модель распознавания, 220 МБ. Расшифровка начнётся сразу после этого', 12000);
+    }
     return;
   }
   if (payload.state === 'error') {
     showToast(payload.message || 'Не удалось скачать модель');
+  }
+  if (payload.state === 'ready' && state.modelToastShown) {
+    state.modelToastShown = false;
+    showToast('Модель распознавания готова', 4000);
   }
   refreshModelStatus();
 }

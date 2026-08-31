@@ -56,11 +56,16 @@ class TranscriptionQueue:
         use_vad: bool = True,
         embedder: VoiceEmbedder | None = None,
         roster: VoiceRoster | None = None,
+        ensure_model: Callable[[], bool] | None = None,
     ) -> None:
         self.transcriber = transcriber
         self.on_segment = on_segment
         self.sample_rate = sample_rate
         self.use_vad = use_vad
+        # Веса могут быть ещё не скачаны. Ждём их здесь, в своём потоке:
+        # поток захвата задерживать нельзя, там любая пауза это дыра в
+        # записи, а чанки пока подождут в очереди.
+        self.ensure_model = ensure_model
         # Кто говорит. Обе части необязательны: без них всё работает
         # ровно как раньше, только реплики остаются просто дорожками.
         self.embedder = embedder
@@ -223,6 +228,11 @@ class TranscriptionQueue:
             if job is None:
                 break
             try:
+                if self.ensure_model is not None and not self.ensure_model():
+                    # Весов нет и скачать не вышло: молча выбрасывать чанк
+                    # нельзя, но и делать с ним нечего. Сообщение об этом
+                    # уже ушло в интерфейс из самого скачивания.
+                    continue
                 segments = self.transcriber.transcribe(
                     job.pcm,
                     sample_rate=self.sample_rate,

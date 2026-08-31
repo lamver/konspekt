@@ -35,6 +35,8 @@ FAST = [
     "delete_test.py",
     "search_test.py",
     "clip_test.py",
+    "import_clip_test.py",
+    "nomodel_test.py",
     "version_test.py",
     "migration_test.py",
 ]

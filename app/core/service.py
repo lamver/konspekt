@@ -50,6 +50,7 @@ from ..asr.enroll import (
 from ..asr.voices import VoiceRoster
 from ..audio import AudioCapture, NullCapture, WasapiCapture
 from ..audio import devices as audio_devices
+from ..audio.buffers import WavWriter, float_to_int16
 from ..core import paths
 from ..core import settings as settings_mod
 from ..core.events import (
@@ -112,6 +113,11 @@ class AppService:
         # Кто говорит: отпечаток голоса и состав участников встречи.
         self.embedder = VoiceEmbedder(paths.models_dir() / EMBEDDER_DIR_NAME)
         self.roster = VoiceRoster()
+        # Скачивание весов по требованию. Заводим до очереди: она
+        # сразу получает ссылку на _ensure_asr_model. Замок нужен, потому
+        # что чанки приходят из разных потоков.
+        self._asr_model_lock = threading.Lock()
+        self._asr_download_failed = False
         # Очередь создаётся всегда: она дешёвая, а поток поднимается
         # только когда реально приходит первый чанк.
         self.asr_queue = TranscriptionQueue(
@@ -119,6 +125,9 @@ class AppService:
             self._on_segment,
             embedder=self.embedder,
             roster=self.roster,
+            # Веса качаются при первой же реплике, а не при установке:
+            # иначе на чистой машине расшифровка молча не появлялась.
+            ensure_model=self._ensure_asr_model,
         )
         self.capture = capture or self._build_capture()
         # Разбор готовых записей. Поток поднимается только когда человек
@@ -148,6 +157,10 @@ class AppService:
         # Сдвиг времени для второго и последующих включений записи в одной
         # встрече: без него каждый заход начинался бы с нуля.
         self.time_offset: float = 0.0
+        # Открытые дорожки разбираемых файлов: встреча -> дорожка -> писатель.
+        # Импорт идёт кусками в фоновом потоке, поэтому файл держим
+        # открытым до конца разбора, а не открываем на каждый кусок.
+        self._import_writers: dict[str, dict[str, WavWriter]] = {}
         self._recover_stale_recordings()
         # Проверка новой версии идёт в фоне и не задерживает старт.
         self._version_checker = VersionChecker(self)
@@ -555,6 +568,69 @@ class AppService:
         settings_mod.save(self.settings)
         return self.model_status()
 
+    def _ensure_asr_model(self) -> bool:
+        """Дождаться весов распознавания, скачав их при необходимости.
+
+        Иначе на чистой установке получалось молчаливое ничто: человек
+        бросал файл, импорт бодро доходил до конца, а расшифровка
+        оставалась пустой, потому что модели на диске нет. Ошибка при
+        этом была только в журнале, которого никто не читает.
+
+        Качаем один раз и по требованию, а не при установке: 220 МБ в
+        дистрибутиве не нужны тем, кто пользуется только заметками.
+        """
+        transcriber = self.transcriber
+        ready = getattr(transcriber, "is_downloaded", lambda: True)()
+        if ready:
+            return True
+        if self._asr_download_failed:
+            # Уже пробовали и не смогли: не долбим сеть на каждом чанке.
+            return False
+
+        with self._asr_model_lock:
+            # Пока ждали замок, скачать мог соседний поток.
+            if getattr(transcriber, "is_downloaded", lambda: True)():
+                return True
+            if self._asr_download_failed:
+                return False
+
+            shown = -1
+
+            def progress(name: str, done: int, total: int) -> None:
+                nonlocal shown
+                if not total:
+                    return
+                percent = done * 100 // total
+                if percent == shown:
+                    return
+                shown = percent
+                bus.emit(
+                    MODEL_DOWNLOAD,
+                    {"file": name, "bytes": done, "total": total,
+                     "percent": percent, "state": "downloading"},
+                )
+
+            log.info("Модель распознавания не найдена, качаем при первом обращении")
+            try:
+                self.downloader.run_blocking(progress)
+            except Exception as exc:
+                self._asr_download_failed = True
+                log.exception("Не удалось скачать модель распознавания")
+                bus.emit(MODEL_DOWNLOAD, {"state": "error", "message": str(exc)})
+                return False
+
+            if not getattr(transcriber, "is_downloaded", lambda: True)():
+                self._asr_download_failed = True
+                bus.emit(MODEL_DOWNLOAD, {
+                    "state": "error",
+                    "message": "Модель скачалась не полностью, попробуйте ещё раз",
+                })
+                return False
+
+            bus.emit(MODEL_DOWNLOAD, {"state": "ready", "message": ""})
+            log.info("Модель распознавания готова")
+            return True
+
     def _recover_stale_recordings(self) -> None:
         """Чиним встречи, зависшие в статусе «идёт запись».
 
@@ -589,6 +665,10 @@ class AppService:
         data = meeting.to_dict()
         data["note_lines"] = [n.to_dict() for n in self.store.list_note_lines(meeting_id)]
         data["segments"] = [s.to_dict() for s in self.store.list_segments(meeting_id)]
+        # Есть ли что переслушать. У встреч, загруженных файлом до появления
+        # этой возможности, звук не сохранялся, и кнопка у их реплик только
+        # обманывала бы: нажал, а в ответ «записи нет».
+        data["has_audio"] = bool(self.store.list_audio_chunks(meeting_id))
         return data
 
     def update_meeting(self, meeting_id: str, **fields: Any) -> dict[str, Any] | None:
@@ -971,15 +1051,68 @@ class AppService:
         очередь и то же определение говорящих, поэтому импортированная
         встреча выглядит ровно как записанная.
         """
+        # Заодно складываем звук рядом со встречей. Без этого у реплик из
+        # загруженного файла нечего было переслушивать: сам файл лежит
+        # где-то у человека и может быть переименован или удалён, а
+        # расшифровка остаётся навсегда.
+        self._write_import_audio(meeting_id, track, pcm)
         if not self.settings.asr.enabled:
+            return
+        # На чистой установке весов нет, и без этого разбор файла
+        # тихо давал пустую расшифровку.
+        if not self._ensure_asr_model():
             return
         # block=True: чтение файла идёт в десятки раз быстрее распознавания,
         # и без ожидания очередь переполняется, а речь молча теряется. На
         # живой 25-минутной записи так пропал 421 фрагмент речи.
         self.asr_queue.submit(meeting_id, track, pcm, offset, block=True)
 
+    def _write_import_audio(self, meeting_id: str, track: str, pcm) -> None:
+        """Дописать кусок разбираемого файла в дорожку встречи.
+
+        Пишем тем же WavWriter и в тот же каталог, что и живая запись,
+        поэтому прослушивание, подсчёт места и удаление встречи работают
+        с импортом ровно так же, как с записанным разговором.
+        """
+        try:
+            writers = self._import_writers.setdefault(meeting_id, {})
+            writer = writers.get(track)
+            if writer is None:
+                folder = paths.audio_dir() / meeting_id
+                folder.mkdir(parents=True, exist_ok=True)
+                writer = WavWriter(folder / f"import-{track}.wav")
+                writers[track] = writer
+            data = np.asarray(pcm)
+            if data.dtype != np.int16:
+                # Из файла звук приходит float32 [-1, 1], а на диск дорожки
+                # кладём в int16, как и живую запись.
+                data = float_to_int16(data)
+            writer.write(data.reshape(-1))
+        except Exception:
+            # Расшифровка важнее возможности переслушать: молчим.
+            log.exception("Не удалось сохранить звук импорта встречи %s", meeting_id)
+
+    def _close_import_audio(self, meeting_id: str) -> None:
+        """Закрыть дорожки импорта и привязать их ко времени встречи."""
+        writers = self._import_writers.pop(meeting_id, None)
+        if not writers:
+            return
+        for track, writer in writers.items():
+            try:
+                duration = writer.duration
+                path = writer.path
+                writer.close()
+                if duration <= 0:
+                    path.unlink(missing_ok=True)
+                    continue
+                # Файл импорта один и начинается с начала встречи.
+                self.store.add_audio_chunk(meeting_id, track, str(path), 0.0, duration)
+            except Exception:
+                log.exception("Не удалось закрыть дорожку импорта %s", track)
+
     def _import_finished(self, meeting_id: str, duration: float) -> None:
         """Файл дочитан: дождаться распознавания и закрыть встречу."""
+        self._close_import_audio(meeting_id)
         try:
             # Последняя фраза сидит внутри VAD и ждёт паузу, которой уже
             # не будет: выталкиваем, иначе потеряем конец записи.
