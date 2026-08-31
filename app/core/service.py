@@ -7,10 +7,13 @@ UI и трей ходят только сюда и ничего не знают 
 
 from __future__ import annotations
 
+import base64
+import io
 import logging
 import shutil
 import threading
 import time
+import wave
 from pathlib import Path
 from typing import Any
 
@@ -610,6 +613,77 @@ class AppService:
         self.store.delete_meeting(meeting_id)
         bus.emit(MEETINGS_CHANGED)
 
+    def _save_audio_chunks(self, meeting_id: str) -> None:
+        """Привязать записанные файлы к времени встречи.
+
+        Молчим при ошибке: не сохранившаяся привязка стоит кнопки
+        «переслушать», а потерянная из-за неё встреча — гораздо дороже.
+        """
+        chunks = getattr(self.capture, "last_chunks", None)
+        if not chunks:
+            return
+        try:
+            for track, path, duration in chunks:
+                self.store.add_audio_chunk(
+                    meeting_id, track, path, self.time_offset, duration
+                )
+        except Exception:
+            log.exception("Не удалось запомнить куски записи встречи %s", meeting_id)
+
+    def audio_clip(self, meeting_id: str, start: float, end: float,
+                   track: str = "") -> dict[str, Any] | None:
+        """Кусок записи вокруг реплики для прослушивания.
+
+        Отдаём готовый WAV в base64, а не путь к файлу: во фронте нет
+        доступа к диску, а поднимать ради этого HTTP-сервер значило бы
+        открыть порт наружу в приложении, которое обещает приватность.
+        """
+        chunks = self.store.list_audio_chunks(meeting_id)
+        if not chunks:
+            return None
+
+        # Реплику писали обе дорожки, но своя слышна чётче: у «them» голос
+        # собеседника, у «me» свой. Берём дорожку реплики, а если её нет
+        # (например, писали только систему) — любую доступную.
+        wanted = [c for c in chunks if not track or c["track"] == track]
+        pool = wanted or chunks
+        # Нужный файл тот, внутрь которого попадает начало реплики.
+        chunk = None
+        for c in pool:
+            if c["start_s"] <= start < c["start_s"] + c["duration_s"]:
+                chunk = c
+                break
+        if chunk is None:
+            # Записи старых встреч не привязаны ко времени: там файл один,
+            # и он начинается с нуля.
+            chunk = pool[0]
+
+        path = Path(chunk["path"])
+        if not path.exists():
+            return None
+
+        # Небольшой запас с обеих сторон: граница фразы у распознавания
+        # неточная, и без него начало слова срезается.
+        pad = 0.25
+        offset = max(0.0, start - chunk["start_s"] - pad)
+        length = max(0.3, (end - start) + pad * 2)
+        try:
+            data, rate = _read_wav_part(path, offset, length)
+        except Exception:
+            log.exception("Не удалось прочитать кусок записи %s", path)
+            return None
+
+        buf = io.BytesIO()
+        with wave.open(buf, "wb") as out:
+            out.setnchannels(1)
+            out.setsampwidth(2)
+            out.setframerate(rate)
+            out.writeframes(data)
+        return {
+            "wav": base64.b64encode(buf.getvalue()).decode("ascii"),
+            "duration": len(data) / 2 / rate,
+        }
+
     def _delete_audio(self, meeting_id: str) -> None:
         """Убрать записи встречи с диска.
 
@@ -778,6 +852,11 @@ class AppService:
             return None
 
         audio_path = self.capture.stop()
+        # Запоминаем, с какой секунды встречи начинается каждый файл.
+        # time_offset хранит, сколько уже было записано до этого захода:
+        # без него второй заход считался бы с нуля, и «переслушать» на
+        # 40-й секунде попадало бы в начало второго файла.
+        self._save_audio_chunks(meeting_id)
         # Последняя фраза ещё сидит внутри VAD: он ждал паузу, а её уже
         # не будет. Выталкиваем до остановки очереди, иначе потеряется.
         self.asr_queue.flush(meeting_id)
@@ -1285,6 +1364,28 @@ class AppService:
         self.importer.stop()
         settings_mod.save(self.settings)
         self.store.close()
+
+
+def _read_wav_part(path: Path, offset: float, length: float) -> tuple[bytes, int]:
+    """Прочитать кусок WAV с нужной секунды, не читая файл целиком.
+
+    Двухчасовая запись весит сотни мегабайт, и читать её ради трёх секунд
+    было бы и медленно, и по памяти расточительно. `setpos` переставляет
+    чтение сразу на нужный кадр.
+    """
+    with wave.open(str(path), "rb") as w:
+        rate = w.getframerate()
+        channels = w.getnchannels()
+        total = w.getnframes()
+        start = min(total, max(0, int(offset * rate)))
+        count = max(0, min(total - start, int(length * rate)))
+        w.setpos(start)
+        raw = w.readframes(count)
+    if channels > 1:
+        # Дорожки пишем в моно, но чужой файл может оказаться стерео.
+        data = np.frombuffer(raw, dtype=np.int16).reshape(-1, channels)
+        raw = data.mean(axis=1).astype(np.int16).tobytes()
+    return raw, rate
 
 
 def _default_title() -> str:

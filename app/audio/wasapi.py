@@ -55,6 +55,10 @@ class _Track:
         self._level = 0.0
         self._error: str | None = None
         self._started = threading.Event()
+        # Длительность записанного. Считаем её до закрытия файла: после
+        # writer обнуляется, а знать, сколько секунд в файле, нужно, чтобы
+        # потом переслушать нужную реплику.
+        self._written_seconds = 0.0
 
     @property
     def level(self) -> float:
@@ -66,7 +70,7 @@ class _Track:
 
     @property
     def duration(self) -> float:
-        return self._writer.duration if self._writer else 0.0
+        return self._writer.duration if self._writer else self._written_seconds
 
     def start(self) -> None:
         self._stop.clear()
@@ -89,6 +93,7 @@ class _Track:
             chunk, offset = tail
             self._safe_chunk(chunk, offset)
         written = self._writer.frames
+        self._written_seconds = self._writer.duration
         self._writer.close()
         path = self._writer.path
         self._writer = None
@@ -181,6 +186,9 @@ class WasapiCapture:
         self._level_thread: threading.Thread | None = None
         self._level_stop = threading.Event()
         self._paths: dict[str, str] = {}
+        # Что записал последний заход: дорожка -> (файл, длительность).
+        # Нужно, чтобы привязать файл к времени встречи.
+        self._last_chunks: list[tuple[str, str, float]] = []
 
     @property
     def is_recording(self) -> bool:
@@ -190,6 +198,11 @@ class WasapiCapture:
     def track_paths(self) -> dict[str, str]:
         """Пути к дорожкам последней записи: {"me": ..., "them": ...}."""
         return dict(self._paths)
+
+    @property
+    def last_chunks(self) -> list[tuple[str, str, float]]:
+        """Файлы последнего захода: (дорожка, путь, длительность в секундах)."""
+        return list(self._last_chunks)
 
     def errors(self) -> dict[str, str]:
         return {name: t.error for name, t in self._tracks.items() if t.error}
@@ -260,11 +273,14 @@ class WasapiCapture:
             self._level_thread = None
 
         paths: dict[str, str] = {}
+        chunks: list[tuple[str, str, float]] = []
         for name, track in self._tracks.items():
             path = track.stop()
             if path is not None:
                 paths[name] = str(path)
+                chunks.append((name, str(path), track.duration))
         self._paths = paths
+        self._last_chunks = chunks
         log.info("Запись остановлена, файлов: %d", len(paths))
 
         # В поле встречи кладём микрофон как основную дорожку,

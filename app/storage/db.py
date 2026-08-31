@@ -24,12 +24,13 @@ from ..core.models import (
     Person,
     Speaker,
     TranscriptSegment,
+    new_id,
     now,
 )
 
 log = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS meetings (
@@ -105,6 +106,22 @@ CREATE TABLE IF NOT EXISTS chat_messages (
 );
 
 CREATE INDEX IF NOT EXISTS idx_chat_meeting ON chat_messages(meeting_id, created_at);
+
+-- Куски записи встречи. Файлов у одной встречи бывает несколько: запись
+-- останавливали и включали снова, и каждый заход пишет свою пару
+-- дорожек. Время реплик при этом сквозное по встрече, поэтому без явной
+-- привязки «файл начинается на такой-то секунде» переслушать реплику
+-- нельзя: во втором заходе попадёшь в начало файла вместо нужного места.
+CREATE TABLE IF NOT EXISTS audio_chunks (
+    id          TEXT PRIMARY KEY,
+    meeting_id  TEXT NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,
+    track       TEXT NOT NULL DEFAULT 'me',   -- me | them
+    path        TEXT NOT NULL,
+    start_s     REAL NOT NULL DEFAULT 0,      -- позиция начала файла во встрече
+    duration_s  REAL NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_chunks_meeting ON audio_chunks(meeting_id, start_s);
 CREATE INDEX IF NOT EXISTS idx_notes_meeting ON note_lines(meeting_id);
 CREATE INDEX IF NOT EXISTS idx_segments_meeting ON transcript_segments(meeting_id, start_s);
 CREATE INDEX IF NOT EXISTS idx_meetings_created ON meetings(created_at DESC);
@@ -191,7 +208,69 @@ class Store:
             if was < SCHEMA_VERSION:
                 log.info("Схема базы обновлена с версии %d до %d", was, SCHEMA_VERSION)
 
+        if was < 6:
+            # У человека уже записаны встречи, а привязки файлов ко времени
+            # нет: без этого кнопка «переслушать» молчала бы на всём архиве.
+            self._index_existing_audio()
+
         self.search_ready = self._init_search(rebuild=was < 5)
+
+    def _index_existing_audio(self) -> None:
+        """Записать в базу файлы уже записанных встреч.
+
+        Порядок восстанавливаем по имени файла: в нём стоит отметка
+        времени старта записи, поэтому заходы выстраиваются правильно,
+        даже если запись останавливали и включали снова.
+        """
+        import wave
+
+        try:
+            root = paths.audio_dir()
+            if not root.exists():
+                return
+            known = {
+                r["meeting_id"]
+                for r in self._conn.execute("SELECT DISTINCT meeting_id FROM audio_chunks")
+            }
+            added = 0
+            for folder in root.iterdir():
+                if not folder.is_dir() or folder.name in known:
+                    continue
+                exists = self._conn.execute(
+                    "SELECT 1 FROM meetings WHERE id=?", (folder.name,)
+                ).fetchone()
+                if not exists:
+                    continue
+                offset = 0.0
+                # Файлы одного захода (me и them) начинаются в один момент,
+                # поэтому сдвиг растёт по заходам, а не по файлам.
+                by_stamp: dict[str, list] = {}
+                for f in sorted(folder.glob("*.wav")):
+                    stamp = f.stem.rsplit("-", 1)[0]
+                    by_stamp.setdefault(stamp, []).append(f)
+                for stamp in sorted(by_stamp):
+                    longest = 0.0
+                    for f in by_stamp[stamp]:
+                        try:
+                            with wave.open(str(f)) as w:
+                                duration = w.getnframes() / float(w.getframerate())
+                        except Exception:
+                            continue
+                        track = "me" if f.stem.endswith("-me") else "them"
+                        self._conn.execute(
+                            "INSERT INTO audio_chunks"
+                            "(id, meeting_id, track, path, start_s, duration_s)"
+                            " VALUES (?,?,?,?,?,?)",
+                            (new_id(), folder.name, track, str(f), offset, duration),
+                        )
+                        added += 1
+                        longest = max(longest, duration)
+                    offset += longest
+            self._conn.commit()
+            if added:
+                log.info("Записи старых встреч привязаны ко времени: %d файлов", added)
+        except sqlite3.Error:
+            log.warning("Не удалось привязать старые записи", exc_info=True)
 
     def _init_search(self, rebuild: bool) -> bool:
         """Поднять индекс поиска. Вернуть, получилось ли.
@@ -485,6 +564,30 @@ class Store:
             )
             self._conn.commit()
             return cur.rowcount
+
+    # --- куски записи -----------------------------------------------------
+
+    def add_audio_chunk(
+        self, meeting_id: str, track: str, path: str,
+        start_s: float, duration_s: float,
+    ) -> None:
+        """Запомнить файл записи и его место во времени встречи."""
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO audio_chunks(id, meeting_id, track, path, start_s, duration_s)"
+                " VALUES (?,?,?,?,?,?)",
+                (new_id(), meeting_id, track, path, start_s, duration_s),
+            )
+            self._conn.commit()
+
+    def list_audio_chunks(self, meeting_id: str) -> list[dict[str, Any]]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT track, path, start_s, duration_s FROM audio_chunks"
+                " WHERE meeting_id=? ORDER BY start_s",
+                (meeting_id,),
+            ).fetchall()
+        return [dict(r) for r in rows]
 
     # --- знакомые голоса --------------------------------------------------
 

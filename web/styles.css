@@ -713,6 +713,31 @@ body { display: flex; flex-direction: column; }
 }
 .turn__time { font-size: 10px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
 
+/* Кнопка «переслушать». Появляется по наведению на реплику: постоянно
+   висящий значок у каждой фразы превратил бы транскрипт в частокол.
+   Пока играет — остаётся видимой, иначе непонятно, что именно звучит. */
+.turn__play {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px; height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--ink-3);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity .12s, color .12s, background .12s;
+}
+.turn:hover .turn__play { opacity: .7; }
+.turn__play:hover { opacity: 1; color: var(--accent); background: var(--paper-3); }
+.turn__play.is-playing { opacity: 1; color: var(--accent); }
+/* Пока читаем кусок с диска, кнопка мигает: на двухчасовой записи
+   ответ приходит не мгновенно, и без отклика кажется, что не нажалось. */
+.turn__play.is-loading { opacity: 1; animation: turn-play-wait 1s infinite; }
+@keyframes turn-play-wait { 50% { opacity: .3; } }
+
 .turn__text {
   font-size: 12.5px;
   line-height: 1.6;

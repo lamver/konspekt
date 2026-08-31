@@ -780,6 +780,71 @@ function renderTranscript(segments) {
   updateTranscriptEmpty();
 }
 
+const ICON_PLAY = '<svg viewBox="0 0 16 16" width="11" height="11"><path d="M5 3.5v9l7-4.5z" fill="currentColor"/></svg>';
+const ICON_STOP = '<svg viewBox="0 0 16 16" width="11" height="11"><rect x="4.5" y="4.5" width="7" height="7" rx="1" fill="currentColor"/></svg>';
+
+/** Проигрыватель на всё окно: вторая фраза останавливает первую. */
+let currentAudio = null;
+let currentPlayBtn = null;
+
+function stopPlayback() {
+  if (currentAudio) {
+    currentAudio.pause();
+    currentAudio = null;
+  }
+  if (currentPlayBtn) {
+    currentPlayBtn.innerHTML = ICON_PLAY;
+    currentPlayBtn.classList.remove('is-playing');
+    currentPlayBtn = null;
+  }
+}
+
+/**
+ * Переслушать реплику.
+ *
+ * Звук приходит из питона готовым куском в base64: у страницы нет
+ * доступа к диску, а поднимать ради этого локальный сервер значило бы
+ * открыть порт в приложении, которое обещает приватность.
+ */
+async function playTurn(btn, turn) {
+  // Повторное нажатие по играющей реплике останавливает её.
+  if (currentPlayBtn === btn) {
+    stopPlayback();
+    return;
+  }
+  stopPlayback();
+  if (!state.currentId) return;
+
+  const start = Number(turn.dataset.start || 0);
+  const end = Number(turn.dataset.end || 0) || start + 3;
+  const track = turn.dataset.speaker || '';
+
+  btn.classList.add('is-loading');
+  let clip = null;
+  try {
+    clip = await api.audio_clip(state.currentId, start, end, track);
+  } catch (e) {
+    clip = null;
+  }
+  btn.classList.remove('is-loading');
+
+  if (!clip || !clip.wav) {
+    // Записи может не быть вовсе: встречу загрузили файлом или запись
+    // удалили. Молчать было бы непонятно, поэтому говорим прямо.
+    showToast('Записи этой фразы нет', 3000);
+    return;
+  }
+
+  const audio = new Audio('data:audio/wav;base64,' + clip.wav);
+  currentAudio = audio;
+  currentPlayBtn = btn;
+  btn.innerHTML = ICON_STOP;
+  btn.classList.add('is-playing');
+  audio.addEventListener('ended', stopPlayback);
+  audio.addEventListener('error', stopPlayback);
+  audio.play().catch(() => stopPlayback());
+}
+
 /**
  * Добавить реплику в конец транскрипта.
  *
@@ -835,8 +900,18 @@ function appendSegment(seg, scroll = true) {
     time.className = 'turn__time';
     time.textContent = fmtDuration(seg.start);
 
+    // Переслушать фразу. Распознавание местами врёт, и без возможности
+    // проверить спорное место расшифровке приходится просто верить.
+    const play = document.createElement('button');
+    play.className = 'turn__play';
+    play.type = 'button';
+    play.title = 'Переслушать фразу';
+    play.innerHTML = ICON_PLAY;
+    play.addEventListener('click', () => playTurn(play, turn));
+
     head.appendChild(who);
     head.appendChild(time);
+    head.appendChild(play);
 
     const text = document.createElement('div');
     text.className = 'turn__text';

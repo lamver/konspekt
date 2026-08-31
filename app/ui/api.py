@@ -54,6 +54,11 @@ class Api:
         """Найти реплики по словам во всех встречах."""
         return self._service.search(query)
 
+    def audio_clip(self, meeting_id: str, start: float, end: float,
+                   track: str = "") -> dict[str, Any] | None:
+        """Кусок записи под репликой, чтобы переслушать спорную фразу."""
+        return self._service.audio_clip(meeting_id, start, end, track)
+
     def storage_usage(self) -> dict[str, Any]:
         """Сколько места занимают записи и база.
 
