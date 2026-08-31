@@ -88,6 +88,12 @@ class Settings:
     hotkey: str = "<ctrl>+<shift>+k"
     start_hidden: bool = False
     language: str = "ru"
+    # Смотреть, не вышла ли новая версия. Приложение, которое лезет
+    # в сеть без спроса, противоречит обещанию приватности, поэтому
+    # проверку можно выключить.
+    check_updates: bool = True
+    # Когда смотрели в последний раз, unix-время.
+    last_version_check: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

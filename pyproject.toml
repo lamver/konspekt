@@ -12,6 +12,9 @@ dependencies = [
     "numpy>=2.0",
     "onnx-asr[cpu,hub]>=0.12.0",
     "av>=18.1.0",
+    # Запросы к LLM и проверка новой версии. Вместо sdk от OpenAI:
+    # тот тянет в билд десятки лишних мегабайт.
+    "httpx>=0.28",
 ]
 
 [project.scripts]

@@ -68,6 +68,7 @@ from ..core.events import (
     bus,
 )
 from ..core.importer import ImportQueue
+from ..core.version_check import VersionChecker
 from ..core.models import (
     ChatMessage,
     Meeting,
@@ -143,9 +144,11 @@ class AppService:
         # встрече: без него каждый заход начинался бы с нуля.
         self.time_offset: float = 0.0
         self._recover_stale_recordings()
+        # Проверка новой версии идёт в фоне и не задерживает старт.
+        self._version_checker = VersionChecker(self)
+        self._version_checker.check_later()
 
-        from .version_check import VersionChecker
-        VersionChecker(self).check_later()
+    def _build_transcriber(self) -> Transcriber:
         """Движок распознавания по настройкам.
 
         Модель здесь не грузится: только объект. Веса поднимутся сами

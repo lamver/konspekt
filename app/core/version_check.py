@@ -1,19 +1,23 @@
 """Проверка новой версии приложения.
 
-Запускается один раз при старте, один раз в сутки. Ничего не скачивает
-и не устанавливает — только оповещает. Обновление происходит вручную,
-через сайт. Автоустановка не будет никогда.
+Смотрит `latest.json` в публичном репозитории релизов. Ничего не
+скачивает и не устанавливает, только оповещает: обновление ставится
+руками. Тихой подмены бинарника не будет никогда.
 
-- Запрос на GitHub API только раз в сутки
-- Никаких данных не отправляется, кроме версии приложения и платформы
-- Можно отключить в настройках
-- Не блокирует старт приложения
+Почему публичный репозиторий, а не GitHub API приватного: Releases
+приватного репозитория отдаются только по токену, а класть в
+дистрибутив токен с доступом к исходникам нельзя.
+
+- Запрос не чаще раза в сутки
+- Наружу не уходит ничего, кроме версии и платформы в User-Agent
+- Отключается в настройках
+- Старт приложения не задерживает: работа идёт в фоновом потоке
 """
 
 from __future__ import annotations
 
-import json
 import logging
+import platform
 import threading
 import time
 from dataclasses import dataclass
@@ -23,13 +27,16 @@ import httpx
 
 from app import __version__
 
+from . import settings as settings_mod
+from .events import NEW_VERSION, bus
+
 if TYPE_CHECKING:
     from app.core.service import AppService
 
 log = logging.getLogger(__name__)
 
-URL = "https://api.github.com/repos/lamver/konspekt/releases/latest"
-USER_AGENT = f"Konspekt/{__version__} (+https://konspekt.app)"
+URL = "https://raw.githubusercontent.com/lamver/konspekt-releases/master/latest.json"
+USER_AGENT = f"Konspekt/{__version__} ({platform.system()} {platform.machine()})"
 CHECK_INTERVAL = 86400  # сутки
 TIMEOUT = 8.0
 
@@ -38,14 +45,14 @@ TIMEOUT = 8.0
 class Release:
     version: str
     url: str
-    published_at: str
+    notes: str = ""
 
     @classmethod
-    def from_api(cls, data: dict[str, Any]) -> "Release":
+    def from_json(cls, data: dict[str, Any]) -> "Release":
         return cls(
-            version=data["tag_name"].lstrip("v"),
-            url=data["html_url"],
-            published_at=data["published_at"],
+            version=str(data["version"]).lstrip("v"),
+            url=str(data.get("url", "")),
+            notes=str(data.get("notes", "")),
         )
 
 
@@ -62,11 +69,12 @@ class VersionChecker:
         self._thread.start()
 
     def _check(self) -> None:
-        if not self._service.settings.check_updates:
+        settings = self._service.settings
+        if not settings.check_updates:
             return
 
-        last_check = self._service.settings.last_version_check
-        if last_check and time.time() - last_check < CHECK_INTERVAL:
+        last = settings.last_version_check
+        if last and 0 < time.time() - last < CHECK_INTERVAL:
             return
 
         try:
@@ -78,33 +86,47 @@ class VersionChecker:
                 timeout=TIMEOUT,
             )
             response.raise_for_status()
-            data = response.json()
+            release = Release.from_json(response.json())
 
-            release = Release.from_api(data)
-            log.debug("Доступна версия %s", release.version)
-
-            if self._newer(release.version, __version__):
+            if is_newer(release.version, __version__):
+                log.info("Доступна версия %s", release.version)
                 bus.emit(
-                    "NEW_VERSION",
+                    NEW_VERSION,
                     {
                         "current": __version__,
                         "latest": release.version,
                         "url": release.url,
+                        "notes": release.notes,
                     },
                 )
+            else:
+                log.debug("Установлена свежая версия %s", __version__)
 
         except Exception as e:
+            # Нет сети или репозиторий недоступен — это не повод шуметь.
             log.debug("Не удалось проверить версию: %s", e)
         finally:
-            self._service.settings.last_version_check = time.time()
-            settings_mod.save(self._service.settings)
+            settings.last_version_check = time.time()
+            settings_mod.save(settings)
 
-    @staticmethod
-    def _newer(a: str, b: str) -> bool:
-        """Сравнить версии вида x.y.z."""
-        try:
-            va = tuple(int(part) for part in a.split(".")[:3])
-            vb = tuple(int(part) for part in b.split(".")[:3])
-            return va > vb
-        except (ValueError, TypeError):
-            return False
+
+def is_newer(candidate: str, current: str) -> bool:
+    """Больше ли `candidate` чем `current`.
+
+    Версии вида `x.y.z`, хвост после третьего числа игнорируется. Любой
+    мусор в ответе означает «новой версии нет»: лучше промолчать, чем
+    звать обновляться непонятно куда.
+    """
+    try:
+        a = _parts(candidate)
+        b = _parts(current)
+    except (ValueError, TypeError, AttributeError):
+        return False
+    return a > b
+
+
+def _parts(version: str) -> tuple[int, int, int]:
+    numbers = [int(part) for part in version.strip().lstrip("v").split(".")[:3]]
+    while len(numbers) < 3:
+        numbers.append(0)
+    return numbers[0], numbers[1], numbers[2]
