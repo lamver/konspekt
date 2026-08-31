@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import threading
 import urllib.request
 from pathlib import Path
@@ -34,6 +35,80 @@ ProgressCallback = Callable[[str, int, int], None]
 
 class DownloadCancelled(RuntimeError):
     """Пользователь остановил скачивание."""
+
+
+class DownloadBusy(RuntimeError):
+    """Тот же файл уже качает другой процесс."""
+
+
+class _FileLock:
+    """Замок между процессами на каталог модели.
+
+    Зачем. По жалобе пользователя: у него одновременно работали два
+    экземпляра программы, и оба дописывали веса в один и тот же `.part`.
+    Куски перемешались, итоговый размер случайно совпал с настоящим, файл
+    прошёл все проверки и лёг на диск как готовая модель. А при загрузке
+    onnxruntime говорил «Protobuf parsing failed», ошибка глохла, и
+    человек видел просто пустой транскрипт без единого намёка на причину.
+
+    Делаем эксклюзивное создание файла-замка: второй процесс не лезет в
+    чужую загрузку, а спокойно ждёт, пока первый закончит.
+    """
+
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        self._fd: int | None = None
+
+    def acquire(self) -> bool:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            self._fd = os.open(self.path, os.O_CREAT | os.O_EXCL | os.O_RDWR)
+        except FileExistsError:
+            if self._stale():
+                # Прошлый процесс убили, замок остался. Иначе загрузка была
+                # бы заблокирована навсегда до ручной чистки.
+                self.path.unlink(missing_ok=True)
+                return self.acquire()
+            return False
+        os.write(self._fd, str(os.getpid()).encode())
+        return True
+
+    def _stale(self) -> bool:
+        try:
+            pid = int(self.path.read_text().strip() or 0)
+        except (OSError, ValueError):
+            return True
+        if pid <= 0:
+            return True
+        if pid == os.getpid():
+            # Замок держит этот же процесс: другой поток уже качает.
+            # Считать его залипшим нельзя, иначе два потока снова полезут
+            # в один файл — ровно та поломка, от которой замок и стоит.
+            return False
+        return not _pid_alive(pid)
+
+    def release(self) -> None:
+        if self._fd is not None:
+            os.close(self._fd)
+            self._fd = None
+        self.path.unlink(missing_ok=True)
+
+
+def _pid_alive(pid: int) -> bool:
+    """Жив ли процесс. Замок мёртвого процесса снимаем сами."""
+    if os.name == "nt":
+        import ctypes
+
+        handle = ctypes.windll.kernel32.OpenProcess(0x1000, False, pid)
+        if not handle:
+            return False
+        ctypes.windll.kernel32.CloseHandle(handle)
+        return True
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        return False
+    return True
 
 
 class ModelDownloader:
@@ -81,6 +156,17 @@ class ModelDownloader:
 
     def run_blocking(self, on_progress: ProgressCallback | None = None) -> None:
         self.dest.mkdir(parents=True, exist_ok=True)
+        lock = _FileLock(self.dest / ".download.lock")
+        if not lock.acquire():
+            raise DownloadBusy(
+                "Модель уже качает другой экземпляр Konspekt"
+            )
+        try:
+            self._download_all(on_progress)
+        finally:
+            lock.release()
+
+    def _download_all(self, on_progress: ProgressCallback | None = None) -> None:
         for name in self.files:
             target = self.dest / name
             if target.exists():

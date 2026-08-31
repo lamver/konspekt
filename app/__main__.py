@@ -17,6 +17,7 @@ from . import __version__
 from .core import paths
 from .core.events import APP_QUIT, WINDOW_SHOW, bus
 from .core.service import AppService
+from .core.single import SingleInstance, wake_running_instance, watch_show_requests
 from .tray import TrayIcon
 from .ui.hotkeys import HotkeyManager
 from .ui.window import MainWindow
@@ -70,6 +71,15 @@ def main() -> int:
     # сборке сидит человек, и заодно видно, что обновление доехало.
     log.info("Запуск Konspekt %s, данные в %s", __version__, paths.data_dir())
 
+    # Вторая копия делила бы с первой базу, каталог записей и загрузку
+    # весов. У пользователя именно это и сломало распознавание: два
+    # процесса писали модель в один файл и перемешали её.
+    instance = SingleInstance(paths.data_dir() / "konspekt.lock")
+    if not instance.acquire():
+        log.info("Уже запущен другой экземпляр, показываем его окно")
+        wake_running_instance(paths.data_dir())
+        return 0
+
     service = AppService()
     main_window = MainWindow(service)
     window = main_window.create()
@@ -88,6 +98,9 @@ def main() -> int:
         # окна ещё нет, и событие WINDOW_SHOW было бы некому обработать.
         tray.start()
         hotkeys.start()
+        # Человек, не нашедший окно в трее, запустит программу ещё раз.
+        # Для него это и есть «открыть Konspekt», так что открываем.
+        watch_show_requests(paths.data_dir(), lambda: bus.emit(WINDOW_SHOW, {}))
 
     try:
         webview.start(on_started, gui=None, debug=False)
@@ -104,6 +117,7 @@ def main() -> int:
             service.updater.install_on_quit()
         except Exception:
             log.exception("Обновление при выходе не удалось")
+        instance.release()
 
     return 0
 

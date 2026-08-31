@@ -32,6 +32,8 @@ from ..asr import (
     TranscriptionQueue,
 )
 from ..asr.embedder import MODEL_DIR_NAME as EMBEDDER_DIR_NAME
+from ..asr.download import DownloadBusy
+from ..asr.gigaam import ModelBroken, ModelMissing
 from ..asr.embedder import MODEL_FILES as EMBEDDER_FILES
 from ..asr.embedder import MODEL_REPO as EMBEDDER_REPO
 from ..asr.embedder import VoiceEmbedder
@@ -121,6 +123,10 @@ class AppService:
         # что чанки приходят из разных потоков.
         self._asr_model_lock = threading.Lock()
         self._asr_download_failed = False
+        # Перекачивали ли уже повреждённые веса. Одна попытка починки на
+        # запуск: если и свежая загрузка не грузится, дело не в файлах,
+        # и бесконечный круг закачек по 220 МБ никому не поможет.
+        self._asr_repaired = False
         # Идёт ли фоновая загрузка прямо сейчас: окно спрашивает об этом
         # при открытии, а события прогресса могли начаться до него.
         self._asr_downloading = False
@@ -638,7 +644,7 @@ class AppService:
         transcriber = self.transcriber
         ready = getattr(transcriber, "is_downloaded", lambda: True)()
         if ready:
-            return True
+            return self._ensure_asr_usable()
         if self._asr_download_failed:
             # Уже пробовали и не смогли: не долбим сеть на каждом чанке.
             return False
@@ -646,7 +652,7 @@ class AppService:
         with self._asr_model_lock:
             # Пока ждали замок, скачать мог соседний поток.
             if getattr(transcriber, "is_downloaded", lambda: True)():
-                return True
+                return self._ensure_asr_usable()
             if self._asr_download_failed:
                 return False
 
@@ -670,6 +676,17 @@ class AppService:
             self._asr_downloading = True
             try:
                 self.downloader.run_blocking(progress)
+            except DownloadBusy:
+                # Второй экземпляр программы уже качает эти же веса.
+                # Ждать здесь нечего: пусть докачает он, а мы попробуем
+                # на следующей реплике. Главное — не лезть в его файл.
+                log.info("Модель качает другой экземпляр, ждём его")
+                bus.emit(MODEL_DOWNLOAD, {
+                    "state": "error",
+                    "message": "Модель уже качает другое окно Konspekt. "
+                               "Закройте лишнее окно и попробуйте снова.",
+                })
+                return False
             except Exception as exc:
                 self._asr_download_failed = True
                 log.exception("Не удалось скачать модель распознавания")
@@ -688,7 +705,62 @@ class AppService:
 
             bus.emit(MODEL_DOWNLOAD, {"state": "ready", "message": ""})
             log.info("Модель распознавания готова")
+            return self._ensure_asr_usable()
+
+    def _ensure_asr_usable(self) -> bool:
+        """Проверить, что скачанные веса действительно загружаются.
+
+        Файлы на диске ещё не значат работающую модель: испорченная
+        загрузка даёт файл верного размера, из которого onnxruntime
+        ничего не собирает. Раньше это выглядело как полностью исправная
+        программа с вечно пустым транскриптом, поэтому проверяем честной
+        загрузкой, а битые веса выбрасываем и качаем заново.
+        """
+        transcriber = self.transcriber
+        engine = getattr(transcriber, "russian", transcriber)
+        load = getattr(engine, "load", None)
+        if load is None:
             return True
+        # Смотрим на настоящие файлы, а не на флаг готовности: флаг
+        # выставляет загрузчик, и при подменённом загрузчике он говорит
+        # «скачано», когда весов на диске нет. Проверять там нечего, а
+        # попытка загрузки полезла бы в сеть за 220 МБ.
+        model_dir = getattr(engine, "model_dir", None)
+        if model_dir is not None and not all(
+            (model_dir / name).exists() for name in MODEL_FILES
+        ):
+            return True
+        try:
+            load()
+            return True
+        except ModelBroken as exc:
+            log.error("Веса повреждены: %s", exc)
+        except ModelMissing:
+            # Файлов нет вовсе. Это не порча: качать заново нечего, и
+            # отдельная ветка загрузки разберётся с этим сама.
+            return True
+        except Exception:
+            log.exception("Модель не загрузилась")
+            return False
+
+        if self._asr_repaired:
+            # Перекачали и снова битая: дело не в загрузке. Молчать
+            # нельзя, иначе человек так и будет смотреть в пустоту.
+            bus.emit(MODEL_DOWNLOAD, {
+                "state": "error",
+                "message": "Модель распознавания повреждена и не чинится "
+                           "перезакачкой. Напишите нам, приложив журнал.",
+            })
+            return False
+
+        self._asr_repaired = True
+        bus.emit(MODEL_DOWNLOAD, {
+            "state": "error",
+            "message": "Файлы модели оказались повреждены, качаем заново",
+        })
+        getattr(engine, "discard", lambda: None)()
+        self._asr_download_failed = False
+        return self._ensure_asr_model()
 
     def _recover_stale_recordings(self) -> None:
         """Чиним встречи, зависшие в статусе «идёт запись».

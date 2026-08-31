@@ -46,6 +46,13 @@ def main() -> int:
 
         service = AppService(store=Store(str(tmp / "konspekt.db")), capture=NullCapture())
 
+        # Файлы здесь ненастоящие, поэтому проверка целостности весов
+        # честно объявила бы их повреждёнными. Тест не про это: он про то,
+        # что после обновления уже скачанное не качается заново. Поэтому
+        # подменяем саму загрузку модели в память успешной.
+        engine = getattr(service.transcriber, "russian", service.transcriber)
+        engine.load = lambda: None
+
         pulled = {"n": 0}
 
         def counting(on_progress=None):

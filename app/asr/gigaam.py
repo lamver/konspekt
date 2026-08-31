@@ -57,6 +57,15 @@ class ModelMissing(RuntimeError):
     """Весов нет на диске. Не ошибка, а повод предложить скачивание."""
 
 
+class ModelBroken(RuntimeError):
+    """Файлы на месте, но модель из них не собирается.
+
+    Так бывает после испорченной загрузки: размер сошёлся, а содержимое
+    перемешано. Отличаем от отсутствия весов, потому что лечение другое:
+    не «скачайте модель», а «перекачаем сами».
+    """
+
+
 class GigaamTranscriber:
     """Русский ASR. Один чанк на входе, один сегмент на выходе."""
 
@@ -96,10 +105,30 @@ class GigaamTranscriber:
             import onnx_asr  # импорт внутри: без модели он не нужен
 
             log.info("Загружаем %s из %s", MODEL_NAME, self.model_dir)
-            self._model = onnx_asr.load_model(
-                MODEL_NAME, str(self.model_dir), quantization=QUANTIZATION
-            )
+            try:
+                self._model = onnx_asr.load_model(
+                    MODEL_NAME, str(self.model_dir), quantization=QUANTIZATION
+                )
+            except Exception as exc:
+                # Битые веса ведут себя как рабочие: файлы на месте,
+                # размер верный. Понять, что дело в них, можно только
+                # здесь, в момент загрузки.
+                raise ModelBroken(f"Файлы модели повреждены: {exc}") from exc
             log.info("Модель загружена")
+
+    def discard(self) -> None:
+        """Удалить веса, чтобы их скачали заново.
+
+        Зовём только на повреждённых файлах: чинить их нечем, а пока они
+        лежат на диске, программа считает модель готовой и молча выдаёт
+        пустой транскрипт.
+        """
+        with self._lock:
+            self._model = None
+            for name in MODEL_FILES:
+                (self.model_dir / name).unlink(missing_ok=True)
+                (self.model_dir / (name + ".part")).unlink(missing_ok=True)
+            log.warning("Повреждённые веса удалены из %s", self.model_dir)
 
     def unload(self) -> None:
         with self._lock:
