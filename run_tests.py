@@ -37,6 +37,7 @@ FAST = [
     "clip_test.py",
     "import_clip_test.py",
     "nomodel_test.py",
+    "upgrade_test.py",
     "version_test.py",
     "migration_test.py",
 ]

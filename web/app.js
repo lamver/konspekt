@@ -128,9 +128,16 @@ window.__konspekt_event = function (payload) {
       // Без процентов ожидание неотличимо от зависания.
       if (payload.state === 'downloading') {
         setSummaryStatus(`Скачиваем модель… ${payload.percent}%`);
+        // И в боковой панели тоже: заголовок саммари видно только на
+        // своей вкладке, а ждать полтора гигабайта человек будет где
+        // угодно.
+        showModelLoad(payload.bytes, payload.total, 'Качаем модель заметок',
+          'Один раз, 1,7 ГБ. Нужна для саммари и вопросов по встрече.');
       } else if (payload.state === 'error') {
+        hideModelLoad();
         showToast(payload.message || 'Не удалось скачать модель');
       } else {
+        hideModelLoad();
         setSummaryStatus('Модель готова, запускаем…');
         refreshLlmStatus();
       }
@@ -1030,12 +1037,17 @@ async function refreshModelStatus() {
     ui.modelProgress.hidden = true;
     ui.modelAction.hidden = true;
     ui.modelBar.classList.add('is-ready');
+    hideModelLoad();
   } else if (st.downloading) {
     ui.modelBar.classList.remove('is-ready');
     ui.modelAction.hidden = false;
     ui.modelAction.textContent = 'Отменить';
     ui.modelAction.dataset.act = 'cancel';
     setModelProgress(st.bytes, st.total_bytes);
+    // Загрузка началась ещё до открытия окна: показываем её сразу, а не
+    // ждём первого события прогресса.
+    showModelLoad(st.bytes, st.total_bytes, 'Качаем модель распознавания',
+      'Один раз, 220 МБ. Пользоваться программой можно уже сейчас.');
   } else {
     ui.modelBar.classList.remove('is-ready');
     ui.modelProgress.hidden = true;
@@ -1062,23 +1074,50 @@ function onModelProgress(payload) {
     ui.modelAction.textContent = 'Отменить';
     ui.modelAction.dataset.act = 'cancel';
     setModelProgress(payload.bytes, payload.total || state.model.total_bytes);
+    showModelLoad(payload.bytes, payload.total || state.model.total_bytes,
+      'Качаем модель распознавания',
+      'Один раз, 220 МБ. Пользоваться программой можно уже сейчас.');
     // Плашка живёт во вкладке «Транскрипт», а человек в этот момент
     // обычно смотрит на список загруженных файлов и не понимает, почему
     // расшифровки нет. Поэтому о первой загрузке говорим на всё окно.
     if (!state.modelToastShown) {
       state.modelToastShown = true;
-      showToast('Качаем модель распознавания, 220 МБ. Расшифровка начнётся сразу после этого', 12000);
+      showToast('Качаем модель распознавания, 220 МБ. Программой можно пользоваться, '
+        + 'расшифровка заработает по окончании', 12000);
     }
     return;
   }
   if (payload.state === 'error') {
+    hideModelLoad();
     showToast(payload.message || 'Не удалось скачать модель');
   }
   if (payload.state === 'ready' && state.modelToastShown) {
     state.modelToastShown = false;
+    hideModelLoad();
     showToast('Модель распознавания готова', 4000);
   }
+  if (payload.state === 'ready') hideModelLoad();
   refreshModelStatus();
+}
+
+/**
+ * Полоса загрузки модели в боковой панели: видна на любом экране.
+ *
+ * Одна и та же полоса и для распознавания, и для модели заметок: две
+ * сразу не качаются, а человеку важно одно — сколько ещё ждать.
+ */
+function showModelLoad(done, total, title, hint) {
+  if (!ui.modelLoad) return;
+  const pct = total ? Math.min(100, Math.round((done / total) * 100)) : 0;
+  ui.modelLoad.hidden = false;
+  if (title) ui.modelLoadText.textContent = title;
+  if (hint) ui.modelLoadHint.textContent = hint;
+  ui.modelLoadPct.textContent = pct + '%';
+  ui.modelLoadFill.style.width = pct + '%';
+}
+
+function hideModelLoad() {
+  if (ui.modelLoad) ui.modelLoad.hidden = true;
 }
 
 async function onModelAction() {
@@ -1855,6 +1894,11 @@ function bindUi() {
     modelProgress: el('model-progress'),
     modelFill: el('model-fill'),
     modelAction: el('model-action'),
+    modelLoad: el('model-load'),
+    modelLoadText: el('model-load-text'),
+    modelLoadHint: el('model-load-hint'),
+    modelLoadPct: el('model-load-pct'),
+    modelLoadFill: el('model-load-fill'),
     imports: el('imports'),
     importsList: el('imports-list'),
     dropzone: el('dropzone'),

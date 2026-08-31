@@ -159,6 +159,51 @@ body { display: flex; flex-direction: column; }
 }
 #btn-import:hover { background: var(--paper-3); color: var(--ink); }
 
+/* Загрузка модели распознавания в боковой панели: видна с любого
+   экрана, потому что качается с первого запуска и объясняет, почему
+   расшифровка пока не появляется. */
+.model-load {
+  margin: 0 8px 8px;
+  padding: 8px 10px;
+  background: var(--paper-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.model-load__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--ink-2);
+}
+
+.model-load__pct { color: var(--accent); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+.model-load__bar {
+  height: 4px;
+  margin-top: 6px;
+  background: var(--paper-3);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.model-load__fill {
+  height: 100%;
+  width: 0;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width .2s;
+}
+
+.model-load__hint {
+  margin-top: 6px;
+  font-size: 10px;
+  line-height: 1.4;
+  color: var(--ink-3);
+}
+
 .imports {
   padding: 0 8px 8px;
   border-bottom: 1px solid var(--line);

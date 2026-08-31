@@ -64,6 +64,19 @@
       </div>
 
       <!-- Очередь разбора файлов: видно, что происходит с каждым -->
+      <!-- Загрузка модели распознавания. Живёт здесь, а не только во
+           вкладке «Транскрипт»: скачивание идёт с первого запуска, и
+           человек должен видеть его на любом экране, иначе программа
+           выглядит просто не работающей. -->
+      <div class="model-load" id="model-load" hidden>
+        <div class="model-load__row">
+          <span id="model-load-text">Качаем модель распознавания</span>
+          <span class="model-load__pct" id="model-load-pct"></span>
+        </div>
+        <div class="model-load__bar"><div class="model-load__fill" id="model-load-fill"></div></div>
+        <p class="model-load__hint" id="model-load-hint">Один раз, 220 МБ. Пользоваться программой можно уже сейчас.</p>
+      </div>
+
       <div class="imports" id="imports" hidden>
         <div class="imports__head">
           <span id="imports-title">Разбор записей</span>

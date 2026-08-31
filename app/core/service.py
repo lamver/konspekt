@@ -10,6 +10,7 @@ from __future__ import annotations
 import base64
 import io
 import logging
+import os
 import shutil
 import threading
 import time
@@ -118,6 +119,9 @@ class AppService:
         # что чанки приходят из разных потоков.
         self._asr_model_lock = threading.Lock()
         self._asr_download_failed = False
+        # Идёт ли фоновая загрузка прямо сейчас: окно спрашивает об этом
+        # при открытии, а события прогресса могли начаться до него.
+        self._asr_downloading = False
         # Очередь создаётся всегда: она дешёвая, а поток поднимается
         # только когда реально приходит первый чанк.
         self.asr_queue = TranscriptionQueue(
@@ -165,6 +169,37 @@ class AppService:
         # Проверка новой версии идёт в фоне и не задерживает старт.
         self._version_checker = VersionChecker(self)
         self._version_checker.check_later()
+        # Модель распознавания качаем сразу, не дожидаясь первой встречи.
+        # Программу ставят ради расшифровки, и лучше потратить эти минуты
+        # тогда, когда человек только осматривается, чем когда он уже
+        # бросил файл и ждёт результата.
+        self._prefetch_asr_model()
+
+    def _prefetch_asr_model(self) -> None:
+        """Начать загрузку весов в фоне сразу после запуска.
+
+        Строго в отдельном потоке: старт окна задерживать нельзя, иначе
+        приложение несколько минут не будет показывать вообще ничего.
+        """
+        # Тестам и разбору поломок нужна возможность запустить приложение
+        # без похода в сеть: 220 МБ на каждый прогон никому не нужны.
+        if os.environ.get("KONSPEKT_NO_PREFETCH") == "1":
+            return
+        if not self.settings.asr.enabled:
+            return
+        if getattr(self.transcriber, "is_downloaded", lambda: True)():
+            return
+
+        def run() -> None:
+            try:
+                self._ensure_asr_model()
+            except Exception:
+                # Не смогли — не беда: попробуем ещё раз при первой
+                # реплике, а до тех пор приложение работает как обычно.
+                log.exception("Фоновая загрузка модели не удалась")
+
+        threading.Thread(target=run, name="asr-prefetch", daemon=True).start()
+        log.info("Начали качать модель распознавания в фоне")
 
     def _build_transcriber(self) -> Transcriber:
         """Движок распознавания по настройкам.
@@ -528,13 +563,17 @@ class AppService:
     def model_status(self) -> dict[str, Any]:
         """Состояние весов для UI: скачаны ли, сколько уже лежит."""
         ready = getattr(self.transcriber, "is_downloaded", lambda: True)()
+        # Фоновая загрузка идёт мимо ModelDownloader.start, поэтому его
+        # флага мало: без этого окно при запуске показывало бы кнопку
+        # «Скачать», хотя загрузка уже идёт.
+        busy = self.downloader.is_running or self._asr_downloading
         return {
             "backend": self.settings.asr.backend,
             "enabled": self.settings.asr.enabled,
             "name": getattr(self.transcriber, "name", "null"),
             "downloaded": bool(ready),
             "loaded": bool(getattr(self.transcriber, "is_loaded", False)),
-            "downloading": self.downloader.is_running,
+            "downloading": bool(busy),
             "bytes": self.downloader.downloaded_bytes(),
             "total_bytes": MODEL_TOTAL_BYTES,
         }
@@ -611,6 +650,7 @@ class AppService:
                 )
 
             log.info("Модель распознавания не найдена, качаем при первом обращении")
+            self._asr_downloading = True
             try:
                 self.downloader.run_blocking(progress)
             except Exception as exc:
@@ -618,6 +658,8 @@ class AppService:
                 log.exception("Не удалось скачать модель распознавания")
                 bus.emit(MODEL_DOWNLOAD, {"state": "error", "message": str(exc)})
                 return False
+            finally:
+                self._asr_downloading = False
 
             if not getattr(transcriber, "is_downloaded", lambda: True)():
                 self._asr_download_failed = True

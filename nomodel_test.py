@@ -12,6 +12,7 @@
 """
 import testenv  # noqa: F401  русский вывод в консоли Windows
 
+import os
 import shutil
 import tempfile
 import time
@@ -25,6 +26,9 @@ RATE = 16000
 
 def main() -> int:
     tmp = Path(tempfile.mkdtemp(prefix="konspekt-nomodel-"))
+    # Фоновая загрузка при старте ушла бы в сеть за 220 МБ на каждый
+    # прогон. Сам факт её запуска проверяем отдельно, вызывая метод руками.
+    os.environ["KONSPEKT_NO_PREFETCH"] = "1"
     try:
         from app.core import paths as paths_mod
 
@@ -162,6 +166,39 @@ def main() -> int:
             f"после неудачи снова полезли в сеть {tries['n']} раз"
         )
         print("[ok] после неудачи не долбим сеть на каждой реплике")
+
+        # --- загрузка начинается сразу при запуске, а не ждёт встречи
+        # Человек ставит программу ради расшифровки: пусть минуты уходят
+        # тогда, когда он осматривается, а не когда уже бросил файл.
+        import app.core.service as service_mod
+
+        started = {"n": 0}
+        real_prefetch = service_mod.AppService._prefetch_asr_model
+
+        fresh = AppService(store=Store(str(tmp / "second.db")), capture=NullCapture())
+        fresh.downloader.run_blocking = lambda on_progress=None: started.__setitem__(
+            "n", started["n"] + 1)
+        fresh.transcriber.is_downloaded = lambda: False
+        fresh._asr_download_failed = False
+        # Снимаем запрет ровно на эту проверку: именно её и проверяем.
+        os.environ.pop("KONSPEKT_NO_PREFETCH", None)
+        fresh._prefetch_asr_model()
+        for _ in range(50):
+            if started["n"]:
+                break
+            time.sleep(0.1)
+        os.environ["KONSPEKT_NO_PREFETCH"] = "1"
+        assert started["n"] >= 1, "при запуске загрузка модели не начинается"
+        print("[ok] загрузка модели стартует сразу при запуске, а не по первой встрече")
+
+        # Пока идёт фоновая загрузка, окно должно это видеть: иначе оно
+        # покажет кнопку «Скачать», как будто ничего не происходит.
+        fresh._asr_downloading = True
+        assert fresh.model_status()["downloading"] is True, (
+            "окно не узнает о фоновой загрузке и предложит скачать ещё раз"
+        )
+        fresh._asr_downloading = False
+        fresh.shutdown()
 
         service.shutdown()
         print("\nНа чистой установке расшифровка не пропадает молча.")
