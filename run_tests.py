@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -49,10 +50,16 @@ SLOW = [
 
 def run(test: str) -> int:
     print(f"\n=== {test} ===")
-    return subprocess.run([sys.executable, test], cwd=ROOT).returncode
+    # Консоль Windows живёт в cp1251, и русский вывод теста роняет его
+    # с UnicodeEncodeError, хотя сам тест прошёл. Просим utf-8 у всех.
+    env = dict(os.environ, PYTHONIOENCODING="utf-8", PYTHONUTF8="1")
+    return subprocess.run([sys.executable, test], cwd=ROOT, env=env).returncode
 
 
 def main() -> int:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
     parser = argparse.ArgumentParser(prog="run_tests")
     parser.add_argument("--full", action="store_true", help="прогнать и медленные тоже")
     parser.add_argument("--list", action="store_true", help="показать список тестов")
