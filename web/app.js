@@ -1034,6 +1034,25 @@ async function showVersion() {
   if (version) ui.appVersion.textContent = 'Версия ' + version;
 }
 
+/**
+ * «О программе»: версия и указание авторства моделей.
+ *
+ * Не украшение: лицензия WeSpeaker (CC BY 4.0) требует, чтобы авторство
+ * видел пользователь, а не только тот, кто откроет исходники.
+ */
+async function openAboutSheet() {
+  ui.aboutSheet.hidden = false;
+  if (ui.aboutVersion && !ui.aboutVersion.textContent) {
+    const version = await api.app_version();
+    if (version) ui.aboutVersion.textContent = version;
+  }
+  if (ui.aboutNotice && !ui.aboutNotice.dataset.loaded) {
+    const text = await api.notice_text();
+    ui.aboutNotice.textContent = text || 'Файл NOTICE не найден рядом с программой';
+    ui.aboutNotice.dataset.loaded = '1';
+  }
+}
+
 /* --- Мой голос ----------------------------------------------------------- */
 
 /**
@@ -1375,7 +1394,10 @@ function bindUi() {
     toast: el('toast'),
     toastText: el('toast-text'),
     audioSheet: el('audio-sheet'),
-  appVersion: el('app-version'),
+    appVersion: el('app-version'),
+    aboutSheet: el('about-sheet'),
+    aboutVersion: el('about-version'),
+    aboutNotice: el('about-notice'),
     micSelect: el('mic-select'),
     loopbackSelect: el('loopback-select'),
     micEnabled: el('mic-enabled'),
@@ -1432,6 +1454,11 @@ function bindUi() {
 
   el('btn-audio').addEventListener('click', openAudioSheet);
   el('audio-close').addEventListener('click', () => { ui.audioSheet.hidden = true; });
+  ui.appVersion.addEventListener('click', openAboutSheet);
+  el('about-close').addEventListener('click', () => { ui.aboutSheet.hidden = true; });
+  ui.aboutSheet.addEventListener('click', (e) => {
+    if (e.target === ui.aboutSheet) ui.aboutSheet.hidden = true;
+  });
   el('theme-switch').addEventListener('click', onThemeClick);
   el('audio-save').addEventListener('click', saveAudioSheet);
   el('enroll-start').addEventListener('click', onEnrollClick);
@@ -1506,7 +1533,8 @@ function bindUi() {
       state.filter = '';
       renderMeetingList();
     }
-    if (e.key === 'Escape' && !ui.audioSheet.hidden) ui.audioSheet.hidden = true;
+    if (e.key === 'Escape' && !ui.aboutSheet.hidden) ui.aboutSheet.hidden = true;
+    else if (e.key === 'Escape' && !ui.audioSheet.hidden) ui.audioSheet.hidden = true;
   });
 
   // Страховка от потери правок при закрытии окна.

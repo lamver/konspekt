@@ -310,9 +310,28 @@
       </label>
 
       <div class="sheet__foot">
-        <span class="version" id="app-version"></span>
+        <button class="version" type="button" id="app-version" title="О программе"></button>
         <button class="btn-primary" id="audio-save">Готово</button>
       </div>
+    </div>
+  </div>
+
+  <!-- О программе: версия и указание авторства моделей -->
+  <div class="sheet" id="about-sheet" hidden>
+    <div class="sheet__panel">
+      <div class="sheet__head">
+        <h3>О программе</h3>
+        <button class="icon-btn" id="about-close" title="Закрыть">
+          <svg viewBox="0 0 16 16" width="14" height="14"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.4" fill="none"/></svg>
+        </button>
+      </div>
+
+      <p class="about__name">Konspekt <span id="about-version"></span></p>
+      <p class="hint">Умный блокнот для встреч. Запись, расшифровка и
+      заметки происходят на этом компьютере.</p>
+
+      <p class="field__label">Модели и авторство</p>
+      <pre class="about__notice" id="about-notice">Загружаем…</pre>
     </div>
   </div>
 

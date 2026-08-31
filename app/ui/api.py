@@ -315,3 +315,16 @@ class Api:
         from app import __version__
 
         return __version__
+
+    def notice_text(self) -> str:
+        """Указание авторства моделей для раздела «О программе».
+
+        Лицензия WeSpeaker (CC BY 4.0) требует, чтобы авторство было
+        видно пользователю, а не только лежало в исходниках.
+        """
+        from app.core import paths
+
+        try:
+            return (paths.resource_dir() / "NOTICE").read_text(encoding="utf-8")
+        except OSError:
+            return ""

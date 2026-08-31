@@ -1071,4 +1071,41 @@ body.is-resizing * { user-select: none !important; }
 
 /* Версия в углу настроек: нужна, когда человек присылает жалобу и надо
    понять, на какой сборке он сидит. */
-.version { margin-right: auto; font-size: 11px; color: var(--ink-3); user-select: text; }
+.version {
+  margin-right: auto;
+  font-size: 11px;
+  color: var(--ink-3);
+  user-select: text;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
+}
+.version:hover { color: var(--ink); text-decoration: underline; }
+
+/* «О программе». Указание авторства моделей обязательно по лицензии
+   WeSpeaker, поэтому текст показываем целиком и даём его выделить. */
+.about__name { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
+/* Шире обычной панели: в NOTICE длинные ссылки и колонки, в 360px
+   они не помещаются. И выше по слою, потому что открывается поверх
+   настроек. */
+#about-sheet { z-index: 60; }
+#about-sheet .sheet__panel { width: min(560px, 94%); }
+.about__notice {
+  margin: 6px 0 0;
+  max-height: 320px;
+  overflow: auto;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper-2);
+  color: var(--ink-2);
+  font-size: 11px;
+  line-height: 1.5;
+  /* pre, а не pre-wrap: колонки в NOTICE выровнены пробелами, и
+     перенос по ширине рвёт их посреди строки. Узкое окно лучше
+     прокрутить вбок, чем читать лесенку. */
+  white-space: pre;
+  user-select: text;
+}

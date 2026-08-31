@@ -1,0 +1,60 @@
+Konspekt
+Умный блокнот для встреч.
+
+Программа использует сторонние модели машинного обучения. Ниже их
+авторы и лицензии. Проверено 30 августа 2026 года по карточкам моделей
+на Hugging Face, подробный разбор в docs/licenses.md.
+
+--------------------------------------------------------------------
+Модели распознавания речи и голоса
+--------------------------------------------------------------------
+
+GigaAM v3 (распознавание русской речи)
+  Автор: SaluteDevices (ai-sage)
+  Лицензия: MIT
+  https://huggingface.co/ai-sage/GigaAM-v3
+
+  Вариант в формате ONNX
+  Автор: Ivan Stupakov
+  Лицензия: MIT
+  https://huggingface.co/istupakov/gigaam-v3-onnx
+
+Whisper small (распознавание остальных языков)
+  Автор: OpenAI
+  Лицензия: MIT
+  https://huggingface.co/openai/whisper-small
+
+VoxLingua107 ECAPA (определение языка по звуку)
+  Автор: SpeechBrain, Tanel Alumäe
+  Лицензия: Apache License 2.0
+  https://huggingface.co/speechbrain/lang-id-voxlingua107-ecapa
+
+WeSpeaker VoxCeleb ResNet34-LM (отпечаток голоса, кто говорит)
+  Автор: WeSpeaker Team, Hongji Wang и другие
+  Лицензия: Creative Commons Attribution 4.0 International (CC BY 4.0)
+  https://huggingface.co/Wespeaker/wespeaker-voxceleb-resnet34-LM
+  Текст лицензии: https://creativecommons.org/licenses/by/4.0/
+
+  Модель используется без изменений весов. В соответствии с условиями
+  CC BY 4.0 авторство указано здесь и в разделе «О программе».
+
+--------------------------------------------------------------------
+Языковые модели
+--------------------------------------------------------------------
+
+Qwen3 1.7B (составление заметок и чат по встрече)
+  Автор: Alibaba Cloud, Qwen Team
+  Лицензия: Apache License 2.0
+  https://huggingface.co/Qwen/Qwen3-1.7B
+
+  Модель не входит в дистрибутив: она скачивается по запросу
+  пользователя при первом обращении к заметкам.
+
+--------------------------------------------------------------------
+Библиотеки
+--------------------------------------------------------------------
+
+Konspekt собран на открытых библиотеках, среди них onnxruntime и numpy
+(MIT и BSD), PyAV (BSD, внутри LGPL-сборка FFmpeg), llama.cpp (MIT),
+pywebview и pystray (BSD). Полный список зависимостей с версиями лежит
+в uv.lock, лицензии доступны в их репозиториях.
