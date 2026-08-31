@@ -1,4 +1,7 @@
 """Эталон голоса владельца: запись, сохранение, узнавание."""
+
+import testenv  # noqa: F401  русский вывод в консоли Windows
+
 import subprocess
 import time
 import wave

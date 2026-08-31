@@ -8,6 +8,8 @@
 
 from __future__ import annotations
 
+import testenv  # noqa: F401  русский вывод в консоли Windows
+
 import sys
 import threading
 import time

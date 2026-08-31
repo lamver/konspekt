@@ -3,6 +3,9 @@
 Проверяем ровно то, что просил пользователь: назвал человека один раз,
 и на следующей встрече он определяется сам.
 """
+
+import testenv  # noqa: F401  русский вывод в консоли Windows
+
 import subprocess
 import wave
 from pathlib import Path

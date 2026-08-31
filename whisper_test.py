@@ -3,6 +3,9 @@
 Whisper на тишине и обрывках зацикливается. Оба случая ниже взяты из
 живых записей, остальное придумано вокруг них.
 """
+
+import testenv  # noqa: F401  русский вывод в консоли Windows
+
 import random
 from pathlib import Path
 

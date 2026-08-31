@@ -3,6 +3,9 @@
 Именно здесь был баг: состав участников жил только в памяти, поэтому
 открыв вчерашнюю встречу, назвать в ней человека было невозможно.
 """
+
+import testenv  # noqa: F401  русский вывод в консоли Windows
+
 import subprocess
 import wave
 from pathlib import Path

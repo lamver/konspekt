@@ -6,6 +6,9 @@
 дописывает в каждый файл поле pywebviewFullPath), и делает с ним то,
 что нужно.
 """
+
+import testenv  # noqa: F401  русский вывод в консоли Windows
+
 import os
 import tempfile
 import wave

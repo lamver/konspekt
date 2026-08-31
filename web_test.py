@@ -4,6 +4,8 @@
 окне: опечатку в JS и обращение к элементу, которого нет в HTML.
 """
 
+import testenv  # noqa: F401  русский вывод в консоли Windows
+
 import re
 import shutil
 import subprocess

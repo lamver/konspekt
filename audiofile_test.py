@@ -6,6 +6,9 @@
 (текст с именем .mp3 и mp3 с именем .txt), видео без звука и разные
 частоты дискретизации.
 """
+
+import testenv  # noqa: F401  русский вывод в консоли Windows
+
 import wave
 from pathlib import Path
 

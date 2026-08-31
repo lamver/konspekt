@@ -1,4 +1,7 @@
 """Проверка разбора голосов: кластеризация и узнавание."""
+
+import testenv  # noqa: F401  русский вывод в консоли Windows
+
 import numpy as np
 
 from app.asr.embedder import cosine

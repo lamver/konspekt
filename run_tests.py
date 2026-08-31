@@ -51,7 +51,9 @@ SLOW = [
 
 
 def run(test: str) -> int:
-    print(f"\n=== {test} ===")
+    # flush обязателен: при выводе в файл питон буферизует свой print, и
+    # заголовок теста оказывается после всего, что напечатал сам тест.
+    print(f"\n=== {test} ===", flush=True)
     # Консоль Windows живёт в cp1251, и русский вывод теста роняет его
     # с UnicodeEncodeError, хотя сам тест прошёл. Просим utf-8 у всех.
     env = dict(os.environ, PYTHONIOENCODING="utf-8", PYTHONUTF8="1")
@@ -81,12 +83,16 @@ def main() -> int:
         print(f"\nВсего: {len(FAST) + len(SLOW)} тестов")
         return 0
 
-    failed = 0
+    failed: list[str] = []
     for test in tests:
         if run(test) != 0:
-            failed += 1
+            failed.append(test)
 
-    print(f"\n==== Итог: {len(tests) - failed} OK, {failed} FAIL")
+    print(f"\n==== Итог: {len(tests) - len(failed)} OK, {len(failed)} FAIL", flush=True)
+    # Имена упавших: без них в длинном прогоне приходится листать вывод
+    # и глазами искать, что именно сломалось.
+    for test in failed:
+        print(f"  упал: {test}", flush=True)
     return 1 if failed else 0
 
 

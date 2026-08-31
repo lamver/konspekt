@@ -5,6 +5,9 @@
 мешает: все они кириллические. А вот принять русскую речь за английскую
 уже нельзя, текст будет испорчен целиком.
 """
+
+import testenv  # noqa: F401  русский вывод в консоли Windows
+
 import subprocess
 import wave
 from pathlib import Path

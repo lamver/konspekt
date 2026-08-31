@@ -525,27 +525,12 @@ body { display: flex; flex-direction: column; }
 }
 
 .sheet__panel {
-  width: min(360px, 92%);
-  max-height: 88%;
-  overflow-y: auto;
+  /* Размеры задаёт .prefs: панель настроек теперь одна на всё окно.
+     Здесь остаётся только её вид. */
   background: var(--paper);
   border: 1px solid var(--line);
   border-radius: 14px;
   box-shadow: 0 12px 32px rgba(0, 0, 0, .2);
-  padding: 14px 16px 16px;
-}
-
-.sheet__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
-}
-
-.sheet__head h3 {
-  font-family: var(--font-serif);
-  font-size: 16px;
-  font-weight: 600;
 }
 
 .field { display: block; margin-bottom: 10px; }
@@ -1095,7 +1080,6 @@ body.is-resizing * { user-select: none !important; }
   /* Высота постоянная, а не по содержимому: иначе при переходе между
      разделами панель прыгает, и пункт меню уезжает из-под курсора. */
   height: min(560px, 88%);
-  padding: 0;
   overflow: hidden;
 }
 
@@ -1149,7 +1133,12 @@ body.is-resizing * { user-select: none !important; }
   margin-bottom: 12px;
   flex: 0 0 auto;
 }
-.prefs__head h3 { margin: 0; font-size: 15px; }
+.prefs__head h3 {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 16px;
+  font-weight: 600;
+}
 
 /* Прокручивается только содержимое раздела: заголовок и кнопка
    «Готово» остаются на месте, как и положено в окне настроек. */

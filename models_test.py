@@ -4,6 +4,9 @@
 выходил больше настоящего. Проверяем размеры по серверу и то, что модели
 действительно открываются.
 """
+
+import testenv  # noqa: F401  русский вывод в консоли Windows
+
 import urllib.request
 
 import onnxruntime as ort

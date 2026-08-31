@@ -4,6 +4,8 @@
 Без модели или движка тихо выходит.
 """
 
+import testenv  # noqa: F401  русский вывод в консоли Windows
+
 import tempfile
 import threading
 import time

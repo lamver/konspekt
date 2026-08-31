@@ -5,6 +5,8 @@
 затевалось. Здесь проверяется, что этого не происходит.
 """
 
+import testenv  # noqa: F401  русский вывод в консоли Windows
+
 import tempfile
 import threading
 import time

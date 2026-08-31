@@ -1,4 +1,7 @@
 """Роутер языков: русский в GigaAM, английский в Whisper."""
+
+import testenv  # noqa: F401  русский вывод в консоли Windows
+
 import subprocess
 import wave
 from pathlib import Path

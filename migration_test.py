@@ -1,4 +1,7 @@
 """Миграция схемы на копии настоящей базы пользователя."""
+
+import testenv  # noqa: F401  русский вывод в консоли Windows
+
 import shutil
 import sqlite3
 import tempfile

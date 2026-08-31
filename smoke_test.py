@@ -4,6 +4,8 @@
 доезжают до SQLite и что события шины летят в правильном порядке.
 """
 
+import testenv  # noqa: F401  русский вывод в консоли Windows
+
 import tempfile
 import time
 from pathlib import Path

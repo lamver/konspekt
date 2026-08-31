@@ -9,6 +9,8 @@
 каждом выпуске.
 """
 
+import testenv  # noqa: F401  русский вывод в консоли Windows
+
 import re
 import sys
 import tomllib

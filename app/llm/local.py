@@ -7,6 +7,12 @@
 Сервер поднимается отдельным процессом и живёт, пока живёт приложение.
 Порт занимаем свободный: фиксированный рано или поздно окажется занят
 чужой программой, и это будет непонятная ошибка.
+
+«Пока живёт приложение» держится не на честном слове: на Windows сервер
+привязан к job-объекту, который система закрывает вместе с нами. Иначе
+при падении или снятии задачи llama-server остаётся в памяти и держит
+несколько гигабайт до перезагрузки, а следующий запуск поднимает ещё
+один такой же.
 """
 
 from __future__ import annotations
@@ -24,6 +30,11 @@ import httpx
 from ..core import paths
 
 log = logging.getLogger(__name__)
+
+# Job-объект Windows: всё, что в него положено, система прибивает,
+# когда закрывается последний держатель. Создаётся один на процесс.
+_job_handle = None
+_job_lock = threading.Lock()
 
 # Сколько ждём, пока сервер прогрузит веса и начнёт отвечать. Модель на
 # 1.7 ГБ читается с диска несколько секунд, на медленном диске дольше.
@@ -104,8 +115,11 @@ class LocalServer:
             cmd,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
-            creationflags=_no_window(),
+            creationflags=_no_window() | _kill_job(),
         )
+        # Сразу после запуска: чтобы сервер не пережил нас, даже если
+        # приложение снимут задачей до первого ответа модели.
+        _attach_to_job(self._proc)
         try:
             self._wait_ready()
         except Exception:
@@ -158,6 +172,103 @@ def _free_port() -> int:
 def _no_window() -> int:
     """Не показывать окно консоли при запуске сервера."""
     return getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
+
+
+def _kill_job() -> int:
+    """Флаг, позволяющий положить процесс в job-объект.
+
+    Без CREATE_BREAKAWAY_FROM_JOB дочерний процесс наследует чужой job,
+    если приложение само запущено внутри такого (так делают некоторые
+    оболочки и отладчики), и добавить его в наш уже нельзя.
+    """
+    if os.name != "nt":
+        return 0
+    return getattr(subprocess, "CREATE_BREAKAWAY_FROM_JOB", 0x01000000)
+
+
+def _attach_to_job(proc: subprocess.Popen) -> None:
+    """Привязать процесс к жизни нашего.
+
+    Windows закрывает job-объект вместе с последним держателем, а с ним
+    и все процессы внутри. Так llama-server не переживёт ни закрытие
+    приложения, ни его падение, ни снятие задачи.
+
+    Молча ничего не делаем, если не вышло: неубитый сервер это утечка
+    памяти, но не повод отказать человеку в заметках.
+    """
+    if os.name != "nt":
+        return
+
+    global _job_handle
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        # Без restype ctypes считает результат int, и 64-битный HANDLE
+        # молча теряет старшую половину. Ошибка при этом не возникает,
+        # просто перестаёт работать.
+        kernel32.CreateJobObjectW.restype = wintypes.HANDLE
+        kernel32.OpenProcess.restype = wintypes.HANDLE
+
+        with _job_lock:
+            if _job_handle is None:
+                handle = kernel32.CreateJobObjectW(None, None)
+                if not handle:
+                    return
+
+                # JOBOBJECT_EXTENDED_LIMIT_INFORMATION целиком нам не
+                # нужен, важен единственный флаг KILL_ON_JOB_CLOSE в
+                # начале структуры. Размер берём с запасом.
+                class _BasicLimits(ctypes.Structure):
+                    _fields_ = [
+                        ("PerProcessUserTimeLimit", ctypes.c_int64),
+                        ("PerJobUserTimeLimit", ctypes.c_int64),
+                        ("LimitFlags", wintypes.DWORD),
+                        ("MinimumWorkingSetSize", ctypes.c_size_t),
+                        ("MaximumWorkingSetSize", ctypes.c_size_t),
+                        ("ActiveProcessLimit", wintypes.DWORD),
+                        ("Affinity", ctypes.POINTER(ctypes.c_ulong)),
+                        ("PriorityClass", wintypes.DWORD),
+                        ("SchedulingClass", wintypes.DWORD),
+                    ]
+
+                class _IoCounters(ctypes.Structure):
+                    _fields_ = [(name, ctypes.c_uint64) for name in (
+                        "ReadOperationCount", "WriteOperationCount",
+                        "OtherOperationCount", "ReadTransferCount",
+                        "WriteTransferCount", "OtherTransferCount",
+                    )]
+
+                class _ExtendedLimits(ctypes.Structure):
+                    _fields_ = [
+                        ("BasicLimitInformation", _BasicLimits),
+                        ("IoInfo", _IoCounters),
+                        ("ProcessMemoryLimit", ctypes.c_size_t),
+                        ("JobMemoryLimit", ctypes.c_size_t),
+                        ("PeakProcessMemoryUsed", ctypes.c_size_t),
+                        ("PeakJobMemoryUsed", ctypes.c_size_t),
+                    ]
+
+                info = _ExtendedLimits()
+                info.BasicLimitInformation.LimitFlags = 0x2000  # KILL_ON_JOB_CLOSE
+                if not kernel32.SetInformationJobObject(
+                    handle, 9, ctypes.byref(info), ctypes.sizeof(info)
+                ):
+                    kernel32.CloseHandle(handle)
+                    return
+                _job_handle = handle
+
+        # PROCESS_SET_QUOTA | PROCESS_TERMINATE
+        process = kernel32.OpenProcess(0x0100 | 0x0001, False, proc.pid)
+        if not process:
+            return
+        try:
+            kernel32.AssignProcessToJobObject(_job_handle, process)
+        finally:
+            kernel32.CloseHandle(process)
+    except Exception:
+        log.debug("Не удалось привязать сервер модели к job-объекту", exc_info=True)
 
 
 def llm_dir() -> Path:

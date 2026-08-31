@@ -4,6 +4,8 @@
 Если их нет, тихо выходит.
 """
 
+import testenv  # noqa: F401  русский вывод в консоли Windows
+
 import time
 
 from app.llm import LlmClient, summary_messages

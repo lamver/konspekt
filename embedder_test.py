@@ -2,6 +2,9 @@
 
 Синтезатор Windows даёт несколько голосов, это и есть разные говорящие.
 """
+
+import testenv  # noqa: F401  русский вывод в консоли Windows
+
 import subprocess
 import wave
 from pathlib import Path
