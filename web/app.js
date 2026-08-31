@@ -14,6 +14,10 @@ const state = {
   recordingId: null,
   startedAt: null,
   filter: '',
+  // Найденное в расшифровках: запрос, к которому относится результат,
+  // и карта «встреча → совпадения». Отдельно от filter, потому что
+  // ответ базы приходит с задержкой и может отстать от строки поиска.
+  search: { query: '', byMeeting: null, timer: null },
   model: {},
   pinned: true,
   imports: [],
@@ -474,9 +478,13 @@ async function loadMeetings() {
 
 function renderMeetingList() {
   const q = state.filter.trim().toLowerCase();
+  // Заголовок и заметки ищем на месте, это мгновенно. Расшифровки ищет
+  // база: их тысячи строк, и держать их во фронте незачем.
+  const found = state.search.query === q ? state.search.byMeeting : null;
   const items = q
     ? state.meetings.filter((m) => (m.title || '').toLowerCase().includes(q)
-        || (m.notes || '').toLowerCase().includes(q))
+        || (m.notes || '').toLowerCase().includes(q)
+        || (found && found.has(m.id)))
     : state.meetings;
 
   ui.list.innerHTML = '';
@@ -501,6 +509,22 @@ function renderMeetingList() {
         + (m.duration > 1 ? ` · ${fmtDuration(m.duration)}` : '');
     }
 
+    // Нашли в расшифровке — показываем цитату. Иначе непонятно, почему
+    // встреча вообще попала в выдачу: в её названии искомого слова нет.
+    const hit = found && found.get(m.id);
+    let quote = null;
+    if (hit && hit.quotes.length) {
+      quote = document.createElement('div');
+      quote.className = 'meeting-item__quote';
+      quote.appendChild(highlight(hit.quotes[0].text, q));
+      if (hit.hits > 1) {
+        const more = document.createElement('span');
+        more.className = 'meeting-item__more';
+        more.textContent = ` ещё ${hit.hits - 1}`;
+        quote.appendChild(more);
+      }
+    }
+
     // Кнопка удаления прямо в списке: удалять хочется там же, где
     // видишь ненужную встречу, а не искать её потом в настройках.
     const del = document.createElement('button');
@@ -516,7 +540,9 @@ function renderMeetingList() {
       askDeleteMeeting(m);
     });
 
-    node.append(title, meta, del);
+    node.append(title, meta);
+    if (quote) node.appendChild(quote);
+    node.appendChild(del);
     node.addEventListener('click', () => selectMeeting(m.id));
     ui.list.appendChild(node);
   }
@@ -586,6 +612,90 @@ function confirmDialog(title, text) {
     // capture: иначе Escape сначала поймает общий обработчик окна.
     document.addEventListener('keydown', onKey, true);
   });
+}
+
+/**
+ * Спросить базу о расшифровках, но не на каждую букву.
+ *
+ * Человек печатает «переговоры» за секунду, и без задержки это девять
+ * запросов, из которых нужен последний. 200 мс достаточно, чтобы поиск
+ * ощущался мгновенным и при этом не дёргал базу зря.
+ */
+function scheduleSearch() {
+  clearTimeout(state.search.timer);
+  const q = state.filter.trim().toLowerCase();
+
+  if (q.length < 2) {
+    // По одной букве совпадёт половина архива, показывать это бессмысленно.
+    state.search.query = '';
+    state.search.byMeeting = null;
+    renderMeetingList();
+    return;
+  }
+
+  state.search.timer = setTimeout(async () => {
+    const found = await api.search(q);
+    // Пока ждали ответ, человек мог напечатать дальше: тогда этот
+    // результат уже не про то, что сейчас в строке поиска.
+    if (state.filter.trim().toLowerCase() !== q) return;
+
+    state.search.query = q;
+    state.search.byMeeting = new Map((found || []).map((m) => [m.meeting_id, m]));
+    renderMeetingList();
+  }, 200);
+}
+
+/**
+ * Подсветить найденные слова в цитате.
+ *
+ * Через текстовые узлы, а не innerHTML: в расшифровке встречается что
+ * угодно, включая угловые скобки, и склеивать её в HTML руками значит
+ * рано или поздно сломать разметку чужим текстом.
+ */
+function highlight(text, query) {
+  const frag = document.createDocumentFragment();
+  const words = query.split(/\s+/).filter((w) => w.length > 1);
+  if (!words.length) {
+    frag.appendChild(document.createTextNode(text));
+    return frag;
+  }
+
+  const low = text.toLowerCase();
+  const marks = [];
+  for (const word of words) {
+    let from = 0;
+    for (;;) {
+      const at = low.indexOf(word, from);
+      if (at < 0) break;
+      marks.push([at, at + word.length]);
+      from = at + word.length;
+    }
+  }
+  if (!marks.length) {
+    frag.appendChild(document.createTextNode(text));
+    return frag;
+  }
+
+  // Совпадения разных слов могут пересекаться: склеиваем, иначе получим
+  // вложенные подсветки и рваный текст.
+  marks.sort((a, b) => a[0] - b[0]);
+  const merged = [marks[0]];
+  for (const [from, to] of marks.slice(1)) {
+    const last = merged[merged.length - 1];
+    if (from <= last[1]) last[1] = Math.max(last[1], to);
+    else merged.push([from, to]);
+  }
+
+  let pos = 0;
+  for (const [from, to] of merged) {
+    if (from > pos) frag.appendChild(document.createTextNode(text.slice(pos, from)));
+    const mark = document.createElement('mark');
+    mark.textContent = text.slice(from, to);
+    frag.appendChild(mark);
+    pos = to;
+  }
+  if (pos < text.length) frag.appendChild(document.createTextNode(text.slice(pos)));
+  return frag;
 }
 
 async function selectMeeting(id) {
@@ -1699,6 +1809,7 @@ function bindUi() {
   ui.search.addEventListener('input', () => {
     state.filter = ui.search.value;
     renderMeetingList();
+    scheduleSearch();
   });
 
   // Вкладки: заметки / саммари / транскрипт.
@@ -1722,6 +1833,8 @@ function bindUi() {
     if (e.key === 'Escape' && document.activeElement === ui.search) {
       ui.search.value = '';
       state.filter = '';
+      state.search.query = '';
+      state.search.byMeeting = null;
       renderMeetingList();
     }
     if (e.key === 'Escape' && !ui.audioSheet.hidden) ui.audioSheet.hidden = true;

@@ -543,8 +543,9 @@ body { display: flex; flex-direction: column; }
 .meeting-item__del {
   position: absolute;
   right: 6px;
-  top: 50%;
-  transform: translateY(-50%);
+  /* Сверху, а не по центру: под строкой может появиться цитата из
+     поиска, и кнопка по центру легла бы прямо на неё. */
+  top: 8px;
   display: none;
   padding: 5px;
   border: 0;
@@ -555,6 +556,26 @@ body { display: flex; flex-direction: column; }
 }
 .meeting-item:hover .meeting-item__del { display: block; }
 .meeting-item__del:hover { background: var(--accent-soft); color: var(--accent); }
+
+/* Цитата из расшифровки в результатах поиска. Две строки максимум:
+   нужна не сама реплика, а понимание, та ли это встреча. */
+.meeting-item__quote {
+  margin-top: 4px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--ink-3);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.meeting-item__quote mark {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-radius: 3px;
+  padding: 0 1px;
+}
+.meeting-item__more { color: var(--ink-3); opacity: .75; }
 
 .field__label {
   display: block;

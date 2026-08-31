@@ -50,6 +50,10 @@ class Api:
         self._service.delete_meeting(meeting_id)
         return True
 
+    def search(self, query: str) -> list[dict[str, Any]]:
+        """Найти реплики по словам во всех встречах."""
+        return self._service.search(query)
+
     def storage_usage(self) -> dict[str, Any]:
         """Сколько места занимают записи и база.
 

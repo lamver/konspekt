@@ -33,6 +33,7 @@ FAST = [
     "llm_download_test.py",
     "notice_test.py",
     "delete_test.py",
+    "search_test.py",
     "version_test.py",
     "migration_test.py",
 ]

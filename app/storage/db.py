@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import sqlite3
 import threading
 from pathlib import Path
@@ -28,7 +29,7 @@ from ..core.models import (
 
 log = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS meetings (
@@ -109,6 +110,46 @@ CREATE INDEX IF NOT EXISTS idx_segments_meeting ON transcript_segments(meeting_i
 CREATE INDEX IF NOT EXISTS idx_meetings_created ON meetings(created_at DESC);
 """
 
+# Поиск по расшифровкам.
+#
+# Отдельной схемой, потому что FTS5 есть не в каждой сборке SQLite: если
+# его нет, приложение обязано работать дальше, просто искать медленнее
+# перебором. Ронять запуск из-за поиска нельзя.
+#
+# Таблица внешняя (`content=`): текст уже лежит в transcript_segments, и
+# хранить его вторую копию значит удвоить размер базы на пустом месте.
+# Синхронизацию держат триггеры, иначе индекс разъедется молча.
+#
+# `unicode61 remove_diacritics 2` вместо стандартного токенизатора:
+# стандартный не считает кириллицу буквами и русский текст не индексирует
+# вовсе.
+SEARCH_SCHEMA = """
+CREATE VIRTUAL TABLE IF NOT EXISTS segments_fts USING fts5(
+    text,
+    content='transcript_segments',
+    content_rowid='rowid',
+    tokenize="unicode61 remove_diacritics 2"
+);
+
+CREATE TRIGGER IF NOT EXISTS segments_fts_insert
+AFTER INSERT ON transcript_segments BEGIN
+    INSERT INTO segments_fts(rowid, text) VALUES (new.rowid, new.text);
+END;
+
+CREATE TRIGGER IF NOT EXISTS segments_fts_delete
+AFTER DELETE ON transcript_segments BEGIN
+    INSERT INTO segments_fts(segments_fts, rowid, text)
+    VALUES ('delete', old.rowid, old.text);
+END;
+
+CREATE TRIGGER IF NOT EXISTS segments_fts_update
+AFTER UPDATE ON transcript_segments BEGIN
+    INSERT INTO segments_fts(segments_fts, rowid, text)
+    VALUES ('delete', old.rowid, old.text);
+    INSERT INTO segments_fts(rowid, text) VALUES (new.rowid, new.text);
+END;
+"""
+
 
 class Store:
     """Потокобезопасная обёртка над SQLite.
@@ -149,6 +190,31 @@ class Store:
             self._conn.commit()
             if was < SCHEMA_VERSION:
                 log.info("Схема базы обновлена с версии %d до %d", was, SCHEMA_VERSION)
+
+        self.search_ready = self._init_search(rebuild=was < 5)
+
+    def _init_search(self, rebuild: bool) -> bool:
+        """Поднять индекс поиска. Вернуть, получилось ли.
+
+        Не роняем приложение, если FTS5 в сборке SQLite нет: поиск
+        откатится на перебор, а записывать и расшифровывать встречи можно
+        и без него.
+        """
+        try:
+            with self._lock:
+                self._conn.executescript(SEARCH_SCHEMA)
+                if rebuild:
+                    # У человека уже есть расшифровки: без этого поиск
+                    # находил бы только то, что записано после обновления.
+                    self._conn.execute(
+                        "INSERT INTO segments_fts(segments_fts) VALUES ('rebuild')"
+                    )
+                    log.info("Индекс поиска построен по существующим расшифровкам")
+                self._conn.commit()
+            return True
+        except sqlite3.Error:
+            log.warning("Поиск по расшифровкам недоступен, ищем перебором", exc_info=True)
+            return False
 
     def _add_columns(self, table: str, columns: dict[str, str]) -> None:
         """Добавить недостающие колонки, не трогая данные."""
@@ -219,6 +285,62 @@ class Store:
         with self._lock:
             self._conn.execute("DELETE FROM meetings WHERE id=?", (meeting_id,))
             self._conn.commit()
+
+    def search(self, query: str, limit: int = 60) -> list[dict[str, Any]]:
+        """Найти реплики по словам. Вернуть по встрече её лучшие совпадения.
+
+        Ищем по расшифровке, а не только по заголовку и заметкам: человек
+        помнит, что «Петров говорил про сроки», а не как он назвал встречу.
+
+        Отдаём вместе с моментом времени: по нему потом можно будет
+        включить воспроизведение с нужной секунды (этап 11).
+        """
+        words = _fts_query(query)
+        if not words:
+            return []
+
+        if not getattr(self, "search_ready", False):
+            return self._search_slow(query, limit)
+
+        try:
+            with self._lock:
+                rows = self._conn.execute(
+                    """SELECT s.meeting_id, s.text, s.start_s, s.voice_label,
+                              s.speaker, m.title, m.created_at
+                       FROM segments_fts f
+                       JOIN transcript_segments s ON s.rowid = f.rowid
+                       JOIN meetings m ON m.id = s.meeting_id
+                       WHERE segments_fts MATCH ?
+                       ORDER BY bm25(segments_fts), m.created_at DESC
+                       LIMIT ?""",
+                    (words, limit),
+                ).fetchall()
+        except sqlite3.Error:
+            # Индекс мог не собраться на чужой сборке SQLite.
+            log.warning("Поиск через индекс не сработал, ищем перебором", exc_info=True)
+            return self._search_slow(query, limit)
+
+        return [dict(r) for r in rows]
+
+    def _search_slow(self, query: str, limit: int) -> list[dict[str, Any]]:
+        """Запасной поиск подстрокой, когда индекса нет.
+
+        Медленнее и без ранжирования, зато работает всегда. Лучше найти
+        не идеально, чем показать пустой экран.
+        """
+        like = f"%{query.strip().lower()}%"
+        with self._lock:
+            rows = self._conn.execute(
+                """SELECT s.meeting_id, s.text, s.start_s, s.voice_label,
+                          s.speaker, m.title, m.created_at
+                   FROM transcript_segments s
+                   JOIN meetings m ON m.id = s.meeting_id
+                   WHERE lower(s.text) LIKE ?
+                   ORDER BY m.created_at DESC
+                   LIMIT ?""",
+                (like, limit),
+            ).fetchall()
+        return [dict(r) for r in rows]
 
     def vacuum(self) -> int:
         """Сжать файл базы и вернуть, сколько байт освободилось.
@@ -484,6 +606,25 @@ def _row_to_person(row: sqlite3.Row) -> Person:
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )
+
+
+def _fts_query(query: str) -> str:
+    """Превратить то, что напечатал человек, в запрос для FTS5.
+
+    Подставлять текст в MATCH напрямую нельзя: кавычки, скобки и слова
+    вроде `AND` или `NEAR` для FTS5 синтаксис, и любой апостроф уронил бы
+    поиск ошибкой разбора. Поэтому режем на слова, выбрасываем всё, кроме
+    букв и цифр, и склеиваем сами.
+
+    Последнее слово получает `*`: человек печатает и ждёт подсказок, не
+    дописав слово до конца.
+    """
+    words = re.findall(r"[\w]+", (query or "").lower(), re.UNICODE)
+    if not words:
+        return ""
+    parts = [f'"{w}"' for w in words[:-1]]
+    parts.append(f'"{words[-1]}"*')
+    return " ".join(parts)
 
 
 def _row_to_meeting(row: sqlite3.Row) -> Meeting:

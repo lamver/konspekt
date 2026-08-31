@@ -656,6 +656,40 @@ class AppService:
             log.info("Убрано %s папок с записями, %s байт", removed, freed)
         return {"folders": removed, "bytes": freed}
 
+    def search(self, query: str) -> list[dict[str, Any]]:
+        """Поиск по расшифровкам, сгруппированный по встречам.
+
+        Плоский список реплик неудобен: одна встреча забивает выдачу
+        десятком совпадений, и остальные не видно. Поэтому на встречу
+        отдаём несколько лучших цитат и общее число совпадений.
+        """
+        rows = self.store.search(query)
+        if not rows:
+            return []
+
+        by_meeting: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            item = by_meeting.setdefault(row["meeting_id"], {
+                "meeting_id": row["meeting_id"],
+                "title": row["title"],
+                "created_at": row["created_at"],
+                "hits": 0,
+                "quotes": [],
+            })
+            item["hits"] += 1
+            # Три цитаты на встречу: больше не помещается в список и не
+            # читается, а понять, та ли это встреча, хватает и одной.
+            if len(item["quotes"]) < 3:
+                item["quotes"].append({
+                    "text": row["text"],
+                    "start": row["start_s"],
+                    "who": row["voice_label"] or ("Я" if row["speaker"] == "me" else "Собеседник"),
+                })
+
+        found = list(by_meeting.values())
+        found.sort(key=lambda m: (-m["hits"], -(m["created_at"] or 0)))
+        return found
+
     def storage_usage(self) -> dict[str, Any]:
         """Сколько занимают записи, база и модели.
 
