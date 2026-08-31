@@ -25,6 +25,10 @@ SIZES = [16, 24, 32, 48, 64, 128, 256]
 
 
 def main() -> int:
+    # Консоль Windows по умолчанию в cp1251, и русский вывод её роняет.
+    if sys.platform == "win32":
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
     base = _make_icon(False, size=256)
     base.save(OUT, format="ICO", sizes=[(s, s) for s in SIZES])
     print(f"готово: {OUT.relative_to(ROOT)}, {OUT.stat().st_size} байт")
