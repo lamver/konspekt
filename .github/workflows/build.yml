@@ -1,6 +1,6 @@
 # Сборка Konspekt под Windows.
 #
-# На каждый push: все быстрые тесты.
+# Тесты живут в tests.yml, здесь только сборка.
 # На тег вида v*: сборка установщика, VirusTotal, подписанная сборка GitHub, релиз.
 
 name: Build
@@ -38,10 +38,7 @@ jobs:
         run: uv sync --frozen --no-editable
 
       - name: Запустить быстрые тесты
-        run: |
-          chcp 65001
-          $env:PYTHONIOENCODING="utf-8"
-          uv run python -m pytest smoke_test.py web_test.py migration_test.py models_test.py router_test.py langid_test.py voices_test.py embedder_test.py import_test.py -v
+        run: uv run python run_tests.py
 
       - name: Собрать дистрибутив
         if: startsWith(github.ref, 'refs/tags/v')
