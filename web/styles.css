@@ -535,6 +535,27 @@ body { display: flex; flex-direction: column; }
 
 .field { display: block; margin-bottom: 10px; }
 
+/* Удаление встречи. Кнопка появляется по наведению: постоянно висящая
+   корзина у каждой строки превращает список в панель управления, а
+   удаляют встречи редко. */
+.meeting-item { position: relative; }
+
+.meeting-item__del {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: none;
+  padding: 5px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--ink-3);
+  cursor: pointer;
+}
+.meeting-item:hover .meeting-item__del { display: block; }
+.meeting-item__del:hover { background: var(--accent-soft); color: var(--accent); }
+
 .field__label {
   display: block;
   font-size: 11px;
@@ -1168,6 +1189,48 @@ body.is-resizing * { user-select: none !important; }
 .card > .card__title + * { margin-top: 8px; }
 .card > * + * { margin-top: 8px; }
 .card__title { margin: 0; font-size: 13px; font-weight: 600; }
+
+/* Что занято на диске: строка на источник, размер прижат вправо. */
+.usage { margin: 0; padding: 0; list-style: none; }
+.usage li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 0;
+  font-size: 12px;
+  color: var(--ink-2);
+  border-bottom: 1px solid var(--line);
+}
+.usage li:last-child { border-bottom: 0; }
+.usage b { color: var(--ink); font-weight: 600; white-space: nowrap; }
+
+/* Подтверждение опасного действия. Узкое окно по центру: вопрос
+   должен читаться целиком, не отводя глаз. */
+#confirm-sheet { z-index: 70; }
+.confirm { width: min(380px, 92%); padding: 18px 20px 16px; }
+.confirm__title {
+  margin: 0 0 8px;
+  font-family: var(--font-serif);
+  font-size: 16px;
+  font-weight: 600;
+}
+.confirm__text { margin: 0 0 16px; font-size: 13px; color: var(--ink-2); line-height: 1.45; }
+.confirm__row { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* Красная кнопка только там, где действие необратимо. Если красить
+   ею всё подряд, цвет перестаёт предупреждать. */
+.btn-danger {
+  padding: 7px 14px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--rec);
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn-danger:hover { filter: brightness(1.08); }
 .about__notice {
   margin: 6px 0 0;
   max-height: 320px;

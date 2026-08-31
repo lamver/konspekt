@@ -50,6 +50,18 @@ class Api:
         self._service.delete_meeting(meeting_id)
         return True
 
+    def storage_usage(self) -> dict[str, Any]:
+        """Сколько места занимают записи и база.
+
+        Показываем в настройках: человек должен видеть, что именно
+        приложение держит на диске, до того как решит это убрать.
+        """
+        return self._service.storage_usage()
+
+    def cleanup_storage(self) -> dict[str, Any]:
+        """Убрать записи без встреч и сжать базу."""
+        return self._service.cleanup_storage()
+
     # --- запись ----------------------------------------------------------
 
     def start_recording(self, meeting_id: str | None = None) -> dict[str, Any] | None:

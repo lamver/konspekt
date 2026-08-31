@@ -501,10 +501,91 @@ function renderMeetingList() {
         + (m.duration > 1 ? ` · ${fmtDuration(m.duration)}` : '');
     }
 
-    node.append(title, meta);
+    // Кнопка удаления прямо в списке: удалять хочется там же, где
+    // видишь ненужную встречу, а не искать её потом в настройках.
+    const del = document.createElement('button');
+    del.className = 'meeting-item__del';
+    del.type = 'button';
+    del.title = 'Удалить встречу';
+    del.innerHTML = '<svg viewBox="0 0 16 16" width="12" height="12">'
+      + '<path d="M6.5 3h3M3.5 4.5h9M5 4.5l.6 8h4.8l.6-8M7 7v3.5M9 7v3.5" '
+      + 'stroke="currentColor" stroke-width="1.2" fill="none" stroke-linecap="round"/></svg>';
+    del.addEventListener('click', (e) => {
+      // Иначе клик заодно откроет встречу, которую собираются удалить.
+      e.stopPropagation();
+      askDeleteMeeting(m);
+    });
+
+    node.append(title, meta, del);
     node.addEventListener('click', () => selectMeeting(m.id));
     ui.list.appendChild(node);
   }
+}
+
+/**
+ * Удаление встречи с подтверждением.
+ *
+ * Спрашиваем всегда: восстановить нечего, корзины у нас нет, а запись
+ * часовой встречи вместе с расшифровкой человек по ошибке не вернёт.
+ */
+async function askDeleteMeeting(meeting) {
+  const name = meeting.title || 'Без названия';
+  const ok = await confirmDialog(
+    `Удалить встречу «${name}»?`,
+    'Вместе с ней исчезнут запись, расшифровка и заметки. '
+    + 'Отменить это будет нельзя.'
+  );
+  if (!ok) return;
+
+  await api.delete_meeting(meeting.id);
+  if (state.currentId === meeting.id) {
+    state.currentId = null;
+    state.current = null;
+  }
+  // loadMeetings сама откроет следующую встречу, если удалили открытую.
+  await loadMeetings();
+  showToast('Встреча удалена');
+}
+
+/**
+ * Спросить «точно?» и дождаться ответа.
+ *
+ * Своё окно вместо window.confirm: системный диалог подписан адресом
+ * вида «127.0.0.1:65373 says» и кнопками на английском. Человек видит,
+ * что перед ним браузер, и пугается ровно там, где нужен спокойный
+ * ответ на понятный вопрос.
+ */
+function confirmDialog(title, text) {
+  return new Promise((resolve) => {
+    ui.confirmTitle.textContent = title;
+    ui.confirmText.textContent = text;
+    ui.confirmSheet.hidden = false;
+    ui.confirmYes.focus();
+
+    const finish = (answer) => {
+      ui.confirmSheet.hidden = true;
+      ui.confirmYes.removeEventListener('click', onYes);
+      ui.confirmNo.removeEventListener('click', onNo);
+      ui.confirmSheet.removeEventListener('click', onBackdrop);
+      // Тот же флаг capture, что и при подписке: иначе обработчик
+      // не снимется и следующий Escape закроет уже закрытое окно.
+      document.removeEventListener('keydown', onKey, true);
+      resolve(answer);
+    };
+    const onYes = () => finish(true);
+    const onNo = () => finish(false);
+    const onBackdrop = (e) => { if (e.target === ui.confirmSheet) finish(false); };
+    const onKey = (e) => {
+      if (e.key === 'Escape') { e.stopPropagation(); finish(false); }
+      if (e.key === 'Enter') { e.stopPropagation(); finish(true); }
+    };
+
+    ui.confirmYes.addEventListener('click', onYes);
+    ui.confirmNo.addEventListener('click', onNo);
+    ui.confirmSheet.addEventListener('click', onBackdrop);
+    // capture: иначе Escape сначала поймает общий обработчик окна.
+    document.addEventListener('keydown', onKey, true);
+  });
 }
 
 async function selectMeeting(id) {
@@ -1042,6 +1123,7 @@ const PREFS_TITLES = {
   voices: 'Голоса',
   notes: 'Заметки',
   look: 'Оформление',
+  data: 'Данные',
   about: 'О программе',
 };
 
@@ -1059,6 +1141,57 @@ function showPrefsTab(tab) {
   }
   ui.prefsTitle.textContent = PREFS_TITLES[tab];
   if (tab === 'about') loadAbout();
+  if (tab === 'data') loadUsage();
+}
+
+/** Человеческий размер: 1.2 ГБ понятнее, чем 1288490188 байт. */
+function fmtBytes(bytes) {
+  if (!bytes) return '0 МБ';
+  const mb = bytes / 1024 / 1024;
+  if (mb >= 1024) return (mb / 1024).toFixed(1) + ' ГБ';
+  if (mb >= 1) return Math.round(mb) + ' МБ';
+  return Math.max(1, Math.round(bytes / 1024)) + ' КБ';
+}
+
+/** Что приложение держит на диске. */
+async function loadUsage() {
+  const u = await api.storage_usage();
+  if (!u) return;
+
+  const rows = [
+    ['Записи встреч', fmtBytes(u.audio_bytes)],
+    ['База встреч и расшифровок', fmtBytes(u.db_bytes)],
+    ['Модели распознавания и заметок', fmtBytes(u.models_bytes)],
+  ];
+  if (u.orphan_folders) {
+    rows.push(['Записи без встречи', fmtBytes(u.orphan_bytes) + ' — можно убрать']);
+  }
+
+  ui.usageList.innerHTML = '';
+  for (const [name, value] of rows) {
+    const li = document.createElement('li');
+    const label = document.createElement('span');
+    label.textContent = name;
+    const size = document.createElement('b');
+    size.textContent = value;
+    li.append(label, size);
+    ui.usageList.appendChild(li);
+  }
+}
+
+/** Убрать записи без встреч и сжать базу. */
+async function runCleanup() {
+  ui.cleanupResult.textContent = 'Убираем…';
+  const res = await api.cleanup_storage();
+  if (!res) {
+    ui.cleanupResult.textContent = 'Не получилось';
+    return;
+  }
+  const freed = (res.bytes || 0) + (res.db_bytes || 0);
+  ui.cleanupResult.textContent = freed
+    ? `Освободилось ${fmtBytes(freed)}`
+    : 'Лишнего не нашлось';
+  loadUsage();
 }
 
 /**
@@ -1445,6 +1578,13 @@ function bindUi() {
     updateAuto: el('update-auto'),
     updateCheck: el('update-check'),
     updateResult: el('update-result'),
+    usageList: el('usage-list'),
+    cleanupResult: el('cleanup-result'),
+    confirmSheet: el('confirm-sheet'),
+    confirmTitle: el('confirm-title'),
+    confirmText: el('confirm-text'),
+    confirmYes: el('confirm-yes'),
+    confirmNo: el('confirm-no'),
     micSelect: el('mic-select'),
     loopbackSelect: el('loopback-select'),
     micEnabled: el('mic-enabled'),
@@ -1503,6 +1643,7 @@ function bindUi() {
   el('audio-close').addEventListener('click', () => { ui.audioSheet.hidden = true; });
   ui.appVersion.addEventListener('click', () => showPrefsTab('about'));
   ui.updateCheck.addEventListener('click', checkUpdatesNow);
+  el('cleanup-run').addEventListener('click', runCleanup);
   ui.updateAuto.addEventListener('change', async () => {
     await api.set_check_updates(ui.updateAuto.checked);
   });

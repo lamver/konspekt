@@ -223,6 +223,7 @@
         <button type="button" class="prefs__tab" data-tab="voices">Голоса</button>
         <button type="button" class="prefs__tab" data-tab="notes">Заметки</button>
         <button type="button" class="prefs__tab" data-tab="look">Оформление</button>
+        <button type="button" class="prefs__tab" data-tab="data">Данные</button>
         <button type="button" class="prefs__tab" data-tab="about">О программе</button>
       </nav>
 
@@ -343,6 +344,28 @@
         </section>
 
         <!-- О программе -->
+        <section class="prefs__page" data-page="data" hidden>
+          <div class="card">
+            <p class="card__title">Что лежит на диске</p>
+            <ul class="usage" id="usage-list">
+              <li class="hint">Считаем…</li>
+            </ul>
+            <p class="hint">Записи и расшифровки хранятся только здесь и
+            никуда не отправляются.</p>
+          </div>
+
+          <div class="card">
+            <p class="card__title">Уборка</p>
+            <p class="hint">Убирает записи, у которых больше нет встречи,
+            и сжимает базу, чтобы удалённое исчезло из файла окончательно.
+            Ваши встречи не трогает.</p>
+            <div class="voice-enroll__row">
+              <button class="btn-secondary" type="button" id="cleanup-run">Убрать лишнее</button>
+              <span class="hint" id="cleanup-result"></span>
+            </div>
+          </div>
+        </section>
+
         <section class="prefs__page" data-page="about" hidden>
           <div class="card">
             <p class="about__name">Konspekt <span id="about-version"></span></p>
@@ -374,6 +397,20 @@
           <button class="version" type="button" id="app-version" title="О программе"></button>
           <button class="btn-primary" id="audio-save">Готово</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Подтверждение опасного действия. Своё, а не window.confirm:
+       системный диалог показывает «127.0.0.1:65373 says» и кнопки
+       на английском, то есть выдаёт веб-нутро и пугает человека. -->
+  <div class="sheet" id="confirm-sheet" hidden>
+    <div class="sheet__panel confirm">
+      <h3 class="confirm__title" id="confirm-title">Удалить?</h3>
+      <p class="confirm__text" id="confirm-text"></p>
+      <div class="confirm__row">
+        <button class="btn-ghost" type="button" id="confirm-no">Отмена</button>
+        <button class="btn-danger" type="button" id="confirm-yes">Удалить</button>
       </div>
     </div>
   </div>

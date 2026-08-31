@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 import sqlite3
 import threading
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -218,6 +219,28 @@ class Store:
         with self._lock:
             self._conn.execute("DELETE FROM meetings WHERE id=?", (meeting_id,))
             self._conn.commit()
+
+    def vacuum(self) -> int:
+        """Сжать файл базы и вернуть, сколько байт освободилось.
+
+        Без этого удалённые встречи остаются в файле: SQLite помечает
+        страницы свободными, но размер не уменьшает. Для приложения,
+        которое обещает удалять данные, это плохо: текст реплик так и
+        лежит в файле, и его видно любым просмотрщиком.
+        """
+        path = Path(self._path)
+        before = path.stat().st_size if path.exists() else 0
+        with self._lock:
+            # Сначала влить журнал в основной файл. В режиме WAL удалённые
+            # реплики остаются лежать в `-wal`, и один VACUUM их не
+            # трогает: текст удалённой встречи так и читается на диске.
+            self._conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            self._conn.execute("VACUUM")
+            # И ещё раз после: сам VACUUM пишет через журнал.
+            self._conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            self._conn.commit()
+        after = path.stat().st_size if path.exists() else 0
+        return max(0, before - after)
 
     # --- строки заметок --------------------------------------------------
 

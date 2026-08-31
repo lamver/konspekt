@@ -8,6 +8,7 @@ UI и трей ходят только сюда и ничего не знают 
 from __future__ import annotations
 
 import logging
+import shutil
 import threading
 import time
 from pathlib import Path
@@ -601,8 +602,97 @@ class AppService:
     def delete_meeting(self, meeting_id: str) -> None:
         if self.active_meeting_id == meeting_id:
             self.stop_recording()
+        # Сначала файлы, потом запись в базе: если удаление файлов
+        # упадёт, встреча останется на месте и человек попробует ещё
+        # раз. Обратный порядок оставил бы аудио без владельца, и найти
+        # его было бы уже нечем.
+        self._delete_audio(meeting_id)
         self.store.delete_meeting(meeting_id)
         bus.emit(MEETINGS_CHANGED)
+
+    def _delete_audio(self, meeting_id: str) -> None:
+        """Убрать записи встречи с диска.
+
+        Молчим при ошибке: занятый файл или права не должны мешать
+        удалить саму встречу. Осиротевшее аудио потом подберёт уборка.
+        """
+        folder = paths.audio_dir() / meeting_id
+        if not folder.exists():
+            return
+        try:
+            shutil.rmtree(folder)
+            log.info("Удалены записи встречи %s", meeting_id)
+        except OSError:
+            log.warning("Не удалось удалить записи встречи %s", meeting_id, exc_info=True)
+
+    def cleanup_audio(self) -> dict[str, Any]:
+        """Убрать записи, у которых больше нет встречи.
+
+        Такие остаются после удаления встречи занятым файлом, после
+        падения во время записи и от версий, которые аудио не убирали
+        вовсе. Молча копить гигабайты в приложении про приватность
+        неправильно.
+        """
+        root = paths.audio_dir()
+        if not root.exists():
+            return {"folders": 0, "bytes": 0}
+
+        known = {m.id for m in self.store.list_meetings()}
+        removed = 0
+        freed = 0
+        for folder in root.iterdir():
+            if not folder.is_dir() or folder.name in known:
+                continue
+            size = sum(f.stat().st_size for f in folder.rglob("*") if f.is_file())
+            try:
+                shutil.rmtree(folder)
+            except OSError:
+                log.warning("Не удалось убрать %s", folder, exc_info=True)
+                continue
+            removed += 1
+            freed += size
+
+        if removed:
+            log.info("Убрано %s папок с записями, %s байт", removed, freed)
+        return {"folders": removed, "bytes": freed}
+
+    def storage_usage(self) -> dict[str, Any]:
+        """Сколько занимают записи, база и модели.
+
+        Модели считаем отдельно: они весят больше всего, но это не
+        личные данные, и убирать их вместе со встречами неправильно.
+        """
+        def folder_size(path: Path) -> int:
+            if not path.exists():
+                return 0
+            return sum(f.stat().st_size for f in path.rglob("*") if f.is_file())
+
+        db = paths.db_path()
+        audio_root = paths.audio_dir()
+        known = {m.id for m in self.store.list_meetings()}
+
+        orphan_bytes = 0
+        orphan_folders = 0
+        if audio_root.exists():
+            for folder in audio_root.iterdir():
+                if folder.is_dir() and folder.name not in known:
+                    orphan_folders += 1
+                    orphan_bytes += folder_size(folder)
+
+        return {
+            "meetings": len(known),
+            "audio_bytes": folder_size(audio_root),
+            "db_bytes": db.stat().st_size if db.exists() else 0,
+            "models_bytes": folder_size(paths.models_dir()),
+            "orphan_folders": orphan_folders,
+            "orphan_bytes": orphan_bytes,
+        }
+
+    def cleanup_storage(self) -> dict[str, Any]:
+        """Убрать записи без встреч и сжать базу."""
+        result = self.cleanup_audio()
+        result["db_bytes"] = self.store.vacuum()
+        return result
 
     # --- запись ----------------------------------------------------------
 
