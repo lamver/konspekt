@@ -1,0 +1,58 @@
+# Прогон тестов для CI.
+
+name: Tests
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+  schedule:
+    - cron: '0 3 * * *' # раз в сутки, ночью
+
+jobs:
+  fast:
+    runs-on: windows-latest
+    name: Быстрые тесты
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Настроить Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Установить uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: latest
+
+      - name: Установить зависимости
+        run: uv sync --frozen --no-editable
+
+      - name: Запустить быстрые тесты
+        run: uv run python run_tests.py
+
+  slow:
+    runs-on: windows-latest
+    name: Медленные тесты
+    if: github.event_name == 'schedule'
+    needs: fast
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Настроить Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Установить uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: latest
+
+      - name: Установить зависимости
+        run: uv sync --frozen --no-editable
+
+      - name: Запустить все тесты
+        run: uv run python run_tests.py --full
