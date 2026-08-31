@@ -61,7 +61,12 @@ jobs:
           subject-path: dist/konspekt-*-setup.exe
 
       - name: VirusTotal скан
-        if: startsWith(github.ref, 'refs/tags/v')
+        # Без ключа шаг молча пропускается: отсутствие сканера не повод
+        # ронять весь релиз. Ключ бесплатный, заводится на virustotal.com
+        # и кладётся в секреты как VT_API_KEY.
+        if: startsWith(github.ref, 'refs/tags/v') && env.VT_API_KEY != ''
+        env:
+          VT_API_KEY: ${{ secrets.VT_API_KEY }}
         uses: crazy-max/ghaction-virustotal@v4
         with:
           vt_api_key: ${{ secrets.VT_API_KEY }}
@@ -72,6 +77,9 @@ jobs:
       # Releases приватного репозитория отдаются только по токену, а
       # класть в дистрибутив токен с доступом к исходникам нельзя.
       # RELEASES_TOKEN — токен с правом записи только в тот репозиторий.
+      # Требует секрет RELEASES_TOKEN: токен с правом записи только в
+      # публичный репозиторий релизов. Без него шаг честно падает, потому
+      # что релиз без файлов хуже, чем несобранный релиз.
       - name: Создать релиз в публичном репозитории
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
