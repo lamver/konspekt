@@ -30,6 +30,8 @@ from ..core.events import (
     MEETING_UPDATED,
     MODEL_DOWNLOAD,
     LLM_DOWNLOAD,
+    NEW_VERSION,
+    UPDATE_STATE,
     RECORDING_LEVEL,
     RECORDING_ERROR,
     RECORDING_STARTED,
@@ -70,6 +72,11 @@ FORWARDED_EVENTS = (
     CHAT_CHUNK,
     CHAT_MESSAGE,
     CHAT_ERROR,
+    # Без этого ежедневная проверка находила новую версию, писала строчку
+    # в журнал и на том всё заканчивалось: человек ничего не видел.
+    NEW_VERSION,
+    # Ход тихого обновления: полоса загрузки и кнопка «поставить сейчас».
+    UPDATE_STATE,
 )
 
 

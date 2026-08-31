@@ -1,4 +1,4 @@
-﻿"""Сервис приложения: вся логика встреч в одном месте.
+"""Сервис приложения: вся логика встреч в одном месте.
 
 UI и трей ходят только сюда и ничего не знают ни про SQLite, ни про
 аудиодвижок. Это позволит на этапе 2 подменить NullCapture на настоящий
@@ -64,6 +64,7 @@ from ..core.events import (
     MEETINGS_CHANGED,
     MEETING_UPDATED,
     MODEL_DOWNLOAD,
+    NEW_VERSION,
     RECORDING_ERROR,
     RECORDING_STARTED,
     RECORDING_STOPPED,
@@ -75,6 +76,7 @@ from ..core.events import (
     bus,
 )
 from ..core.importer import ImportQueue
+from ..core.updater import Updater
 from ..core.version_check import VersionChecker
 from ..core.models import (
     ChatMessage,
@@ -168,12 +170,23 @@ class AppService:
         self._recover_stale_recordings()
         # Проверка новой версии идёт в фоне и не задерживает старт.
         self._version_checker = VersionChecker(self)
+        # Обновление скачиваем сами: гонять человека на страницу релиза
+        # за установщиком — это работа, которую программа может сделать
+        # за него. Ставится оно при выходе, чтобы не прерывать встречу.
+        self.updater = Updater(self)
+        bus.on(NEW_VERSION, self._on_new_version)
         self._version_checker.check_later()
         # Модель распознавания качаем сразу, не дожидаясь первой встречи.
         # Программу ставят ради расшифровки, и лучше потратить эти минуты
         # тогда, когда человек только осматривается, чем когда он уже
         # бросил файл и ждёт результата.
         self._prefetch_asr_model()
+
+    def _on_new_version(self, payload: dict) -> None:
+        """Нашлась новая версия — тихо качаем её в фоне."""
+        if not self.settings.auto_update:
+            return
+        self.updater.download_later(str(payload.get("latest") or ""))
 
     def _prefetch_asr_model(self) -> None:
         """Начать загрузку весов в фоне сразу после запуска.
@@ -1520,6 +1533,12 @@ class AppService:
         """Отметить, что версию только что смотрели."""
         self.settings.last_version_check = time.time()
         settings_mod.save(self.settings)
+
+    def set_auto_update(self, enabled: bool) -> bool:
+        """Разрешить или запретить самостоятельную установку обновлений."""
+        self.settings.auto_update = bool(enabled)
+        settings_mod.save(self.settings)
+        return self.settings.auto_update
 
     def save_window_geometry(self, x: int, y: int, width: int, height: int) -> None:
         self.settings.window.x = int(x)

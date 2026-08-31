@@ -123,6 +123,12 @@ window.__konspekt_event = function (payload) {
     case 'model.download':
       onModelProgress(payload);
       break;
+    case 'app.new_version':
+      showUpdateNote(payload);
+      break;
+    case 'app.update_state':
+      onUpdateState(payload);
+      break;
     case 'llm.download':
       // Модель приезжает при первом запросе, и это полтора гигабайта.
       // Без процентов ожидание неотличимо от зависания.
@@ -1503,7 +1509,10 @@ async function loadAbout() {
     ui.aboutNotice.dataset.loaded = '1';
   }
   const state = await api.get_update_settings();
-  if (state) ui.updateAuto.checked = state.check_updates !== false;
+  if (state) {
+    ui.updateAuto.checked = state.check_updates !== false;
+    ui.updateSilent.checked = state.auto_update !== false;
+  }
 }
 
 /** Проверка новой версии по кнопке, с ответом на месте. */
@@ -1516,9 +1525,55 @@ async function checkUpdatesNow() {
   }
   if (res.has_update) {
     ui.updateResult.textContent = 'Вышла версия ' + res.latest;
-    showToast('Вышла версия ' + res.latest);
+    showUpdateNote(res);
   } else {
     ui.updateResult.textContent = 'Установлена свежая версия';
+  }
+}
+
+/**
+ * Плашка «вышла новая версия» в боковой панели.
+ *
+ * Раньше находка превращалась во всплывающее сообщение, которое исчезало
+ * через пару секунд, и человек оставался на старой сборке, ничего не
+ * поняв. Плашка висит, пока её не закроют или не нажмут кнопку.
+ */
+function showUpdateNote(payload) {
+  if (!payload || !payload.latest || !ui.updateNote) return;
+  ui.updateNoteText.textContent = 'Вышла версия ' + payload.latest;
+  ui.updateNoteNotes.textContent = payload.notes || '';
+  ui.updateNoteNotes.hidden = !payload.notes;
+  ui.updateNote.hidden = false;
+}
+
+/**
+ * Ход тихого обновления.
+ *
+ * Пока качается — полоса, потом кнопка «Установить и перезапустить».
+ * Ничего не нажимать тоже правильный путь: обновление встанет само при
+ * следующем выходе из программы, и об этом сказано прямо в плашке.
+ */
+function onUpdateState(payload) {
+  if (!ui.updateNote || !payload) return;
+  if (payload.state === 'downloading') {
+    ui.updateNote.hidden = false;
+    ui.updateNoteText.textContent = 'Качаем версию ' + (payload.version || '');
+    ui.updateNoteBar.hidden = false;
+    ui.updateNoteFill.style.width = (payload.percent || 0) + '%';
+    ui.updateNoteNotes.textContent = 'Скачается фоном, установится при выходе.';
+    ui.updateNoteNotes.hidden = false;
+    ui.updateNoteInstall.hidden = true;
+  } else if (payload.state === 'ready') {
+    ui.updateNote.hidden = false;
+    ui.updateNoteText.textContent = 'Версия ' + (payload.version || '') + ' готова';
+    ui.updateNoteBar.hidden = true;
+    ui.updateNoteNotes.textContent = 'Установится сама при выходе из программы.';
+    ui.updateNoteNotes.hidden = false;
+    ui.updateNoteInstall.hidden = false;
+  } else {
+    // Не скачалось: молчим. Человек ничего не просил, и ошибка сети в
+    // фоновой задаче не повод пугать его красной плашкой.
+    ui.updateNote.hidden = true;
   }
 }
 
@@ -1868,8 +1923,16 @@ function bindUi() {
     aboutNotice: el('about-notice'),
     prefsTitle: el('prefs-title'),
     updateAuto: el('update-auto'),
+    updateSilent: el('update-silent'),
     updateCheck: el('update-check'),
     updateResult: el('update-result'),
+    updateNote: el('update-note'),
+    updateNoteText: el('update-note-text'),
+    updateNoteNotes: el('update-note-notes'),
+    updateNoteBar: el('update-note-bar'),
+    updateNoteFill: el('update-note-fill'),
+    updateNoteInstall: el('update-note-install'),
+    updateNoteHide: el('update-note-hide'),
     usageList: el('usage-list'),
     cleanupResult: el('cleanup-result'),
     confirmSheet: el('confirm-sheet'),
@@ -1940,9 +2003,23 @@ function bindUi() {
   el('audio-close').addEventListener('click', () => { ui.audioSheet.hidden = true; });
   ui.appVersion.addEventListener('click', () => showPrefsTab('about'));
   ui.updateCheck.addEventListener('click', checkUpdatesNow);
+  ui.updateNoteInstall.addEventListener('click', async () => {
+    ui.updateNoteInstall.disabled = true;
+    const ok = await api.install_update();
+    if (!ok) {
+      ui.updateNoteInstall.disabled = false;
+      showToast('Сейчас идёт запись, обновление встанет после неё');
+    }
+  });
+  ui.updateNoteHide.addEventListener('click', () => {
+    ui.updateNote.hidden = true;
+  });
   el('cleanup-run').addEventListener('click', runCleanup);
   ui.updateAuto.addEventListener('change', async () => {
     await api.set_check_updates(ui.updateAuto.checked);
+  });
+  ui.updateSilent.addEventListener('change', async () => {
+    await api.set_auto_update(ui.updateSilent.checked);
   });
   for (const btn of document.querySelectorAll('.prefs__tab')) {
     btn.addEventListener('click', () => showPrefsTab(btn.dataset.tab));
@@ -2113,6 +2190,9 @@ async function init() {
   await loadMeetings();
   // Разбор файлов мог продолжаться, пока окно было скрыто в трее.
   await refreshImports();
+  // Обновление могло скачаться до того, как окно открыли: тогда события
+  // мы не слышали, и без этого запроса кнопка установки не появилась бы.
+  onUpdateState(await api.update_state());
 
   // Восстанавливаем состояние записи, если окно открыли посреди встречи.
   const rec = await api.recording_state();

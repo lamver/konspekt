@@ -77,6 +77,21 @@
         <p class="model-load__hint" id="model-load-hint">Один раз, 220 МБ. Пользоваться программой можно уже сейчас.</p>
       </div>
 
+      <!-- Новая версия. Программа качает её сама и ставит при выходе,
+           здесь только видно, что происходит, и можно поставить сразу,
+           не дожидаясь закрытия. -->
+      <div class="update-note" id="update-note" hidden>
+        <div class="update-note__row">
+          <span id="update-note-text">Вышла новая версия</span>
+          <button class="btn-link" id="update-note-hide" title="Скрыть">×</button>
+        </div>
+        <div class="model-load__bar" id="update-note-bar" hidden>
+          <div class="model-load__fill" id="update-note-fill"></div>
+        </div>
+        <p class="update-note__hint" id="update-note-notes"></p>
+        <button class="btn-secondary" type="button" id="update-note-install" hidden>Установить и перезапустить</button>
+      </div>
+
       <div class="imports" id="imports" hidden>
         <div class="imports__head">
           <span id="imports-title">Разбор записей</span>
@@ -392,8 +407,14 @@
               <input type="checkbox" id="update-auto" checked>
               <span>Раз в сутки смотреть, не вышла ли новая версия</span>
             </label>
+            <label class="check">
+              <input type="checkbox" id="update-silent" checked>
+              <span>Скачивать и ставить обновления самостоятельно</span>
+            </label>
             <p class="hint">Наружу уходит только номер версии и тип системы.
-            Ничего не скачивается и не ставится само.</p>
+            Обновление скачивается фоном, сверяется по контрольной сумме и
+            ставится при выходе из программы, поэтому работу не прерывает.
+            Встречи, записи и скачанные модели остаются на месте.</p>
             <div class="voice-enroll__row">
               <button class="btn-secondary" type="button" id="update-check">Проверить сейчас</button>
               <span class="hint" id="update-result"></span>

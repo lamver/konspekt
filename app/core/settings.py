@@ -94,6 +94,10 @@ class Settings:
     check_updates: bool = True
     # Когда смотрели в последний раз, unix-время.
     last_version_check: float = 0.0
+    # Скачивать и ставить обновление самим, без похода на сайт. Установка
+    # происходит при выходе из программы, поэтому работу не прерывает.
+    # Выключается для тех, кто хочет решать сам, что и когда ставится.
+    auto_update: bool = True
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

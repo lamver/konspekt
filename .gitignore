@@ -36,3 +36,4 @@ _voices_tmp/
 audio_examples/
 dist_dbg/ 
 build_dbg/
+/_*.md

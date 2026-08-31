@@ -74,7 +74,9 @@ WINDOW_SHOW = "window.show"
 WINDOW_HIDE = "window.hide"
 WINDOW_TOGGLE = "window.toggle"
 APP_QUIT = "app.quit"
-# Вышла свежая сборка. Просто сообщение: ставит её человек сам.
+# Вышла свежая сборка.
 NEW_VERSION = "app.new_version"
+# Ход тихого обновления: качаем, готово к установке, не вышло.
+UPDATE_STATE = "app.update_state"
 
 bus = EventBus()

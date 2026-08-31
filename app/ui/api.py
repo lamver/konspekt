@@ -356,6 +356,7 @@ class Api:
         return {
             "check_updates": bool(settings.check_updates),
             "last_check": float(settings.last_version_check or 0),
+            "auto_update": bool(settings.auto_update),
         }
 
     def set_check_updates(self, enabled: bool) -> dict[str, Any]:
@@ -365,6 +366,15 @@ class Api:
         спроса, противоречит обещанию приватности.
         """
         self._service.set_check_updates(bool(enabled))
+        return self.get_update_settings()
+
+    def set_auto_update(self, enabled: bool) -> dict[str, Any]:
+        """Ставить ли обновления самостоятельно.
+
+        Отключаемость обязательна: часть людей хочет решать сама, что
+        и когда меняется на их машине.
+        """
+        self._service.set_auto_update(bool(enabled))
         return self.get_update_settings()
 
     def check_updates_now(self) -> dict[str, Any]:
@@ -384,6 +394,10 @@ class Api:
 
         self._service.mark_version_checked()
         newer = version_check.is_newer(release.version, __version__)
+        # Нашли новее — сразу качаем, не заставляя человека искать файл
+        # руками. Он всё равно хотел обновиться, раз нажал кнопку.
+        if newer and self._service.settings.auto_update:
+            self._service.updater.download_later(release.version)
         return {
             "ok": True,
             "current": __version__,
@@ -392,3 +406,24 @@ class Api:
             "notes": release.notes,
             "has_update": newer,
         }
+
+    def install_update(self) -> bool:
+        """Поставить скачанное обновление прямо сейчас.
+
+        Программа при этом закрывается: установщик заменяет её файлы.
+        Во время записи откажемся и вернём False, чтобы интерфейс
+        объяснил человеку, почему ничего не произошло.
+        """
+        return bool(self._service.updater.install_now())
+
+    def update_state(self) -> dict[str, Any]:
+        """Состояние обновления для только что открытого окна.
+
+        Загрузка идёт фоном и могла закончиться до того, как окно
+        подписалось на события: без этого запроса готовое обновление
+        было бы не видно до перезапуска.
+        """
+        ready = self._service.updater.ready
+        if not ready:
+            return {"state": "idle"}
+        return {"state": "ready", "version": ready.version}

@@ -204,6 +204,35 @@ body { display: flex; flex-direction: column; }
   color: var(--ink-3);
 }
 
+/* Плашка о новой версии. Заметнее загрузки модели (у неё рамка цвета
+   акцента), потому что требует действия человека, а не просто ждёт. */
+.update-note {
+  margin: 0 8px 8px;
+  padding: 8px 10px;
+  background: var(--paper-2);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+}
+
+.update-note__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.update-note__hint {
+  margin: 4px 0 6px;
+  font-size: 10px;
+  line-height: 1.4;
+  color: var(--ink-3);
+}
+
+.update-note .btn-secondary { width: 100%; font-size: 11px; padding: 4px 8px; }
+
 .imports {
   padding: 0 8px 8px;
   border-bottom: 1px solid var(--line);

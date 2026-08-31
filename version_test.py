@@ -137,6 +137,45 @@ def check_survives_junk() -> None:
     print("[ok] битый ответ не роняет приложение и не зовёт обновляться")
 
 
+def check_published_matches_build() -> None:
+    """`latest.json` в сети должен знать про текущую версию.
+
+    Единственная проверка здесь, которая ходит в сеть, и не зря: при
+    выпуске 0.5.0 обновили релиз, а `latest.json` остался на 0.4.0.
+    Внешне всё было исправно, но у людей кнопка «Проверить сейчас»
+    отвечала «установлена свежая версия», сидя на старой сборке.
+    Молча выйти отсюда нельзя: без сети пропускаем, но говорим об этом.
+    """
+    from app import __version__
+
+    try:
+        release = version_check.fetch_latest()
+    except Exception as e:
+        print(f"[пропуск] нет связи с сервером обновлений: {e}")
+        return
+
+    assert not version_check.is_newer(__version__, release.version), (
+        f"latest.json отдаёт {release.version}, а собрана {__version__}: "
+        "у пользователей проверка обновлений будет молчать"
+    )
+    print(f"[ok] latest.json знает про {release.version}, собрана {__version__}")
+
+
+def check_forwarded_to_ui() -> None:
+    """Событие о новой версии должно доезжать до окна.
+
+    Проверка находила обновление и писала строчку в журнал, а список
+    транслируемых в интерфейс тем её не содержал: человек не видел
+    ничего. Поэтому список проверяем явно.
+    """
+    from app.ui.window import FORWARDED_EVENTS
+
+    assert NEW_VERSION in FORWARDED_EVENTS, (
+        "событие о новой версии не транслируется в интерфейс"
+    )
+    print("[ok] новость об обновлении доезжает до окна")
+
+
 def main() -> int:
     check_versions()
     check_notifies()
@@ -144,6 +183,8 @@ def main() -> int:
     check_disabled()
     check_daily()
     check_survives_junk()
+    check_forwarded_to_ui()
+    check_published_matches_build()
     print("\nВсе проверки пройдены.")
     return 0
 
