@@ -28,7 +28,11 @@ import os
 import sys
 from pathlib import Path
 
-from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs
+from PyInstaller.utils.hooks import (
+    collect_data_files,
+    collect_dynamic_libs,
+    copy_metadata,
+)
 
 # Обычная сборка идёт без консоли, но тогда упавший запуск не оставляет
 # никаких следов. KONSPEKT_CONSOLE=1 собирает то же самое с консолью,
@@ -56,6 +60,13 @@ datas = [
 # onnx_asr держит рядом с кодом описания моделей, без них распознавание
 # не поднимется.
 datas += collect_data_files("onnx_asr")
+
+# И его метаданные: onnx_asr на первой же строке спрашивает свою версию
+# через importlib.metadata. Без папки .dist-info импорт падает с
+# PackageNotFoundError, распознавание не поднимается вовсе, и в готовой
+# сборке это выглядит как молчащая программа. В разработке беды не видно:
+# там метаданные лежат в окружении.
+datas += copy_metadata("onnx-asr")
 
 binaries = []
 # soundcard и av носят свои нативные библиотеки, автоматически они не

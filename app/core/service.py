@@ -210,8 +210,6 @@ class AppService:
             return
         if not self.settings.asr.enabled:
             return
-        if getattr(self.transcriber, "is_downloaded", lambda: True)():
-            return
 
         def run() -> None:
             try:
@@ -221,8 +219,13 @@ class AppService:
                 # реплике, а до тех пор приложение работает как обычно.
                 log.exception("Фоновая загрузка модели не удалась")
 
+        # Раньше здесь стоял ранний выход, если файлы уже на диске. Из-за
+        # него повреждённые веса доживали до первой реплики: человек жал
+        # запись, ждал и получал пустоту. Теперь загрузку в память
+        # проверяем сразу при запуске, пока он ещё осматривается, и порча
+        # чинится до того, как понадобится расшифровка.
         threading.Thread(target=run, name="asr-prefetch", daemon=True).start()
-        log.info("Начали качать модель распознавания в фоне")
+        log.info("Готовим модель распознавания в фоне")
 
     def _build_transcriber(self) -> Transcriber:
         """Движок распознавания по настройкам.

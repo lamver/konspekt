@@ -131,6 +131,21 @@ def test_service_repairs_and_reports(tmp: Path) -> None:
     check("повреждены" in texts,
           "человеку сказали про повреждение, а не оставили пустой транскрипт")
 
+    # Порча обязана всплывать при запуске, а не при первой реплике.
+    # Иначе человек нажимает запись, говорит, ждёт и получает пустоту:
+    # ровно то, с чем он и пришёл жаловаться.
+    state["broken"] = True
+    state["discarded"] = 0
+    service._asr_repaired = False
+    os.environ.pop("KONSPEKT_NO_PREFETCH", None)
+    service._prefetch_asr_model()
+    os.environ["KONSPEKT_NO_PREFETCH"] = "1"
+    deadline = time.time() + 10
+    while time.time() < deadline and not state["discarded"]:
+        time.sleep(0.05)
+    check(state["discarded"] >= 1,
+          "битые веса замечены сразу при запуске, до первой записи")
+
 
 def test_second_process_does_not_corrupt(tmp: Path) -> None:
     """Второй загрузчик не лезет в файл, который качает первый."""

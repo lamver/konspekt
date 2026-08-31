@@ -269,6 +269,12 @@ class ModelDownloader:
         total = 0
         for name in self.files:
             for path in (self.dest / name, self.dest / (name + ".part")):
-                if path.exists():
+                try:
                     total += path.stat().st_size
+                except OSError:
+                    # Файла нет или он исчез прямо сейчас: веса как раз
+                    # выбрасывают из-за порчи, а окно в этот момент
+                    # спрашивает размер. Проверка «существует, потом
+                    # stat» тут не спасает, между ними файл и пропадает.
+                    continue
         return total
