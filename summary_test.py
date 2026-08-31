@@ -184,10 +184,82 @@ def main() -> int:
         assert len(service.list_chat_messages(mid)) == 2, "пустой вопрос попал в историю"
         print("[ok] пустой вопрос отклоняется")
 
+        проверить_длинную_встречу(service)
+
         print("\nСаммари и чат работают от базы до текста.")
         return 0
     finally:
         service.shutdown()
+
+
+def проверить_длинную_встречу(service) -> None:
+    """Часовая встреча не влезает в окно контекста и идёт по частям.
+
+    Из-за чего написано. Разбиение по частям — самое хрупкое место
+    синтеза: обычная встреча до него не доходит, поэтому поломка вылезет
+    только у человека с длинной записью, когда чинить уже поздно. Здесь
+    расшифровка нарочно длиннее окна, и проверяется, что заметки всё
+    равно выходят и опираются на сказанное.
+    """
+    from app.core.events import SUMMARY_STATUS
+
+    meeting = service.store.create_meeting(Meeting(title="Долгая планёрка"))
+    mid = meeting.id
+
+    # Наполнитель, чтобы перевалить за окно контекста, и одна приметная
+    # реплика в самом конце: если разбиение теряет хвост, мы это увидим.
+    # Реплики разные: одинаковые склеиваются при сборке расшифровки, и
+    # набрать нужную длину повторами не выйдет.
+    реплики = [
+        (
+            Speaker.THEM,
+            "Дмитрий",
+            f"Пункт {n}: посмотрели загрузку команды и текущие задачи, "
+            f"ничего нового не решили, вернёмся к этому позже.",
+        )
+        for n in range(600)
+    ]
+    реплики.append(
+        (Speaker.ME, "Валерий", "И самое главное: сервер переезжает в четверг.")
+    )
+    for i, (дорожка, кто, текст) in enumerate(реплики):
+        service.store.add_segment(TranscriptSegment(
+            meeting_id=mid, speaker=дорожка, text=текст,
+            start=float(i * 10), end=float(i * 10 + 8), voice_label=кто,
+        ))
+
+    расшифровка = service.transcript_text(mid)
+    from app.core.service import TRANSCRIPT_BUDGET
+    from app.llm.chunking import fits
+
+    assert not fits(расшифровка, TRANSCRIPT_BUDGET), \
+        "встреча вышла короткой, разбиение по частям не сработает"
+
+    состояния: list[str] = []
+    готово = threading.Event()
+    итог: dict = {}
+    стоп = [
+        bus.on(SUMMARY_STATUS, lambda p: состояния.append(p["text"])),
+        bus.on(SUMMARY_READY, lambda p: (итог.update(p), готово.set())),
+        bus.on(SUMMARY_ERROR, lambda p: (итог.update(p), готово.set())),
+    ]
+    t0 = time.time()
+    assert service.generate_summary(mid).get("ok"), "синтез длинной встречи не запустился"
+    assert готово.wait(900), "длинная встреча не досчиталась"
+    for s in стоп:
+        s()
+
+    assert "error" not in итог, f"длинная встреча упала: {итог.get('error')}"
+    заметки = итог.get("summary", "")
+    assert заметки.strip(), "по длинной встрече заметки пустые"
+    print(f"[ok] длинная встреча ({len(расшифровка)} символов) разобрана за {time.time() - t0:.1f}с")
+
+    assert состояния, "человеку не сказали, что встреча длинная и идёт по частям"
+    print(f"[ok] показан ход разбора: {состояния[0]}")
+
+    assert "четверг" in заметки.lower(), \
+        f"хвост встречи потерялся при разбиении:\n{заметки}"
+    print("[ok] сказанное в самом конце не потерялось")
 
 
 if __name__ == "__main__":
