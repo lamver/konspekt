@@ -1,15 +1,15 @@
 @echo off
-rem Запуск Konspekt из исходников двойным щелчком. Окно консоли прячется,
-rem работает только приложение.
+rem Zapusk Konspekt iz ishodnikov dvojnym schelchkom.
 rem
-rem Профиль «разработка» разводит эту копию с установленной: своя база,
-rem свои записи, свои веса и свой замок единственного экземпляра. Без него
-rem запуск рядом с установленной программой не поднимал вторую копию
-rem вовсе, а данные обе копии писали в одну папку.
+rem Kommentarii latinicej namerenno: cmd chitaet .bat v kodirovke cp866, a
+rem fajly proekta hranjatsja v utf-8. Russkij tekst zdes prevrashaetsja v
+rem musor i lomaet zapusk - eto uzhe slomalo fajl odin raz.
+rem
+rem Profil "razrabotka" razvodit etu kopiju s ustanovlennoj: svoja baza,
+rem svoi zapisi, svoi vesa i svoj zamok edinstvennogo ekzempljara. Bez nego
+rem zapusk rjadom s ustanovlennoj programmoj ne podnimal vtoruju kopiju
+rem vovse, a dannye obe kopii pisali v odnu papku.
 cd /d "%~dp0"
-rem Кодировка консоли: иначе имя профиля ниже приедет искажённым и профиль
-rem окажется другим, чем в документации.
-chcp 65001 >nul
 set PYTHONIOENCODING=utf-8
-if "%KONSPEKT_PROFILE%"=="" set KONSPEKT_PROFILE=разработка
+if "%KONSPEKT_PROFILE%"=="" set KONSPEKT_PROFILE=razrabotka
 start "" /b uv run pythonw -m app
