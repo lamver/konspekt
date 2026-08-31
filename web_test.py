@@ -52,7 +52,9 @@ def main() -> int:
     # --- классы из JS против стилей --------------------------------------
     # Проверяем только те, что создаются в коде: разметку видно глазами,
     # а созданный из JS узел без стиля выглядит сломанным и молча.
-    for cls in ("bubble", "bubble--me", "bubble--bot", "dots", "is-waiting"):
+    for cls in ("bubble", "bubble--me", "bubble--bot", "dots", "is-waiting",
+                "meeting-item__quote", "meeting-item__more", "meeting-item__del",
+                "turn--found"):
         assert f".{cls}" in css, f"класс .{cls} создаётся в JS, но не описан в стилях"
     print("[ok] классы, которые создаёт JS, описаны в стилях")
 

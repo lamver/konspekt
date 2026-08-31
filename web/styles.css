@@ -561,6 +561,7 @@ body { display: flex; flex-direction: column; }
    нужна не сама реплика, а понимание, та ли это встреча. */
 .meeting-item__quote {
   margin-top: 4px;
+  cursor: pointer;
   font-size: 11px;
   line-height: 1.4;
   color: var(--ink-3);
@@ -576,6 +577,7 @@ body { display: flex; flex-direction: column; }
   padding: 0 1px;
 }
 .meeting-item__more { color: var(--ink-3); opacity: .75; }
+.meeting-item__quote:hover { color: var(--ink-2); }
 
 .field__label {
   display: block;
@@ -637,6 +639,19 @@ body { display: flex; flex-direction: column; }
    отделяет, где вы, а где они, без чтения подписей. */
 .turn { max-width: 88%; align-self: flex-start; }
 .turn--me { align-self: flex-end; }
+
+/* Реплика, к которой перешли из поиска. Подсветка гаснет сама: она
+   нужна только в первый момент, чтобы глаз нашёл нужное место. */
+.turn--found {
+  border-radius: 8px;
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  animation: found-fade 2.5s ease-out forwards;
+}
+@keyframes found-fade {
+  0%, 60% { outline-color: var(--accent); }
+  100% { outline-color: transparent; }
+}
 
 .turn__head {
   display: flex;

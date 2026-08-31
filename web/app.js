@@ -516,6 +516,7 @@ function renderMeetingList() {
     if (hit && hit.quotes.length) {
       quote = document.createElement('div');
       quote.className = 'meeting-item__quote';
+      quote.title = 'Показать это место в расшифровке';
       quote.appendChild(highlight(hit.quotes[0].text, q));
       if (hit.hits > 1) {
         const more = document.createElement('span');
@@ -523,6 +524,13 @@ function renderMeetingList() {
         more.textContent = ` ещё ${hit.hits - 1}`;
         quote.appendChild(more);
       }
+      // Клик по цитате открывает не просто встречу, а нужное место в
+      // ней: иначе человек попадает в начало часовой расшифровки и
+      // ищет глазами заново то, что уже нашёл.
+      quote.addEventListener('click', (e) => {
+        e.stopPropagation();
+        selectMeeting(m.id, hit.quotes[0].start);
+      });
     }
 
     // Кнопка удаления прямо в списке: удалять хочется там же, где
@@ -698,7 +706,7 @@ function highlight(text, query) {
   return frag;
 }
 
-async function selectMeeting(id) {
+async function selectMeeting(id, jumpTo = null) {
   // Не теряем несохранённые правки при переключении.
   flushNotes();
 
@@ -725,6 +733,42 @@ async function selectMeeting(id) {
   renderChat((await api.list_chat_messages(id)) || []);
   renderMeetingList();
   toggleEmptyState();
+
+  // Пришли из поиска: показываем вкладку с расшифровкой и то самое
+  // место, а не начало часовой встречи.
+  if (jumpTo !== null) {
+    showTab('transcript');
+    revealTranscriptAt(jumpTo);
+  }
+}
+
+/** Переключить вкладку так же, как это делает клик по ней. */
+function showTab(name) {
+  const tab = document.querySelector(`.tab[data-tab="${name}"]`);
+  if (tab) tab.click();
+}
+
+/**
+ * Показать реплику, сказанную в этот момент встречи.
+ *
+ * Ищем блок, внутрь которого попадает секунда: реплики склеиваются в
+ * блоки, и точного совпадения по началу обычно нет.
+ */
+function revealTranscriptAt(start) {
+  const turns = [...ui.transcript.querySelectorAll('.turn')];
+  if (!turns.length) return;
+
+  let target = turns[0];
+  for (const turn of turns) {
+    if (Number(turn.dataset.start || 0) <= start + 0.01) target = turn;
+    else break;
+  }
+
+  target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  // Подсветка на пару секунд: без неё непонятно, куда именно смотреть,
+  // особенно если рядом несколько похожих реплик.
+  target.classList.add('turn--found');
+  setTimeout(() => target.classList.remove('turn--found'), 2500);
 }
 
 /* --- Транскрипт --------------------------------------------------------- */
@@ -763,6 +807,9 @@ function appendSegment(seg, scroll = true) {
     turn.className = 'turn' + (isMe ? ' turn--me' : '');
     turn.dataset.speaker = seg.speaker;
     turn.dataset.end = seg.end;
+    // Начало блока: по нему находим нужное место, когда человек пришёл
+    // сюда из поиска.
+    turn.dataset.start = seg.start;
     turn.dataset.voice = seg.voice_id || '';
 
     const head = document.createElement('div');
