@@ -176,6 +176,10 @@ class ModelDownloader:
         for name in self.files:
             target = self.dest / name
             if target.exists():
+                # Файл готов, но рядом мог остаться недокачанный кусок от
+                # прошлой попытки: он занимает место и сбивает подсчёт
+                # скачанного в окне.
+                target.with_suffix(target.suffix + ".part").unlink(missing_ok=True)
                 continue
             # Имя файла может содержать путь, как «onnx/encoder.onnx» у
             # моделей Hugging Face. Без этого запись падает на несуществующем
@@ -201,6 +205,15 @@ class ModelDownloader:
         # значило бы не докачать её никогда.
         впустую = 0
         for attempt in range(1, RETRIES + 1):
+            if target.exists():
+                # Файл появился, пока мы качали. Так бывает, если его
+                # положил другой экземпляр программы или человек скопировал
+                # руками из соседней установки. Качать второй раз то же
+                # самое незачем, и без этой проверки загрузка продолжалась
+                # часами при готовом файле на диске.
+                log.info("Файл %s уже на месте, качать не надо", name)
+                part.unlink(missing_ok=True)
+                return
             before = part.stat().st_size if part.exists() else 0
             try:
                 self._fetch(name, target, on_progress)
