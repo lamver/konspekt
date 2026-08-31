@@ -42,6 +42,22 @@ time.sleep(1)
 os.kill(os.getpid(), signal.SIGTERM)
 """
 
+# То же самое, но сервер поднимает не тест напрямую, а слой LLM
+# приложения. Без этого мы проверяем только LocalServer, тогда как в бою
+# сервер заводит LlmManager, и он мог бы поднять процесс мимо job.
+CHILD_VIA_APP = """
+import os, signal, sys, time
+sys.path.insert(0, {root!r})
+from app.core.settings import LlmSettings
+from app.llm.manager import LlmManager
+
+manager = LlmManager(lambda: LlmSettings(backend="local"))
+manager.client()  # поднимает локальный сервер, как при первом саммари
+print(manager._server._proc.pid, flush=True)
+time.sleep(1)
+os.kill(os.getpid(), signal.SIGTERM)
+"""
+
 
 def _alive(pid: int) -> bool:
     """Жив ли процесс с таким номером."""
@@ -52,10 +68,10 @@ def _alive(pid: int) -> bool:
     return str(pid) in out
 
 
-def _run_child(attach: bool) -> int:
+def _run_child(attach: bool = True, template: str = CHILD) -> int:
     """Запустить дочерний процесс и вернуть PID поднятого им сервера."""
     disable = "" if attach else "local._attach_to_job = lambda proc: None"
-    code = CHILD.format(root=str(ROOT), disable=disable)
+    code = template.format(root=str(ROOT), disable=disable)
     res = subprocess.run(
         [sys.executable, "-c", code],
         cwd=ROOT, capture_output=True, text=True,
@@ -98,6 +114,16 @@ def main() -> int:
         "уборку делает не job-объект"
     )
     print(f"[ok] без привязки сервер {stray} выживает, значит убирает именно job")
+
+    # --- настоящий путь: сервер поднимает слой LLM приложения ----------
+    # Проверять только LocalServer мало: в бою его заводит LlmManager, и
+    # достаточно однажды поднять процесс в обход, чтобы утечка вернулась.
+    pid = _run_child(template=CHILD_VIA_APP)
+    time.sleep(3)
+    assert not _alive(pid), (
+        f"сервер {pid}, поднятый через LlmManager, пережил приложение"
+    )
+    print(f"[ok] сервер {pid}, поднятый как в приложении, тоже ушёл следом")
 
     print("\nСервер модели не переживает приложение.")
     return 0
