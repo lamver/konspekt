@@ -1,4 +1,7 @@
 # Прогон тестов для CI.
+#
+# Минуты Actions платные, поэтому: быстрые тесты на push и pull request,
+# медленные раз в неделю и по кнопке.
 
 name: Tests
 
@@ -8,7 +11,19 @@ on:
   pull_request:
     branches: [ master ]
   schedule:
-    - cron: '0 3 * * *' # раз в сутки, ночью
+    - cron: '0 3 * * 1' # по понедельникам ночью
+  workflow_dispatch:
+    inputs:
+      full:
+        description: 'Прогнать и медленные тесты'
+        type: boolean
+        default: true
+
+# Новый push отменяет предыдущий прогон той же ветки: незачем платить
+# за проверку кода, который уже переписан.
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   fast:
@@ -26,6 +41,7 @@ jobs:
         uses: astral-sh/setup-uv@v3
         with:
           version: latest
+          enable-cache: true
 
       - name: Установить зависимости
         run: uv sync --frozen --no-editable
@@ -36,7 +52,7 @@ jobs:
   slow:
     runs-on: windows-latest
     name: Медленные тесты
-    if: github.event_name == 'schedule'
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.full)
     needs: fast
     steps:
       - uses: actions/checkout@v4
@@ -50,6 +66,7 @@ jobs:
         uses: astral-sh/setup-uv@v3
         with:
           version: latest
+          enable-cache: true
 
       - name: Установить зависимости
         run: uv sync --frozen --no-editable

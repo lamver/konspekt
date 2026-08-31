@@ -1,17 +1,20 @@
 # Сборка Konspekt под Windows.
 #
 # Тесты живут в tests.yml, здесь только сборка.
-# На тег вида v*: сборка установщика, VirusTotal, подписанная сборка GitHub, релиз.
+# Запускается на тег вида v* и по кнопке: собирать установщик на каждый
+# push незачем, а минуты Windows-раннера стоят вдвое дороже обычных.
 
 name: Build
 
 on:
   push:
-    branches: [ master ]
     tags:
       - 'v*'
-  pull_request:
-    branches: [ master ]
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -33,6 +36,7 @@ jobs:
         uses: astral-sh/setup-uv@v3
         with:
           version: latest
+          enable-cache: true
 
       - name: Установить зависимости
         run: uv sync --frozen --no-editable
@@ -41,11 +45,9 @@ jobs:
         run: uv run python run_tests.py
 
       - name: Собрать дистрибутив
-        if: startsWith(github.ref, 'refs/tags/v')
         run: uv run python packaging/build.py
 
       - name: Верифицировать сборку
-        if: startsWith(github.ref, 'refs/tags/v')
         run: |
           $exe = Get-Item dist/konspekt-*-setup.exe
           if ($exe.Length -lt 50MB) { throw "Установщик слишком маленький: $($exe.Length/1MB) МБ" }
