@@ -169,7 +169,17 @@ def engine_dir() -> Path:
 
 
 def default_binary() -> Path:
+    """Путь к серверу llama.cpp.
+
+    В собранном приложении движок лежит в ресурсах рядом с программой: он
+    едет в дистрибутиве, чтобы заметки работали сразу после установки. В
+    режиме разработки его там нет, и мы падаем обратно в каталог моделей,
+    куда его кладут руками или докачкой.
+    """
     name = "llama-server.exe" if os.name == "nt" else "llama-server"
+    bundled = paths.resource_dir() / "engine" / name
+    if bundled.exists():
+        return bundled
     return engine_dir() / name
 
 
