@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 from pathlib import Path
 from typing import Any
 
@@ -1130,6 +1131,17 @@ class AppService:
         self.settings.window.sidebar_width = value
         settings_mod.save(self.settings)
         return value
+
+    def set_check_updates(self, enabled: bool) -> bool:
+        """Включить или выключить ежедневную проверку новой версии."""
+        self.settings.check_updates = bool(enabled)
+        settings_mod.save(self.settings)
+        return self.settings.check_updates
+
+    def mark_version_checked(self) -> None:
+        """Отметить, что версию только что смотрели."""
+        self.settings.last_version_check = time.time()
+        settings_mod.save(self.settings)
 
     def save_window_geometry(self, x: int, y: int, width: int, height: int) -> None:
         self.settings.window.x = int(x)

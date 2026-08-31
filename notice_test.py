@@ -54,11 +54,30 @@ def main() -> int:
     # --- кнопка и окно в интерфейсе --------------------------------------
     html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
     js = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
-    assert 'id="about-sheet"' in html, "в разметке нет окна «О программе»"
-    assert 'id="about-notice"' in html, "в окне «О программе» негде показать NOTICE"
+    assert 'data-tab="about"' in html, "в настройках нет раздела «О программе»"
+    assert 'id="about-notice"' in html, "в разделе «О программе» негде показать NOTICE"
     assert "notice_text" in js, "фронт не запрашивает NOTICE"
-    assert "openAboutSheet" in js, "окно «О программе» не открывается"
+    assert "showPrefsTab('about')" in js, "раздел «О программе» не открывается"
     print("[ok] раздел «О программе» есть в интерфейсе")
+
+    # --- проверка обновлений видна и отключается ------------------------
+    assert 'id="update-auto"' in html, "нет выключателя проверки обновлений"
+    assert 'id="update-check"' in html, "нет кнопки «Проверить сейчас»"
+    assert "check_updates_now" in js, "фронт не умеет проверять обновления"
+    assert "set_check_updates" in js, "проверку обновлений нельзя выключить"
+    api_src = (ROOT / "app" / "ui" / "api.py").read_text(encoding="utf-8")
+    for method in ("check_updates_now", "set_check_updates", "get_update_settings"):
+        assert f"def {method}" in api_src, f"в мосту нет метода {method}"
+    print("[ok] обновления проверяются по кнопке и отключаются")
+
+    # --- разделы настроек не разъехались с обработчиками -----------------
+    tabs = set(re.findall(r'class="prefs__tab[^"]*" data-tab="(\w+)"', html))
+    pages = set(re.findall(r'class="prefs__page" data-page="(\w+)"', html))
+    assert tabs, "не нашлось ни одного раздела настроек"
+    assert tabs == pages, f"разделы и страницы настроек разошлись: {tabs ^ pages}"
+    titles = set(re.findall(r"^\s+(\w+): '", js, re.M))
+    assert tabs <= titles, f"у разделов нет заголовков: {sorted(tabs - titles)}"
+    print(f"[ok] разделов настроек: {len(tabs)}, у всех есть страница и заголовок")
 
     # --- версия в трёх местах --------------------------------------------
     from app import __version__

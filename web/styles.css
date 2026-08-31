@@ -1087,11 +1087,98 @@ body.is-resizing * { user-select: none !important; }
 /* «О программе». Указание авторства моделей обязательно по лицензии
    WeSpeaker, поэтому текст показываем целиком и даём его выделить. */
 .about__name { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
-/* Шире обычной панели: в NOTICE длинные ссылки и колонки, в 360px
-   они не помещаются. И выше по слою, потому что открывается поверх
-   настроек. */
-#about-sheet { z-index: 60; }
-#about-sheet .sheet__panel { width: min(560px, 94%); }
+/* Настройки разделами: слева список, справа карточки.
+   Панель шире обычной, потому что в NOTICE длинные ссылки и колонки. */
+.prefs {
+  display: flex;
+  width: min(720px, 96%);
+  /* Высота постоянная, а не по содержимому: иначе при переходе между
+     разделами панель прыгает, и пункт меню уезжает из-под курсора. */
+  height: min(560px, 88%);
+  padding: 0;
+  overflow: hidden;
+}
+
+.prefs__nav {
+  flex: 0 0 168px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 14px 10px;
+  background: var(--paper-2);
+  border-right: 1px solid var(--line);
+  overflow-y: auto;
+}
+
+.prefs__nav-title {
+  margin: 0 0 8px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.prefs__tab {
+  text-align: left;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.prefs__tab:hover { background: var(--paper-3); color: var(--ink); }
+.prefs__tab.is-active { background: var(--paper-3); color: var(--ink); font-weight: 600; }
+
+.prefs__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 14px 16px 16px;
+  overflow: hidden;
+}
+
+.prefs__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  flex: 0 0 auto;
+}
+.prefs__head h3 { margin: 0; font-size: 15px; }
+
+/* Прокручивается только содержимое раздела: заголовок и кнопка
+   «Готово» остаются на месте, как и положено в окне настроек. */
+.prefs__page {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.prefs__page[hidden] { display: none; }
+.prefs .sheet__foot { flex: 0 0 auto; margin-top: 12px; }
+
+/* Карточка: одна тема настроек. Так же, как у Granola: связанные
+   пункты вместе, между группами воздух. */
+.card {
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper-2);
+}
+.card > .field { margin-bottom: 0; }
+.card > .field + .check,
+.card > .check + .hint,
+.card > .field + .hint,
+.card > .card__title + * { margin-top: 8px; }
+.card > * + * { margin-top: 8px; }
+.card__title { margin: 0; font-size: 13px; font-weight: 600; }
 .about__notice {
   margin: 6px 0 0;
   max-height: 320px;
@@ -1099,7 +1186,7 @@ body.is-resizing * { user-select: none !important; }
   padding: 10px 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: var(--paper-2);
+  background: var(--paper);
   color: var(--ink-2);
   font-size: 11px;
   line-height: 1.5;

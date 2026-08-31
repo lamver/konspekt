@@ -213,125 +213,168 @@
     </div>
   </div>
 
-  <!-- Настройки звука -->
+  <!-- Настройки. Разделами, а не одной простынёй: пунктов уже два
+       десятка, и вперемешку человек ищет нужный дольше, чем меняет. -->
   <div class="sheet" id="audio-sheet" hidden>
-    <div class="sheet__panel">
-      <div class="sheet__head">
-        <h3>Звук</h3>
-        <button class="icon-btn" id="audio-close" title="Закрыть">
-          <svg viewBox="0 0 16 16" width="14" height="14"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.4" fill="none"/></svg>
-        </button>
-      </div>
+    <div class="sheet__panel prefs">
+      <nav class="prefs__nav">
+        <p class="prefs__nav-title">Настройки</p>
+        <button type="button" class="prefs__tab is-active" data-tab="audio">Звук</button>
+        <button type="button" class="prefs__tab" data-tab="voices">Голоса</button>
+        <button type="button" class="prefs__tab" data-tab="notes">Заметки</button>
+        <button type="button" class="prefs__tab" data-tab="look">Оформление</button>
+        <button type="button" class="prefs__tab" data-tab="about">О программе</button>
+      </nav>
 
-      <label class="field">
-        <span class="field__label">Микрофон (я)</span>
-        <select id="mic-select"></select>
-      </label>
-      <label class="check">
-        <input type="checkbox" id="mic-enabled" checked>
-        <span>Записывать микрофон</span>
-      </label>
-
-      <label class="field">
-        <span class="field__label">Системный звук (собеседник)</span>
-        <select id="loopback-select"></select>
-      </label>
-      <label class="check">
-        <input type="checkbox" id="system-enabled" checked>
-        <span>Записывать системный звук</span>
-      </label>
-
-      <p class="hint">Системный звук берётся с того же устройства, куда идёт
-      воспроизведение. Если собеседника не слышно, выберите то устройство,
-      в котором вы его слушаете.</p>
-
-      <label class="field">
-        <span class="field__label">Оформление</span>
-        <div class="theme-switch" id="theme-switch">
-          <button type="button" data-theme="light">Светлая</button>
-          <button type="button" data-theme="dark">Тёмная</button>
-          <button type="button" data-theme="system">Как в системе</button>
+      <div class="prefs__body">
+        <div class="prefs__head">
+          <h3 id="prefs-title">Звук</h3>
+          <button class="icon-btn" id="audio-close" title="Закрыть">
+            <svg viewBox="0 0 16 16" width="14" height="14"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.4" fill="none"/></svg>
+          </button>
         </div>
-      </label>
 
-      <label class="field">
-        <span class="field__label">Мой голос</span>
-        <div class="voice-enroll" id="voice-enroll">
-          <p class="voice-enroll__state" id="enroll-state">Голос не записан</p>
-          <p class="hint">Прочитайте вслух пару фраз, и Konspekt научится
-          отличать вас от остальных, даже если за компьютером говорят
-          несколько человек.</p>
-          <p class="voice-enroll__prompt" id="enroll-prompt" hidden></p>
-          <div class="voice-enroll__row">
-            <button class="btn-secondary" type="button" id="enroll-start">Записать голос</button>
-            <button class="btn-ghost" type="button" id="enroll-forget" hidden>Забыть</button>
+        <!-- Звук -->
+        <section class="prefs__page" data-page="audio">
+          <div class="card">
+            <label class="field">
+              <span class="field__label">Микрофон (я)</span>
+              <select id="mic-select"></select>
+            </label>
+            <label class="check">
+              <input type="checkbox" id="mic-enabled" checked>
+              <span>Записывать микрофон</span>
+            </label>
           </div>
+
+          <div class="card">
+            <label class="field">
+              <span class="field__label">Системный звук (собеседник)</span>
+              <select id="loopback-select"></select>
+            </label>
+            <label class="check">
+              <input type="checkbox" id="system-enabled" checked>
+              <span>Записывать системный звук</span>
+            </label>
+            <p class="hint">Системный звук берётся с того же устройства, куда идёт
+            воспроизведение. Если собеседника не слышно, выберите то устройство,
+            в котором вы его слушаете.</p>
+          </div>
+        </section>
+
+        <!-- Голоса -->
+        <section class="prefs__page" data-page="voices" hidden>
+          <div class="card">
+            <p class="card__title">Мой голос</p>
+            <div class="voice-enroll" id="voice-enroll">
+              <p class="voice-enroll__state" id="enroll-state">Голос не записан</p>
+              <p class="hint">Прочитайте вслух пару фраз, и Konspekt научится
+              отличать вас от остальных, даже если за компьютером говорят
+              несколько человек.</p>
+              <p class="voice-enroll__prompt" id="enroll-prompt" hidden></p>
+              <div class="voice-enroll__row">
+                <button class="btn-secondary" type="button" id="enroll-start">Записать голос</button>
+                <button class="btn-ghost" type="button" id="enroll-forget" hidden>Забыть</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card" id="people-field" hidden>
+            <p class="card__title">Знакомые голоса</p>
+            <p class="hint">Названный один раз человек узнаётся на следующих встречах сам.</p>
+            <ul class="people" id="people-list"></ul>
+          </div>
+        </section>
+
+        <!-- Заметки -->
+        <section class="prefs__page" data-page="notes" hidden>
+          <div class="card">
+            <label class="field">
+              <span class="field__label">Кто пишет заметки и отвечает</span>
+              <select id="llm-backend">
+                <option value="local">На этом компьютере</option>
+                <option value="remote">На своём сервере</option>
+                <option value="null">Выключить</option>
+              </select>
+            </label>
+            <p class="hint" id="llm-hint"></p>
+
+            <div class="llm-remote" id="llm-remote" hidden>
+              <label class="field">
+                <span class="field__label">Адрес сервера</span>
+                <input type="text" id="llm-url" placeholder="https://api.example.com/v1" spellcheck="false">
+              </label>
+              <label class="field">
+                <span class="field__label">Ключ доступа</span>
+                <input type="password" id="llm-key" placeholder="Ключ хранится только на этом компьютере" spellcheck="false">
+              </label>
+              <label class="field">
+                <span class="field__label">Модель</span>
+                <input type="text" id="llm-model" placeholder="gpt-4o-mini" spellcheck="false">
+              </label>
+            </div>
+
+            <div class="voice-enroll__row">
+              <button class="btn-secondary" type="button" id="llm-check">Проверить связь</button>
+              <span class="hint" id="llm-check-result"></span>
+            </div>
+          </div>
+
+          <div class="card">
+            <label class="check">
+              <input type="checkbox" id="llm-auto" checked>
+              <span>Делать заметки сразу после остановки записи</span>
+            </label>
+          </div>
+        </section>
+
+        <!-- Оформление -->
+        <section class="prefs__page" data-page="look" hidden>
+          <div class="card">
+            <label class="field">
+              <span class="field__label">Тема</span>
+              <div class="theme-switch" id="theme-switch">
+                <button type="button" data-theme="light">Светлая</button>
+                <button type="button" data-theme="dark">Тёмная</button>
+                <button type="button" data-theme="system">Как в системе</button>
+              </div>
+            </label>
+          </div>
+        </section>
+
+        <!-- О программе -->
+        <section class="prefs__page" data-page="about" hidden>
+          <div class="card">
+            <p class="about__name">Konspekt <span id="about-version"></span></p>
+            <p class="hint">Умный блокнот для встреч. Запись, расшифровка и
+            заметки происходят на этом компьютере.</p>
+          </div>
+
+          <div class="card">
+            <p class="card__title">Обновления</p>
+            <label class="check">
+              <input type="checkbox" id="update-auto" checked>
+              <span>Раз в сутки смотреть, не вышла ли новая версия</span>
+            </label>
+            <p class="hint">Наружу уходит только номер версии и тип системы.
+            Ничего не скачивается и не ставится само.</p>
+            <div class="voice-enroll__row">
+              <button class="btn-secondary" type="button" id="update-check">Проверить сейчас</button>
+              <span class="hint" id="update-result"></span>
+            </div>
+          </div>
+
+          <div class="card">
+            <p class="card__title">Модели и авторство</p>
+            <pre class="about__notice" id="about-notice">Загружаем…</pre>
+          </div>
+        </section>
+
+        <div class="sheet__foot">
+          <button class="version" type="button" id="app-version" title="О программе"></button>
+          <button class="btn-primary" id="audio-save">Готово</button>
         </div>
-      </label>
-
-      <label class="field">
-        <span class="field__label">Заметки и ответы</span>
-        <select id="llm-backend">
-          <option value="local">На этом компьютере</option>
-          <option value="remote">На своём сервере</option>
-          <option value="null">Выключить</option>
-        </select>
-      </label>
-      <p class="hint" id="llm-hint"></p>
-
-      <div class="llm-remote" id="llm-remote" hidden>
-        <label class="field">
-          <span class="field__label">Адрес сервера</span>
-          <input type="text" id="llm-url" placeholder="https://api.example.com/v1" spellcheck="false">
-        </label>
-        <label class="field">
-          <span class="field__label">Ключ доступа</span>
-          <input type="password" id="llm-key" placeholder="Ключ хранится только на этом компьютере" spellcheck="false">
-        </label>
-        <label class="field">
-          <span class="field__label">Модель</span>
-          <input type="text" id="llm-model" placeholder="gpt-4o-mini" spellcheck="false">
-        </label>
       </div>
-
-      <label class="check">
-        <input type="checkbox" id="llm-auto" checked>
-        <span>Делать заметки сразу после остановки записи</span>
-      </label>
-
-      <div class="voice-enroll__row">
-        <button class="btn-secondary" type="button" id="llm-check">Проверить связь</button>
-        <span class="hint" id="llm-check-result"></span>
-      </div>
-
-      <label class="field" id="people-field" hidden>
-        <span class="field__label">Знакомые голоса</span>
-        <ul class="people" id="people-list"></ul>
-      </label>
-
-      <div class="sheet__foot">
-        <button class="version" type="button" id="app-version" title="О программе"></button>
-        <button class="btn-primary" id="audio-save">Готово</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- О программе: версия и указание авторства моделей -->
-  <div class="sheet" id="about-sheet" hidden>
-    <div class="sheet__panel">
-      <div class="sheet__head">
-        <h3>О программе</h3>
-        <button class="icon-btn" id="about-close" title="Закрыть">
-          <svg viewBox="0 0 16 16" width="14" height="14"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.4" fill="none"/></svg>
-        </button>
-      </div>
-
-      <p class="about__name">Konspekt <span id="about-version"></span></p>
-      <p class="hint">Умный блокнот для встреч. Запись, расшифровка и
-      заметки происходят на этом компьютере.</p>
-
-      <p class="field__label">Модели и авторство</p>
-      <pre class="about__notice" id="about-notice">Загружаем…</pre>
     </div>
   </div>
 

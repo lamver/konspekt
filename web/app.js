@@ -1024,6 +1024,7 @@ async function openAudioSheet() {
   refreshPeople();
   refreshLlmStatus();
   showVersion();
+  showPrefsTab('audio');
   ui.audioSheet.hidden = false;
 }
 
@@ -1034,14 +1035,39 @@ async function showVersion() {
   if (version) ui.appVersion.textContent = 'Версия ' + version;
 }
 
+/* --- Разделы настроек ---------------------------------------------------- */
+
+const PREFS_TITLES = {
+  audio: 'Звук',
+  voices: 'Голоса',
+  notes: 'Заметки',
+  look: 'Оформление',
+  about: 'О программе',
+};
+
+/** Показать один раздел настроек и подсветить его в списке слева. */
+function showPrefsTab(tab) {
+  if (!PREFS_TITLES[tab]) tab = 'audio';
+  for (const btn of document.querySelectorAll('.prefs__tab')) {
+    btn.classList.toggle('is-active', btn.dataset.tab === tab);
+  }
+  for (const page of document.querySelectorAll('.prefs__page')) {
+    page.hidden = page.dataset.page !== tab;
+    // Раздел сменился, а прокрутка осталась от прежнего: человек видит
+    // середину нового раздела и думает, что тот пустой.
+    if (!page.hidden) page.scrollTop = 0;
+  }
+  ui.prefsTitle.textContent = PREFS_TITLES[tab];
+  if (tab === 'about') loadAbout();
+}
+
 /**
- * «О программе»: версия и указание авторства моделей.
+ * «О программе»: версия, обновления и указание авторства моделей.
  *
- * Не украшение: лицензия WeSpeaker (CC BY 4.0) требует, чтобы авторство
- * видел пользователь, а не только тот, кто откроет исходники.
+ * Авторство не украшение: лицензия WeSpeaker (CC BY 4.0) требует, чтобы
+ * его видел пользователь, а не только тот, кто откроет исходники.
  */
-async function openAboutSheet() {
-  ui.aboutSheet.hidden = false;
+async function loadAbout() {
   if (ui.aboutVersion && !ui.aboutVersion.textContent) {
     const version = await api.app_version();
     if (version) ui.aboutVersion.textContent = version;
@@ -1050,6 +1076,24 @@ async function openAboutSheet() {
     const text = await api.notice_text();
     ui.aboutNotice.textContent = text || 'Файл NOTICE не найден рядом с программой';
     ui.aboutNotice.dataset.loaded = '1';
+  }
+  const state = await api.get_update_settings();
+  if (state) ui.updateAuto.checked = state.check_updates !== false;
+}
+
+/** Проверка новой версии по кнопке, с ответом на месте. */
+async function checkUpdatesNow() {
+  ui.updateResult.textContent = 'Смотрим…';
+  const res = await api.check_updates_now();
+  if (!res || !res.ok) {
+    ui.updateResult.textContent = (res && res.error) || 'Не получилось проверить';
+    return;
+  }
+  if (res.has_update) {
+    ui.updateResult.textContent = 'Вышла версия ' + res.latest;
+    showToast('Вышла версия ' + res.latest);
+  } else {
+    ui.updateResult.textContent = 'Установлена свежая версия';
   }
 }
 
@@ -1395,9 +1439,12 @@ function bindUi() {
     toastText: el('toast-text'),
     audioSheet: el('audio-sheet'),
     appVersion: el('app-version'),
-    aboutSheet: el('about-sheet'),
     aboutVersion: el('about-version'),
     aboutNotice: el('about-notice'),
+    prefsTitle: el('prefs-title'),
+    updateAuto: el('update-auto'),
+    updateCheck: el('update-check'),
+    updateResult: el('update-result'),
     micSelect: el('mic-select'),
     loopbackSelect: el('loopback-select'),
     micEnabled: el('mic-enabled'),
@@ -1454,11 +1501,14 @@ function bindUi() {
 
   el('btn-audio').addEventListener('click', openAudioSheet);
   el('audio-close').addEventListener('click', () => { ui.audioSheet.hidden = true; });
-  ui.appVersion.addEventListener('click', openAboutSheet);
-  el('about-close').addEventListener('click', () => { ui.aboutSheet.hidden = true; });
-  ui.aboutSheet.addEventListener('click', (e) => {
-    if (e.target === ui.aboutSheet) ui.aboutSheet.hidden = true;
+  ui.appVersion.addEventListener('click', () => showPrefsTab('about'));
+  ui.updateCheck.addEventListener('click', checkUpdatesNow);
+  ui.updateAuto.addEventListener('change', async () => {
+    await api.set_check_updates(ui.updateAuto.checked);
   });
+  for (const btn of document.querySelectorAll('.prefs__tab')) {
+    btn.addEventListener('click', () => showPrefsTab(btn.dataset.tab));
+  }
   el('theme-switch').addEventListener('click', onThemeClick);
   el('audio-save').addEventListener('click', saveAudioSheet);
   el('enroll-start').addEventListener('click', onEnrollClick);
@@ -1533,8 +1583,7 @@ function bindUi() {
       state.filter = '';
       renderMeetingList();
     }
-    if (e.key === 'Escape' && !ui.aboutSheet.hidden) ui.aboutSheet.hidden = true;
-    else if (e.key === 'Escape' && !ui.audioSheet.hidden) ui.audioSheet.hidden = true;
+    if (e.key === 'Escape' && !ui.audioSheet.hidden) ui.audioSheet.hidden = true;
   });
 
   // Страховка от потери правок при закрытии окна.

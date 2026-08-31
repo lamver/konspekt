@@ -56,6 +56,23 @@ class Release:
         )
 
 
+def fetch_latest() -> Release:
+    """Забрать `latest.json`. Бросает исключение, если не вышло.
+
+    Отдельно от `_check`, потому что кнопка «Проверить сейчас» в
+    настройках должна отдать результат в ответ на нажатие, а не через
+    событие: человек стоит и ждёт.
+    """
+    response = httpx.get(
+        URL,
+        headers={"User-Agent": USER_AGENT},
+        follow_redirects=True,
+        timeout=TIMEOUT,
+    )
+    response.raise_for_status()
+    return Release.from_json(response.json())
+
+
 class VersionChecker:
     def __init__(self, service: "AppService") -> None:
         self._service = service
@@ -79,14 +96,7 @@ class VersionChecker:
 
         try:
             log.debug("Проверяю новую версию")
-            response = httpx.get(
-                URL,
-                headers={"User-Agent": USER_AGENT},
-                follow_redirects=True,
-                timeout=TIMEOUT,
-            )
-            response.raise_for_status()
-            release = Release.from_json(response.json())
+            release = fetch_latest()
 
             if is_newer(release.version, __version__):
                 log.info("Доступна версия %s", release.version)

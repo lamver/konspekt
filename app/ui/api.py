@@ -328,3 +328,46 @@ class Api:
             return (paths.resource_dir() / "NOTICE").read_text(encoding="utf-8")
         except OSError:
             return ""
+
+    def get_update_settings(self) -> dict[str, Any]:
+        """Состояние проверки обновлений для раздела «О программе»."""
+        settings = self._service.settings
+        return {
+            "check_updates": bool(settings.check_updates),
+            "last_check": float(settings.last_version_check or 0),
+        }
+
+    def set_check_updates(self, enabled: bool) -> dict[str, Any]:
+        """Включить или выключить ежедневную проверку версии.
+
+        Отключаемость обязательна: приложение, которое лезет в сеть без
+        спроса, противоречит обещанию приватности.
+        """
+        self._service.set_check_updates(bool(enabled))
+        return self.get_update_settings()
+
+    def check_updates_now(self) -> dict[str, Any]:
+        """Проверить версию прямо сейчас, не дожидаясь суточного срока.
+
+        Ответ приходит сразу: человек нажал кнопку и ждёт результата,
+        а не фонового события неизвестно когда.
+        """
+        from app import __version__
+        from app.core import version_check
+
+        try:
+            release = version_check.fetch_latest()
+        except Exception as e:
+            log.debug("Не удалось проверить версию: %s", e)
+            return {"ok": False, "error": "Не удалось связаться с сервером обновлений"}
+
+        self._service.mark_version_checked()
+        newer = version_check.is_newer(release.version, __version__)
+        return {
+            "ok": True,
+            "current": __version__,
+            "latest": release.version,
+            "url": release.url,
+            "notes": release.notes,
+            "has_update": newer,
+        }

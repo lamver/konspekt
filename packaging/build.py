@@ -64,7 +64,10 @@ def find_iscc() -> Path | None:
 
 def run(cmd: list[str]) -> None:
     print(">", " ".join(str(c) for c in cmd), flush=True)
-    result = subprocess.run(cmd, cwd=ROOT)
+    # utf-8 дочерним процессам: иначе русский вывод make_icon.py и
+    # PyInstaller падает на кодировке консоли Windows.
+    env = dict(os.environ, PYTHONIOENCODING="utf-8", PYTHONUTF8="1")
+    result = subprocess.run(cmd, cwd=ROOT, env=env)
     if result.returncode != 0:
         raise SystemExit(f"не удалось: {cmd[0]} (код {result.returncode})")
 
@@ -98,6 +101,11 @@ def copy_engine(app_dir: Path) -> None:
 
 
 def main() -> int:
+    # Консоль Windows живёт в cp1251, и русский вывод обрывает сборку
+    # посреди работы, хотя собралось всё правильно.
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--no-setup", action="store_true", help="только папка, без установщика")
     parser.add_argument("--console", action="store_true", help="собрать с консолью, чтобы видеть ошибки запуска")
