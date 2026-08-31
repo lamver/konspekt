@@ -1524,7 +1524,11 @@ async function checkUpdatesNow() {
     return;
   }
   if (res.has_update) {
-    ui.updateResult.textContent = 'Вышла версия ' + res.latest;
+    // Мало сказать «вышла версия»: человек нажал кнопку и вправе знать,
+    // что произойдёт дальше и надо ли ему что-то делать.
+    ui.updateResult.textContent = ui.updateSilent.checked
+      ? 'Вышла версия ' + res.latest + ', скачиваем'
+      : 'Вышла версия ' + res.latest + '. Включите загрузку выше или скачайте вручную';
     showUpdateNote(res);
   } else {
     ui.updateResult.textContent = 'Установлена свежая версия';
@@ -1541,8 +1545,14 @@ async function checkUpdatesNow() {
 function showUpdateNote(payload) {
   if (!payload || !payload.latest || !ui.updateNote) return;
   ui.updateNoteText.textContent = 'Вышла версия ' + payload.latest;
-  ui.updateNoteNotes.textContent = payload.notes || '';
-  ui.updateNoteNotes.hidden = !payload.notes;
+  // Если человек запретил ставить обновления самим, обещать «установится
+  // сама» нельзя: он останется на старой версии и будет ждать напрасно.
+  const silent = !ui.updateSilent || ui.updateSilent.checked;
+  const hint = silent
+    ? (payload.notes || 'Скачаем и поставим сами.')
+    : 'Загрузка обновлений выключена: скачайте новую версию сами.';
+  ui.updateNoteNotes.textContent = hint;
+  ui.updateNoteNotes.hidden = false;
   ui.updateNote.hidden = false;
 }
 
@@ -1550,8 +1560,8 @@ function showUpdateNote(payload) {
  * Ход тихого обновления.
  *
  * Пока качается — полоса, потом кнопка «Установить и перезапустить».
- * Ничего не нажимать тоже правильный путь: обновление встанет само при
- * следующем выходе из программы, и об этом сказано прямо в плашке.
+ * Ничего не нажимать тоже правильный путь: обновление встанет само,
+ * когда программа побудет свёрнутой, и об этом сказано в плашке.
  */
 function onUpdateState(payload) {
   if (!ui.updateNote || !payload) return;
@@ -1560,14 +1570,16 @@ function onUpdateState(payload) {
     ui.updateNoteText.textContent = 'Качаем версию ' + (payload.version || '');
     ui.updateNoteBar.hidden = false;
     ui.updateNoteFill.style.width = (payload.percent || 0) + '%';
-    ui.updateNoteNotes.textContent = 'Скачается фоном, установится при выходе.';
+    ui.updateNoteNotes.textContent = 'Скачается фоном, встанет в простое.';
     ui.updateNoteNotes.hidden = false;
     ui.updateNoteInstall.hidden = true;
   } else if (payload.state === 'ready') {
     ui.updateNote.hidden = false;
     ui.updateNoteText.textContent = 'Версия ' + (payload.version || '') + ' готова';
     ui.updateNoteBar.hidden = true;
-    ui.updateNoteNotes.textContent = 'Установится сама при выходе из программы.';
+    // Не «при выходе»: крестик прячет окно в трей, и выхода может не
+    // случиться неделями. Ставим, когда программа свёрнута и свободна.
+    ui.updateNoteNotes.textContent = 'Установится сама, когда свернёте программу.';
     ui.updateNoteNotes.hidden = false;
     ui.updateNoteInstall.hidden = false;
   } else {

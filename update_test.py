@@ -256,6 +256,43 @@ def check_installs_after_idle() -> None:
     print("[ok] после простоя обновление ставится и программа возвращается")
 
 
+def check_retries_after_break() -> None:
+    """Оборванная загрузка повторяется, а не ждёт сутки.
+
+    Версию смотрим раз в сутки, поэтому единственная неудачная попытка
+    означала бы день без обновления. Но и долбить сеть бесконечно
+    нельзя: попыток должно быть немного.
+    """
+    tries: list[str] = []
+    real_dir, real_get, real_delays = up._updates_dir, up.httpx.get, up.RETRY_DELAYS
+
+    def failing_get(*a, **kw):
+        tries.append("get")
+        raise OSError("сеть отвалилась")
+
+    with tempfile.TemporaryDirectory() as d:
+        up._updates_dir = lambda: Path(d)
+        up.httpx.get = failing_get
+        # Настоящие паузы — минуты; ждать их в тесте некому.
+        up.RETRY_DELAYS = (0.05, 0.05, 0.05)
+        try:
+            u = up.Updater(FakeService())
+            u.download_later("9.9.9")
+            for _ in range(60):
+                if len(tries) >= 4:
+                    break
+                time.sleep(0.1)
+        finally:
+            up._updates_dir, up.httpx.get, up.RETRY_DELAYS = real_dir, real_get, real_delays
+
+    assert len(tries) > 1, "после обрыва не попробовали ещё раз"
+    assert len(tries) <= 5, f"слишком много попыток подряд: {len(tries)}"
+    assert len(tries) == 4, (
+        f"ждали три повтора после первой неудачи, попыток вышло {len(tries)}"
+    )
+    print(f"[ok] после обрыва пробуем ещё раз, попыток {len(tries)}")
+
+
 def main() -> int:
     check_happy_path()
     check_bad_sum()
@@ -265,6 +302,7 @@ def main() -> int:
     check_reuses_downloaded()
     check_waits_for_idle()
     check_installs_after_idle()
+    check_retries_after_break()
     print("\nВсе проверки пройдены.")
     return 0
 

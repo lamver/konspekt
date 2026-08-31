@@ -63,6 +63,10 @@ VERSION_RE = re.compile(r"^\d+(\.\d+){0,3}$")
 # «отвлёкся на минуту», а закрытая и забытая программа.
 IDLE_BEFORE_INSTALL = float(os.environ.get("KONSPEKT_UPDATE_IDLE", 1800))
 
+# Паузы перед повторной загрузкой после обрыва: минута, две, четыре.
+# Дальше не пробуем, дождёмся завтрашней проверки версии.
+RETRY_DELAYS = (60.0, 120.0, 240.0)
+
 
 @dataclass
 class Ready:
@@ -106,6 +110,9 @@ class Updater:
         self._lock = threading.Lock()
         self._thread: threading.Thread | None = None
         self._idle_thread: threading.Thread | None = None
+        # Сколько раз пробовали скачать каждую версию: после обрыва
+        # повторяем, но не бесконечно, чтобы не долбить сеть.
+        self._attempts: dict[str, int] = {}
         self.ready: Ready | None = None
 
     # --- скачивание ------------------------------------------------------
@@ -178,6 +185,27 @@ class Updater:
         except Exception as e:
             log.info("Не удалось скачать обновление: %s", e)
             bus.emit(UPDATE_STATE, {"state": "error"})
+            # Проверка версии ходит в сеть раз в сутки, поэтому одна
+            # оборванная загрузка означала бы сутки без обновления.
+            # Пробуем ещё несколько раз, с растущими паузами.
+            self._retry(version)
+
+    def _retry(self, version: str) -> None:
+        attempt = self._attempts.get(version, 0)
+        self._attempts[version] = attempt + 1
+        if attempt >= len(RETRY_DELAYS):
+            log.info("Обновление %s не скачалось, ждём следующей проверки", version)
+            return
+        delay = RETRY_DELAYS[attempt]
+        log.info("Повторим загрузку %s через %s с", version, delay)
+
+        def again() -> None:
+            time.sleep(delay)
+            with self._lock:
+                self._thread = None
+            self.download_later(version)
+
+        threading.Thread(target=again, daemon=True, name="update-retry").start()
 
     def _finish(self, version: str, path: Path) -> None:
         with self._lock:
