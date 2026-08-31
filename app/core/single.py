@@ -26,8 +26,26 @@ from typing import Callable
 
 log = logging.getLogger(__name__)
 
-MUTEX_NAME = "Local\\KonspektSingleInstance"
 _ERROR_ALREADY_EXISTS = 183
+
+
+def mutex_name() -> str:
+    """Имя замка. Своё у каждого профиля данных.
+
+    Общий замок означал бы, что копия из исходников не запускается рядом
+    с установленной: она видит чужой мьютекс и уходит, показав чужое окно.
+    Разные данные — разные замки, иначе разделение профилей бессмысленно.
+    """
+    from app.core import paths
+
+    профиль = paths.profile()
+    if профиль:
+        return f"Local\\KonspektSingleInstance-{профиль}"
+    return "Local\\KonspektSingleInstance"
+
+
+# Оставлено для читаемости журналов и старых вызовов.
+MUTEX_NAME = "Local\\KonspektSingleInstance"
 
 
 class SingleInstance:
@@ -48,7 +66,7 @@ class SingleInstance:
         import ctypes
 
         kernel32 = ctypes.windll.kernel32
-        self._handle = kernel32.CreateMutexW(None, False, MUTEX_NAME)
+        self._handle = kernel32.CreateMutexW(None, False, mutex_name())
         if kernel32.GetLastError() == _ERROR_ALREADY_EXISTS:
             # Дескриптор всё равно выдан, и пока он открыт, мьютекс жив.
             # Не закрыв его, мы бы не пустили и следующий честный запуск

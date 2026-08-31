@@ -25,7 +25,9 @@
 # живьём, а не надеяться.
 
 import os
+import re
 import sys
+import tomllib
 from pathlib import Path
 
 from PyInstaller.utils.hooks import (
@@ -66,7 +68,24 @@ datas += collect_data_files("onnx_asr")
 # PackageNotFoundError, распознавание не поднимается вовсе, и в готовой
 # сборке это выглядит как молчащая программа. В разработке беды не видно:
 # там метаданные лежат в окружении.
-datas += copy_metadata("onnx-asr")
+#
+# Перечислять библиотеки руками — та же ловушка с другим именем: новая
+# зависимость молча останется без метаданных, и узнаем мы об этом снова
+# от пользователя. Поэтому список берётся из pyproject.toml, а спрашивать
+# свою версию умеет слишком много библиотек, чтобы гадать, какая начнёт.
+_ЗАВИСИМОСТИ = tomllib.loads(
+    (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+)["project"]["dependencies"]
+
+for _строка in _ЗАВИСИМОСТИ:
+    # "onnx-asr[cpu,hub]>=0.12.0" -> "onnx-asr"
+    _имя = re.split(r"[\[<>=!~;\s]", _строка, maxsplit=1)[0]
+    try:
+        datas += copy_metadata(_имя)
+    except Exception as _беда:
+        # Не молчим: без метаданных сборка может оказаться нерабочей,
+        # и это должно быть видно в журнале сборки.
+        print(f"ВНИМАНИЕ: нет метаданных для {_имя}: {_беда}")
 
 binaries = []
 # soundcard и av носят свои нативные библиотеки, автоматически они не

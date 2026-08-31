@@ -13,6 +13,20 @@ from pathlib import Path
 APP_NAME = "Konspekt"
 
 
+def profile() -> str:
+    """Имя профиля данных: чем разведены установленная копия и разработка.
+
+    Пустая строка — обычный профиль пользователя. Иначе к каталогу данных
+    и к замку единственного экземпляра добавляется суффикс, и две копии
+    перестают делить базу, записи и веса моделей.
+
+    Без этого запуск из исходников рядом с установленной программой не
+    поднимал вторую копию вовсе: он натыкался на общий мьютекс и лишь
+    показывал окно уже работающей.
+    """
+    return os.environ.get("KONSPEKT_PROFILE", "").strip()
+
+
 def resource_dir() -> Path:
     """Каталог с неизменяемыми ресурсами (фронт, иконки)."""
     bundled = getattr(sys, "_MEIPASS", None)
@@ -27,13 +41,23 @@ def web_dir() -> Path:
 
 def data_dir() -> Path:
     """Каталог пользовательских данных, создаётся при первом обращении."""
+    # Прямое указание каталога: нужно тестам, которым удобнее временная
+    # папка, чем чужой профиль в AppData.
+    прямой = os.environ.get("KONSPEKT_DATA_DIR", "").strip()
+    if прямой:
+        path = Path(прямой)
+        path.mkdir(parents=True, exist_ok=True)
+        return path
     if sys.platform == "win32":
         base = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
     elif sys.platform == "darwin":
         base = Path.home() / "Library" / "Application Support"
     else:
         base = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
-    path = base / APP_NAME
+    имя = APP_NAME
+    if profile():
+        имя = f"{APP_NAME} ({profile()})"
+    path = base / имя
     path.mkdir(parents=True, exist_ok=True)
     return path
 

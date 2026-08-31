@@ -43,6 +43,7 @@ FAST = [
     "version_test.py",
     "update_test.py",
     "migration_test.py",
+    "profile_test.py",
 ]
 
 SLOW = [

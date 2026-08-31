@@ -13,7 +13,9 @@
 import testenv  # noqa: F401  русский вывод в консоли Windows
 
 import subprocess
+import re
 import sys
+import tomllib
 from pathlib import Path
 
 DIST = Path("dist/Konspekt")
@@ -49,14 +51,19 @@ def main() -> int:
         check((meta[0] / "METADATA").exists(),
               "в метаданных есть METADATA, из которого читается версия")
 
-    # Тот же класс поломки для остальных библиотек, которые спрашивают
-    # свою версию на импорте. Перечисляем явно: молча узнавать о них от
-    # пользователей — это ровно то, что уже случилось один раз.
-    for package, folder in (("onnxruntime", "onnxruntime"),
-                            ("numpy", "numpy")):
-        present = any(internal.glob(f"{package}*.dist-info"))
-        check(present or (internal / folder).is_dir(),
-              f"{package} укомплектован в сборке")
+    # Тот же класс поломки грозит любой зависимости: та же строчка
+    # importlib.metadata.version может появиться в любой из них при
+    # очередном обновлении. Поэтому список не пишем руками, а берём
+    # из pyproject.toml — новая зависимость проверится сама.
+    зависимости = tomllib.loads(
+        Path("pyproject.toml").read_text(encoding="utf-8")
+    )["project"]["dependencies"]
+    for строка in зависимости:
+        имя = re.split(r"[\[<>=!~;\s]", строка, maxsplit=1)[0]
+        # PyInstaller пишет имя каталога через подчёркивания.
+        образец = имя.replace("-", "[-_]")
+        check(any(internal.glob(f"{образец}-*.dist-info")),
+              f"метаданные {имя} на месте")
 
     if FAILS:
         print(f"\nПровалено проверок: {len(FAILS)}")

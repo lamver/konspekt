@@ -200,6 +200,12 @@ def test_single_instance(tmp: Path) -> None:
     data = tmp / "single"
     data.mkdir(parents=True, exist_ok=True)
 
+    # Свой профиль, иначе тест берёт тот же замок, что и настоящая
+    # запущенная программа: у разработчика она обычно висит в трее, и
+    # проверка падала не потому, что код сломан, а потому что Konspekt
+    # открыт. Красный тест по такой причине быстро учатся не замечать.
+    os.environ["KONSPEKT_PROFILE"] = "тест-замка"
+
     first = SingleInstance(data / "konspekt.lock")
     check(first.acquire(), "первый запуск берёт замок")
 
@@ -214,6 +220,7 @@ def test_single_instance(tmp: Path) -> None:
     third = SingleInstance(data / "konspekt.lock")
     check(third.acquire(), "после выхода замок свободен для нового запуска")
     third.release()
+    os.environ.pop("KONSPEKT_PROFILE", None)
 
 
 def main() -> int:
