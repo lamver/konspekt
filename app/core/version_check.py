@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import platform
 import threading
 import time
@@ -35,7 +36,12 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
-URL = "https://raw.githubusercontent.com/lamver/konspekt-releases/master/latest.json"
+# Адрес можно подменить локальным, чтобы проверить обновление на живой
+# сборке, а не на пользователях. Обычный запуск переменной не видит.
+URL = os.environ.get(
+    "KONSPEKT_LATEST_URL",
+    "https://raw.githubusercontent.com/lamver/konspekt-releases/master/latest.json",
+)
 USER_AGENT = f"Konspekt/{__version__} ({platform.system()} {platform.machine()})"
 CHECK_INTERVAL = 86400  # сутки
 TIMEOUT = 8.0

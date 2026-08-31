@@ -29,6 +29,7 @@ import platform
 import re
 import subprocess
 import threading
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -42,7 +43,12 @@ from .events import UPDATE_STATE, bus
 log = logging.getLogger(__name__)
 
 REPO = "lamver/konspekt-releases"
-DOWNLOAD = f"https://github.com/{REPO}/releases/download"
+# Адрес можно подменить на локальный сервер: иначе живьём проверить
+# обновление можно только выложив настоящий релиз, то есть на живых
+# пользователях. Обычный запуск переменной не видит.
+DOWNLOAD = os.environ.get(
+    "KONSPEKT_UPDATE_BASE", f"https://github.com/{REPO}/releases/download"
+)
 USER_AGENT = f"Konspekt/{__version__} ({platform.system()} {platform.machine()})"
 TIMEOUT = 30.0
 
@@ -50,6 +56,12 @@ TIMEOUT = 30.0
 # только цифры с точками: испорченный latest.json не должен уводить
 # загрузку в чужое место.
 VERSION_RE = re.compile(r"^\d+(\.\d+){0,3}$")
+
+# Сколько программа должна простоять свёрнутой, прежде чем ставить
+# обновление. Крестик прячет окно в трей, а не закрывает программу,
+# поэтому ждать выхода можно неделями. Полчаса — это уже точно не
+# «отвлёкся на минуту», а закрытая и забытая программа.
+IDLE_BEFORE_INSTALL = float(os.environ.get("KONSPEKT_UPDATE_IDLE", 1800))
 
 
 @dataclass
@@ -93,6 +105,7 @@ class Updater:
         self._service = service
         self._lock = threading.Lock()
         self._thread: threading.Thread | None = None
+        self._idle_thread: threading.Thread | None = None
         self.ready: Ready | None = None
 
     # --- скачивание ------------------------------------------------------
@@ -171,11 +184,63 @@ class Updater:
             self.ready = Ready(version=version, path=path)
         log.info("Обновление %s скачано и проверено", version)
         bus.emit(UPDATE_STATE, {"state": "ready", "version": version})
+        self._watch_idle()
+
+    # --- ожидание удобного момента ---------------------------------------
+
+    def _watch_idle(self) -> None:
+        """Дождаться, когда программу можно тихо подменить.
+
+        Ждём, пока окно спрятано в трей и не идёт запись. Ставить, пока
+        человек смотрит в окно, нельзя: программа исчезнет у него из-под
+        рук. А ждать полного выхода бессмысленно, потому что крестик
+        прячет в трей, и «выход» может не случиться неделями.
+        """
+        if self._idle_thread is not None and self._idle_thread.is_alive():
+            return
+        self._idle_thread = threading.Thread(
+            target=self._idle_loop, daemon=True, name="update-idle"
+        )
+        self._idle_thread.start()
+
+    def _idle_loop(self) -> None:
+        quiet = 0.0
+        step = 15.0
+        while self.ready:
+            time.sleep(step)
+            if self._busy():
+                quiet = 0.0
+                continue
+            quiet += step
+            if quiet >= IDLE_BEFORE_INSTALL:
+                log.info("Программа простаивает, ставим обновление")
+                self.install_now(restart=True)
+                return
+
+    def _busy(self) -> bool:
+        """Мешает ли что-нибудь подменить программу прямо сейчас."""
+        rec = getattr(self._service, "is_recording", None)
+        if callable(rec) and rec():
+            return True
+        # Открытое окно означает, что человек за программой: пусть
+        # обновление подождёт, пока он свернёт её или уйдёт.
+        visible = getattr(self._service, "window_visible", None)
+        if callable(visible) and visible():
+            return True
+        # Разбор записи тоже нельзя обрывать: файл придётся грузить заново.
+        importing = getattr(self._service, "is_importing", None)
+        if callable(importing) and importing():
+            return True
+        return False
 
     # --- установка -------------------------------------------------------
 
-    def install_now(self) -> bool:
+    def install_now(self, restart: bool = False) -> bool:
         """Запустить установку. Программа при этом закрывается.
+
+        `restart` просит установщик поднять программу обратно: при тихой
+        установке в простое человек ничего не нажимал, и пропавший
+        значок в трее выглядел бы поломкой.
 
         Во время записи не трогаем: установщик закрывает Konspekt, и
         незаконченная встреча пропала бы вместе с ним.
@@ -191,11 +256,15 @@ class Updater:
             return False
 
         try:
+            args = [str(ready.path), "/VERYSILENT", "/SP-", "/NORESTART", "/NOCANCEL"]
+            if restart:
+                # Установщик сам поднимет программу после подмены файлов.
+                args.append("/RESTARTKONSPEKT")
             # /VERYSILENT — без окон, /NORESTART — не перезагружать
             # систему, /SP- — без вопроса «продолжить установку?».
             # Запускаем открепившись: установщик закроет нас самих.
             subprocess.Popen(
-                [str(ready.path), "/VERYSILENT", "/SP-", "/NORESTART", "/NOCANCEL"],
+                args,
                 creationflags=(
                     getattr(subprocess, "DETACHED_PROCESS", 0)
                     | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)

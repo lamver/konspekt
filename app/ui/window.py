@@ -111,6 +111,7 @@ class MainWindow:
         )
         self.api._attach(self.window)
         self._visible = not self.service.settings.start_hidden
+        self.service._window_visible = self._visible
 
         self.window.events.closing += self._on_closing
         self.window.events.moved += self._on_geometry_changed
@@ -187,6 +188,7 @@ class MainWindow:
             try:
                 self.window.show()
                 self._visible = True
+                self.service._window_visible = True
                 log.info("Окно показано")
             except Exception:
                 log.exception("Не удалось показать окно")
@@ -198,6 +200,8 @@ class MainWindow:
             try:
                 self.window.hide()
                 self._visible = False
+                # Обновление ждёт, когда человек уйдёт из программы.
+                self.service._window_visible = False
                 log.info("Окно скрыто")
             except Exception:
                 log.exception("Не удалось скрыть окно")

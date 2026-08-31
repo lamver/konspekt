@@ -13,6 +13,7 @@ import sys
 
 import webview
 
+from . import __version__
 from .core import paths
 from .core.events import APP_QUIT, WINDOW_SHOW, bus
 from .core.service import AppService
@@ -65,7 +66,9 @@ def _setup_logging() -> None:
 
 def main() -> int:
     _setup_logging()
-    log.info("Запуск Konspekt, данные в %s", paths.data_dir())
+    # Версия в первой строке журнала: по жалобе сразу видно, на какой
+    # сборке сидит человек, и заодно видно, что обновление доехало.
+    log.info("Запуск Konspekt %s, данные в %s", __version__, paths.data_dir())
 
     service = AppService()
     main_window = MainWindow(service)

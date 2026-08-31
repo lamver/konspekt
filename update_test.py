@@ -18,6 +18,7 @@ import testenv  # noqa: F401  русский вывод в консоли Window
 import hashlib
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 sys.path.insert(0, ".")
@@ -30,11 +31,20 @@ GOOD_SUM = hashlib.sha256(PAYLOAD).hexdigest()
 
 
 class FakeService:
-    def __init__(self, recording: bool = False) -> None:
+    def __init__(self, recording: bool = False, visible: bool = False,
+                 importing: bool = False) -> None:
         self._rec = recording
+        self._vis = visible
+        self._imp = importing
 
     def is_recording(self) -> bool:
         return self._rec
+
+    def window_visible(self) -> bool:
+        return self._vis
+
+    def is_importing(self) -> bool:
+        return self._imp
 
 
 class FakeStream:
@@ -195,6 +205,57 @@ def check_reuses_downloaded() -> None:
     print("[ok] уже скачанный файл не качается повторно")
 
 
+def check_waits_for_idle() -> None:
+    """Пока человек в программе, подменять её нельзя.
+
+    Крестик прячет окно в трей, поэтому «выход» может не случиться
+    неделями, и обновление ставится в простое. Но простой должен быть
+    настоящим: открытое окно, запись или разбор файла его прерывают.
+    """
+    cases = {
+        "открыто окно": FakeService(visible=True),
+        "идёт запись": FakeService(recording=True),
+        "разбирается файл": FakeService(importing=True),
+    }
+    for name, service in cases.items():
+        u = up.Updater(service)
+        assert u._busy(), f"{name}: программа занята, а обновление считает иначе"
+
+    free = up.Updater(FakeService())
+    assert not free._busy(), "свёрнутая и молчащая программа считается занятой"
+    print("[ok] обновление ждёт настоящего простоя")
+
+
+def check_installs_after_idle() -> None:
+    """Достаточно долгий простой заканчивается тихой установкой."""
+    with tempfile.TemporaryDirectory() as d:
+        path = Path(d) / "setup.exe"
+        path.write_bytes(PAYLOAD)
+
+        started: list = []
+        real_popen, real_idle = up.subprocess.Popen, up.IDLE_BEFORE_INSTALL
+        up.subprocess.Popen = lambda *a, **kw: started.append(list(a[0]))
+        up.IDLE_BEFORE_INSTALL = 0.01  # ждать полчаса в тесте некому
+        try:
+            u = up.Updater(FakeService())
+            u.ready = up.Ready("9.9.9", path)
+            u._watch_idle()
+            for _ in range(60):
+                if started:
+                    break
+                time.sleep(0.5)
+        finally:
+            up.subprocess.Popen, up.IDLE_BEFORE_INSTALL = real_popen, real_idle
+
+        assert started, "простой затянулся, а обновление так и не поставилось"
+        args = started[0]
+        assert "/VERYSILENT" in args, "установка не тихая, человек увидит окна"
+        assert "/RESTARTKONSPEKT" in args, (
+            "после тихой установки программа не вернётся, и значок в трее пропадёт"
+        )
+    print("[ok] после простоя обновление ставится и программа возвращается")
+
+
 def main() -> int:
     check_happy_path()
     check_bad_sum()
@@ -202,6 +263,8 @@ def main() -> int:
     check_bad_version()
     check_not_during_recording()
     check_reuses_downloaded()
+    check_waits_for_idle()
+    check_installs_after_idle()
     print("\nВсе проверки пройдены.")
     return 0
 

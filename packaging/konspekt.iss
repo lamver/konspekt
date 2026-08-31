@@ -57,6 +57,10 @@ Name: "{userstartup}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: autostart
 
 [Run]
 Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
+; Тихое обновление из самой программы: она закрылась ради подмены файлов
+; и должна вернуться, иначе пропавший значок в трее выглядит поломкой.
+; Обычная тихая установка (без ключа) ничего не запускает.
+Filename: "{app}\{#AppExe}"; Flags: nowait skipifnotsilent; Check: RestartRequested
 
 [UninstallDelete]
 ; Кэш webview принадлежит нам и после удаления не нужен. Встречи, записи и
@@ -65,6 +69,20 @@ Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags
 Type: filesandordirs; Name: "{localappdata}\{#AppName}\EBWebView"
 
 [Code]
+// Ключ /RESTARTKONSPEKT передаёт сама программа при тихом обновлении.
+function RestartRequested(): Boolean;
+var
+  i: Integer;
+begin
+  Result := False;
+  for i := 1 to ParamCount do
+    if CompareText(ParamStr(i), '/RESTARTKONSPEKT') = 0 then
+    begin
+      Result := True;
+      Exit;
+    end;
+end;
+
 // Перед установкой закрываем запущенную копию: иначе файлы заняты и
 // обновление поверх падает на середине.
 function InitializeSetup(): Boolean;
