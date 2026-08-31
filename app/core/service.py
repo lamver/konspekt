@@ -144,7 +144,8 @@ class AppService:
         self.time_offset: float = 0.0
         self._recover_stale_recordings()
 
-    def _build_transcriber(self) -> Transcriber:
+        from .version_check import VersionChecker
+        VersionChecker(self).check_later()
         """Движок распознавания по настройкам.
 
         Модель здесь не грузится: только объект. Веса поднимутся сами
