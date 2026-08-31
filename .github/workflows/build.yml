@@ -1,0 +1,77 @@
+# Сборка Konspekt под Windows.
+#
+# На каждый push: все быстрые тесты.
+# На тег вида v*: сборка установщика, VirusTotal, подписанная сборка GitHub, релиз.
+
+name: Build
+
+on:
+  push:
+    branches: [ master ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Настроить Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Установить uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: latest
+
+      - name: Установить зависимости
+        run: uv sync --frozen --no-editable
+
+      - name: Запустить быстрые тесты
+        run: |
+          chcp 65001
+          $env:PYTHONIOENCODING="utf-8"
+          uv run python -m pytest smoke_test.py web_test.py migration_test.py models_test.py router_test.py langid_test.py voices_test.py embedder_test.py import_test.py -v
+
+      - name: Собрать дистрибутив
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: uv run python packaging/build.py
+
+      - name: Верифицировать сборку
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          $exe = Get-Item dist/konspekt-*-setup.exe
+          if ($exe.Length -lt 50MB) { throw "Установщик слишком маленький: $($exe.Length/1MB) МБ" }
+          if ($exe.Length -gt 70MB) { throw "Установщик слишком большой: $($exe.Length/1MB) МБ" }
+          echo "Установщик собран: $($exe.Name), $($exe.Length/1MB) МБ"
+
+      - name: Подписать происхождение сборки
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: dist/konspekt-*-setup.exe
+
+      - name: VirusTotal скан
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: crazy-max/ghaction-virustotal@v4
+        with:
+          vt_api_key: ${{ secrets.VT_API_KEY }}
+          files: dist/konspekt-*-setup.exe
+          update_release_body: true
+
+      - name: Создать релиз
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/konspekt-*-setup.exe
+          generate_release_notes: true
