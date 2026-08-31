@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import os
 import shutil
 import subprocess
@@ -149,7 +150,30 @@ def main() -> int:
     setup = DIST / f"konspekt-{__version__}-setup.exe"
     if setup.exists():
         print(f"установщик: {setup} ({setup.stat().st_size / 1024 / 1024:.0f} МБ)")
+        write_checksums(setup)
     return 0
+
+
+def write_checksums(setup: Path) -> Path:
+    """Посчитать SHA256 установщика и положить рядом `SHA256SUMS`.
+
+    Konspekt пишет микрофон и слушает системный звук: со стороны это
+    поведение шпионской программы. Наше «мы проверили» не стоит ничего,
+    поэтому у человека должна быть возможность убедиться, что скачанный
+    файл ровно тот, что мы собрали, а не подменённый по дороге.
+
+        certutil -hashfile konspekt-0.4.0-setup.exe SHA256
+    """
+    digest = hashlib.sha256()
+    with setup.open("rb") as f:
+        for block in iter(lambda: f.read(1024 * 1024), b""):
+            digest.update(block)
+
+    sums = DIST / "SHA256SUMS"
+    # Формат как у sha256sum: хеш, пробел, звёздочка (двоичный режим), имя.
+    sums.write_text(f"{digest.hexdigest()} *{setup.name}\n", encoding="utf-8")
+    print(f"контрольная сумма: {digest.hexdigest()}")
+    return sums
 
 
 if __name__ == "__main__":
