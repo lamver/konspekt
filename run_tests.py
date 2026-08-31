@@ -37,6 +37,7 @@ FAST = [
 ]
 
 SLOW = [
+    "job_test.py",
     "llm_test.py",
     "summary_test.py",
     "long_meeting_test.py",
