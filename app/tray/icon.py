@@ -29,23 +29,32 @@ INK = (43, 41, 38)          # основной тёмный
 REC = (220, 53, 69)         # красный индикатор записи
 
 
-def _make_icon(recording: bool = False) -> Image.Image:
-    """Рисуем иконку кодом, чтобы не тащить бинарные ассеты в репо."""
-    size = 64
-    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+def _make_icon(recording: bool = False, size: int = 64) -> Image.Image:
+    """Рисуем иконку кодом, чтобы не тащить бинарные ассеты в репо.
+
+    Размер параметром: из этой же функции делается .ico для ярлыка и
+    установщика, а там нужны все размеры от 16 до 256. Рисуем в четыре раза
+    крупнее и уменьшаем, иначе на мелких размерах края лесенкой.
+    """
+    scale = 4
+    box = size * scale
+    img = Image.new("RGBA", (box, box), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
+    k = box / 64  # пропорции подобраны на 64 пикселях
 
     # Страница блокнота
-    d.rounded_rectangle([10, 6, 54, 58], radius=8, fill=INK)
-    d.rounded_rectangle([10, 6, 20, 58], radius=8, fill=ACCENT)
+    d.rounded_rectangle([10 * k, 6 * k, 54 * k, 58 * k], radius=8 * k, fill=INK)
+    d.rounded_rectangle([10 * k, 6 * k, 20 * k, 58 * k], radius=8 * k, fill=ACCENT)
     # Строки текста
     for y in (20, 30, 40):
-        d.rounded_rectangle([26, y, 48, y + 4], radius=2, fill=(250, 249, 247))
+        d.rounded_rectangle(
+            [26 * k, y * k, 48 * k, (y + 4) * k], radius=2 * k, fill=(250, 249, 247)
+        )
 
     if recording:
-        d.ellipse([38, 38, 60, 60], fill=REC)
+        d.ellipse([38 * k, 38 * k, 60 * k, 60 * k], fill=REC)
 
-    return img
+    return img.resize((size, size), Image.LANCZOS)
 
 
 class TrayIcon:

@@ -1023,7 +1023,15 @@ async function openAudioSheet() {
   refreshEnrollment();
   refreshPeople();
   refreshLlmStatus();
+  showVersion();
   ui.audioSheet.hidden = false;
+}
+
+/** Версия сборки в углу настроек: по жалобе сразу видно, что у человека. */
+async function showVersion() {
+  if (!ui.appVersion || ui.appVersion.textContent) return;
+  const version = await api.app_version();
+  if (version) ui.appVersion.textContent = 'Версия ' + version;
 }
 
 /* --- Мой голос ----------------------------------------------------------- */
@@ -1367,6 +1375,7 @@ function bindUi() {
     toast: el('toast'),
     toastText: el('toast-text'),
     audioSheet: el('audio-sheet'),
+  appVersion: el('app-version'),
     micSelect: el('mic-select'),
     loopbackSelect: el('loopback-select'),
     micEnabled: el('mic-enabled'),

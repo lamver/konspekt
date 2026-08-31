@@ -305,3 +305,13 @@ class Api:
     def set_sidebar_width(self, width: int) -> int:
         """Запомнить ширину боковой колонки после перетаскивания."""
         return self._service.set_sidebar_width(width)
+
+    def app_version(self) -> str:
+        """Версия сборки.
+
+        Нужна, когда человек присылает жалобу: без неё непонятно, на какой
+        сборке он сидит, и половина разговора уходит на выяснение.
+        """
+        from app import __version__
+
+        return __version__

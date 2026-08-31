@@ -1068,3 +1068,7 @@ body.is-resizing * { user-select: none !important; }
 /* Текст встречи выделяется и копируется: окно таскается только за шапку,
    поэтому запрещать выделение во всём приложении незачем. */
 .transcript, .summary__body, .chat__list { user-select: text; cursor: auto; }
+
+/* Версия в углу настроек: нужна, когда человек присылает жалобу и надо
+   понять, на какой сборке он сидит. */
+.version { margin-right: auto; font-size: 11px; color: var(--ink-3); user-select: text; }
