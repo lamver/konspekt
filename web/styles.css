@@ -25,6 +25,9 @@
 }
 
 :root {
+  /* Движок рисует системные части сам: стрелку списка, полосы прокрутки,
+     выпадающий список. Без этой строки он всегда считает фон светлым. */
+  color-scheme: light;
   --paper:      #FAF9F7;
   --paper-2:    #F3F1ED;
   --paper-3:    #EAE7E1;
@@ -35,6 +38,11 @@
   --accent:     #D65A3F;
   --accent-soft:#FBEDE9;
   --rec:        #DC3545;
+  /* Цвета наведения живут здесь же: заданные прямо в правилах, они
+     остаются светлыми в тёмной теме и наоборот. */
+  --ink-hover:  #403C37;
+  --accent-hover:#C24E35;
+  --thumb-hover:#D6D1C8;
   --radius:     10px;
   --font-ui:    "Inter", -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-serif: "IBM Plex Serif", Georgia, "Iowan Old Style", serif;
@@ -135,7 +143,7 @@ body { display: flex; flex-direction: column; }
   cursor: pointer;
   transition: background .12s, transform .08s;
 }
-.btn-new:hover { background: #403C37; }
+.btn-new:hover { background: var(--ink-hover); }
 .btn-new:active { transform: scale(.98); }
 
 /* --- Загрузка готовых записей ------------------------------------------- */
@@ -340,7 +348,7 @@ body { display: flex; flex-direction: column; }
   font-size: 12px; font-weight: 500; font-family: inherit;
   cursor: pointer;
 }
-.btn-primary:hover { background: #C24E35; }
+.btn-primary:hover { background: var(--accent-hover); }
 
 .editor { flex: 1; display: flex; flex-direction: column; min-height: 0; }
 
@@ -475,7 +483,7 @@ body { display: flex; flex-direction: column; }
 ::-webkit-scrollbar { width: 7px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--paper-3); border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: #D6D1C8; }
+::-webkit-scrollbar-thumb:hover { background: var(--thumb-hover); }
 
 
 /* --- Плашка сообщений --------------------------------------------------- */
@@ -591,10 +599,19 @@ body { display: flex; flex-direction: column; }
   padding: 7px 8px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: #fff;
+  /* Фон берём из темы, а не белым цветом: в тёмной теме белое поле
+     со светлым текстом читалось как пустая полоса. */
+  background: var(--paper);
   color: var(--ink);
   font-family: var(--font-ui);
   font-size: 12px;
+}
+
+.field select option {
+  /* Раскрытый список рисует сама Windows, и без явного цвета он
+     оставался бы белым с почти белым текстом. */
+  background: var(--paper);
+  color: var(--ink);
 }
 
 .field select:focus { outline: none; border-color: var(--accent); }
@@ -687,7 +704,7 @@ body { display: flex; flex-direction: column; }
   font-weight: 600;
   font-family: inherit;
   color: var(--ink);
-  background: var(--bg-2);
+  background: var(--paper-2);
   border: 1px solid var(--accent);
   border-radius: 4px;
   padding: 1px 4px;
@@ -961,6 +978,7 @@ body.is-resizing { user-select: none; cursor: inherit; }
  * и перестаёт читаться.
  */
 :root[data-theme="dark"] {
+  color-scheme: dark;
   --paper:      #1C1B19;
   --paper-2:    #232220;
   --paper-3:    #2E2C29;
@@ -971,10 +989,16 @@ body.is-resizing { user-select: none; cursor: inherit; }
   --accent:     #E8785C;
   --accent-soft:#3A2620;
   --rec:        #F06A75;
+  /* Кнопка «Новая встреча» тут светлая, значит наведение делает её ещё
+     светлее, а не темнее, как в светлой теме. */
+  --ink-hover:  #FFFFFF;
+  --accent-hover:#F08D72;
+  --thumb-hover:#403C37;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]):not([data-theme="dark"]) {
+    color-scheme: dark;
     --paper:      #1C1B19;
     --paper-2:    #232220;
     --paper-3:    #2E2C29;
@@ -985,6 +1009,9 @@ body.is-resizing { user-select: none; cursor: inherit; }
     --accent:     #E8785C;
     --accent-soft:#3A2620;
     --rec:        #F06A75;
+    --ink-hover:  #FFFFFF;
+    --accent-hover:#F08D72;
+    --thumb-hover:#403C37;
   }
 }
 

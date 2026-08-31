@@ -71,6 +71,8 @@ def main() -> int:
     # видно только на экране, когда русский текст рисуется системным.
     try:
         from fontTools.ttLib import TTFont
+        # woff2 сжат brotli, и без него fontTools падает уже при чтении.
+        import brotli  # noqa: F401
     except ImportError:
         print(f"[skip] все {len(fonts)} шрифтов на месте, кириллица не проверена")
     else:
@@ -81,6 +83,30 @@ def main() -> int:
             for letter in "АЯЁабяё":
                 assert ord(letter) in chars, f"в {name} нет буквы {letter}"
         print(f"[ok] все {len(set(fonts))} шрифтов на месте и знают кириллицу")
+
+    # --- цвета против тёмной темы ----------------------------------------
+    # Тема живёт в переменных, и любой прямой цвет фона мимо них — это
+    # пятно, которое в одной из тем перестаёт читаться. Так уже случилось
+    # с полями выбора устройства: белый фон и светлый текст.
+    for block in re.findall(r"\{[^{}]*\}", css):
+        if "background" not in block:
+            continue
+        hard = re.findall(r"background(?:-color)?:\s*(#[0-9a-fA-F]{3,6})", block)
+        # Белый на акцентной кнопке — это цвет текста, а не фона, и
+        # претензий к нему нет: там фон задан переменной.
+        assert not hard, f"прямой цвет фона мимо темы: {hard} в {block[:60]}"
+
+    # Переменная с опечаткой не ошибка для браузера: он просто ничего не
+    # применит, и элемент останется прозрачным. Такое было с --bg-2.
+    declared = set(re.findall(r"^\s*(--[\w-]+):", css, re.M))
+    used_vars = set(re.findall(r"var\((--[\w-]+)", css))
+    unknown_vars = sorted(used_vars - declared)
+    assert not unknown_vars, f"стили зовут несуществующие переменные: {unknown_vars}"
+
+    # Системные элементы (стрелка списка, полосы прокрутки) движок рисует
+    # сам и без этой подсказки всегда считает фон светлым.
+    assert "color-scheme: dark" in css, "тёмной теме не объявлена color-scheme"
+    print("[ok] цвета берутся из темы, тёмная тема объявлена движку")
 
     # --- вызовы моста против методов Api ---------------------------------
     api_py = Path("app/ui/api.py").read_text(encoding="utf-8")
