@@ -21,6 +21,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 
 FAST = [
+    "silence_test.py",
     "smoke_test.py",
     "web_test.py",
     "models_test.py",

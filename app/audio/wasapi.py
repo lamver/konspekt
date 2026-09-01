@@ -18,7 +18,7 @@ from typing import Any, Callable
 
 import numpy as np
 
-from ..core.events import RECORDING_LEVEL, bus
+from ..core.events import RECORDING_ERROR, RECORDING_LEVEL, bus
 from ..core.paths import audio_dir
 from . import devices
 from .buffers import SAMPLE_RATE, ChunkBuffer, WavWriter, float_to_int16, rms_level
@@ -28,6 +28,12 @@ log = logging.getLogger(__name__)
 # Сколько кадров просим за раз: компромисс между отзывчивостью
 # индикатора и нагрузкой на процессор.
 BLOCK_FRAMES = 1600  # 0.1 с при 16 кГц
+
+# Через сколько секунд ровного нуля на дорожке говорим человеку, что
+# записывается пустота. Десять секунд: достаточно, чтобы не дёргать на
+# паузе перед началом разговора, и достаточно рано, чтобы успеть
+# переключить устройство и не потерять встречу.
+ПОРОГ_ТИШИНЫ = 10.0
 
 # Готовый чанк для распознавания.
 ChunkCallback = Callable[[str, np.ndarray, float], None]
@@ -55,6 +61,13 @@ class _Track:
         self._level = 0.0
         self._error: str | None = None
         self._started = threading.Event()
+        # Сколько секунд подряд с дорожки идёт ровный ноль. Устройство
+        # при этом «открыто» и ошибок не даёт, просто в нём нет звука:
+        # так бывает, когда звук играет не на том выходе, который мы
+        # слушаем. Молчать об этом нельзя, иначе человек час пишет
+        # встречу, а в расшифровке получает обрывки из микрофона.
+        self._тишина_секунд = 0.0
+        self._было_слышно = False
         # Длительность записанного. Считаем её до закрытия файла: после
         # writer обнуляется, а знать, сколько секунд в файле, нужно, чтобы
         # потом переслушать нужную реплику.
@@ -106,6 +119,43 @@ class _Track:
             return None
         return path
 
+    def _следить_за_тишиной(self, блок: np.ndarray) -> None:
+        """Предупредить, если дорожка пишет ровный ноль.
+
+        Проверяем именно ноль, а не тихий звук: тихая речь и пауза в
+        разговоре — это нормально, а вот отсутствие даже шума значит,
+        что устройство отдаёт пустоту. Предупреждаем один раз за заход,
+        и только пока с дорожки вообще ничего не слышали: если звук был
+        и просто настала пауза, тревожить человека незачем.
+        """
+        if self._было_слышно:
+            return
+        if float(np.abs(блок).max()) > 0.0:
+            self._было_слышно = True
+            self._тишина_секунд = 0.0
+            return
+        self._тишина_секунд += len(блок) / SAMPLE_RATE
+        if self._тишина_секунд < ПОРОГ_ТИШИНЫ:
+            return
+        self._было_слышно = True  # больше не повторяемся
+        куда = "микрофон" if self.name == devices.TRACK_ME else "системный звук"
+        log.warning(
+            "Дорожка %s молчит %.0f секунд подряд: устройство открылось, "
+            "но звука в нём нет", self.name, self._тишина_секунд
+        )
+        bus.emit(
+            RECORDING_ERROR,
+            {
+                "track": self.name,
+                "silent": True,
+                "message": (
+                    f"Тишина на дорожке «{куда}»: за {int(self._тишина_секунд)} "
+                    f"секунд не было ни звука. Проверьте, то ли устройство "
+                    f"выбрано в настройках записи."
+                ),
+            },
+        )
+
     def _safe_chunk(self, chunk: np.ndarray, offset: float) -> None:
         """Ошибка в распознавании не должна ронять запись."""
         try:
@@ -140,6 +190,7 @@ class _Track:
                     continue
                 mono = data.reshape(-1) if data.ndim == 1 else data.mean(axis=1)
                 self._level = rms_level(mono)
+                self._следить_за_тишиной(mono)
                 pcm16 = float_to_int16(mono)
                 if self._writer:
                     self._writer.write(pcm16)
