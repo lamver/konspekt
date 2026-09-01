@@ -16,6 +16,7 @@ from __future__ import annotations
 import logging
 import os
 import threading
+import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Callable
@@ -35,8 +36,31 @@ CHUNK = 1 << 16  # 64 КБ
 RETRIES = 200
 RETRY_PAUSE = 3.0  # секунды между попытками
 
+# Hugging Face режет скорость одного соединения. Замер на живом канале:
+# в один поток файл идёт 0.3 МБ/с, в восемь — 1.6 МБ/с, то есть модель
+# на 214 МБ приходит за две минуты вместо двенадцати. Канал тут ни при
+# чём, ограничение именно на соединение, поэтому просим куски файла
+# несколькими соединениями сразу.
+ПОТОКОВ = 8
+# Меньше этого размера дробить не стоит: накладные расходы на лишние
+# соединения съедят выигрыш, а мелких файлов у модели большинство.
+ПОРОГ_ДРОБЛЕНИЯ = 32 << 20  # 32 МБ
+
 # Колбэк прогресса: (имя файла, скачано байт, всего байт)
 ProgressCallback = Callable[[str, int, int], None]
+
+
+class _ФайлБольшой(Exception):
+    """Файл стоит качать несколькими соединениями, а не одним.
+
+    Не беда, а способ сообщить наверх размер, который уже пришёл в
+    ответе сервера: отдельный запрос за ним был бы лишним походом в
+    сеть на каждый мелкий файл модели.
+    """
+
+    def __init__(self, всего: int) -> None:
+        super().__init__(f"файл на {всего} байт качаем кусками")
+        self.всего = всего
 
 
 class DownloadCancelled(RuntimeError):
@@ -218,6 +242,11 @@ class ModelDownloader:
             try:
                 self._fetch(name, target, on_progress)
                 return
+            except _ФайлБольшой as большой:
+                # Файл крупный и мы только начали: докачивать нечего,
+                # поэтому берём его несколькими соединениями сразу.
+                self._качать_кусками(name, target, большой.всего, on_progress)
+                return
             except DownloadCancelled:
                 raise
             except Exception as exc:
@@ -235,6 +264,124 @@ class ModelDownloader:
                 if self._cancel.wait(RETRY_PAUSE):
                     raise DownloadCancelled(name) from exc
         raise RuntimeError(f"Не удалось скачать {name}: {last_error}")
+
+    def _размер_на_сервере(self, name: str) -> int:
+        """Сколько весит файл и берёт ли сервер запросы по кускам.
+
+        Ноль значит «дробить нельзя»: либо размер неизвестен, либо
+        сервер не понимает Range. Тогда качаем как раньше, одним
+        потоком, и ничего не ломаем.
+        """
+        url = HF_BASE.format(repo=self.repo, name=name)
+        запрос = urllib.request.Request(
+            url, headers={"User-Agent": "konspekt", "Range": "bytes=0-0"})
+        try:
+            with urllib.request.urlopen(запрос, timeout=30) as ответ:
+                if ответ.status != 206:
+                    return 0
+                диапазон = ответ.headers.get("Content-Range", "")
+                return int(диапазон.rsplit("/", 1)[-1])
+        except (OSError, ValueError, urllib.error.URLError):
+            return 0
+
+    def _качать_кусками(
+        self, name: str, target: Path, всего: int,
+        on_progress: ProgressCallback | None,
+    ) -> None:
+        """Качать файл несколькими соединениями сразу.
+
+        Каждый поток тянет свой отрезок в отдельный файл и умеет
+        продолжать с места обрыва, поэтому оборванная загрузка не
+        начинается заново. Склеиваем только когда все куски дотянуты до
+        последнего байта: иначе на диск лёг бы обрубок, который весит
+        правдоподобно и открывается как испорченная модель.
+        """
+        куски = self.dest / (name + ".куски")
+        куски.mkdir(parents=True, exist_ok=True)
+        длина = всего // ПОТОКОВ + 1
+        границы = []
+        for н in range(ПОТОКОВ):
+            начало = н * длина
+            if начало >= всего:
+                break
+            границы.append((н, начало, min(начало + длина, всего) - 1))
+
+        url = HF_BASE.format(repo=self.repo, name=name)
+        готово = {н: 0 for н, _, _ in границы}
+        беда: list[Exception] = []
+        замок = threading.Lock()
+
+        def тянуть(н: int, начало: int, конец: int) -> None:
+            ф = куски / f"{н}.часть"
+            нужно = конец - начало + 1
+            for _ in range(RETRIES):
+                if self._cancel.is_set():
+                    return
+                есть = ф.stat().st_size if ф.exists() else 0
+                with замок:
+                    готово[н] = есть
+                    if on_progress:
+                        on_progress(name, sum(готово.values()), всего)
+                if есть >= нужно:
+                    return
+                запрос = urllib.request.Request(
+                    url, headers={"User-Agent": "konspekt",
+                                  "Range": f"bytes={начало + есть}-{конец}"})
+                try:
+                    with urllib.request.urlopen(запрос, timeout=60) as ответ, \
+                            open(ф, "ab") as fh:
+                        while блок := ответ.read(CHUNK):
+                            if self._cancel.is_set():
+                                return
+                            fh.write(блок)
+                            with замок:
+                                готово[н] += len(блок)
+                                if on_progress:
+                                    on_progress(name, sum(готово.values()), всего)
+                except Exception as exc:  # обрыв: продолжим с этого места
+                    if self._cancel.wait(RETRY_PAUSE):
+                        return
+                    беда.append(exc)
+
+        нити = [threading.Thread(target=тянуть, args=г, name=f"качаем-{name}-{г[0]}",
+                                 daemon=True) for г in границы]
+        for н in нити:
+            н.start()
+        for н in нити:
+            н.join()
+
+        if self._cancel.is_set():
+            raise DownloadCancelled(name)
+
+        # Проверяем каждый кусок до склейки. Без этого обрубок ложится
+        # на диск как готовая модель и падает уже при распознавании,
+        # где причину не видно.
+        недобор = []
+        for н, начало, конец in границы:
+            ф = куски / f"{н}.часть"
+            есть = ф.stat().st_size if ф.exists() else 0
+            нужно = конец - начало + 1
+            if есть != нужно:
+                недобор.append(f"кусок {н}: {есть} из {нужно}")
+        if недобор:
+            raise RuntimeError(
+                f"Файл {name} скачан не полностью: {'; '.join(недобор)}"
+            )
+
+        part = target.with_suffix(target.suffix + ".part")
+        with open(part, "wb") as out:
+            for н, _, _ in границы:
+                out.write((куски / f"{н}.часть").read_bytes())
+        if part.stat().st_size != всего:
+            part.unlink(missing_ok=True)
+            raise RuntimeError(
+                f"Файл {name} собран неверно: {part.stat().st_size} вместо {всего}"
+            )
+        part.replace(target)
+        for ф in куски.glob("*.часть"):
+            ф.unlink()
+        куски.rmdir()
+        log.info("Файл %s готов (%d байт, качали в %d потоков)", name, всего, len(границы))
 
     def _fetch(self, name: str, target: Path, on_progress: ProgressCallback | None) -> None:
         part = target.with_suffix(target.suffix + ".part")
@@ -266,6 +413,12 @@ class ModelDownloader:
                 )
                 part.unlink(missing_ok=True)
                 raise RuntimeError(f"Повреждённая докачка {name}, начинаем сначала")
+            if not done and total >= ПОРОГ_ДРОБЛЕНИЯ and response.headers.get("Accept-Ranges") != "none":
+                # Большой файл, качать только начали. Hugging Face режет
+                # скорость одного соединения, поэтому дальше тянем его
+                # кусками параллельно. Отдельного запроса за размером не
+                # делаем: он уже пришёл в этом ответе.
+                raise _ФайлБольшой(total)
             mode = "ab" if done else "wb"
             with open(part, mode) as fh:
                 while True:
