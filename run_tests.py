@@ -60,6 +60,7 @@ SLOW = [
     "old_meeting_test.py",
     "whisper_test.py",
     "long_import_test.py",
+    "latency_test.py",
 ]
 
 
