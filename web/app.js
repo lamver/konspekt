@@ -115,6 +115,12 @@ window.__konspekt_event = function (payload) {
     case 'recording.level':
       renderLevels(payload.me, payload.them);
       break;
+    case 'recording.silent':
+      // Дорожка немая, но запись идёт: только предупреждаем. Трогать
+      // состояние кнопки нельзя, иначе окно решит, что записи нет, и
+      // кнопка перестанет слушаться посреди живой встречи.
+      showToast(payload.message || 'На одной из дорожек нет звука', 10000);
+      break;
     case 'recording.error':
       // Запись не началась: сообщаем прямо, иначе человек будет думать,
       // что встреча пишется, и потеряет её.

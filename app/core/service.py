@@ -1200,7 +1200,21 @@ class AppService:
     def start_recording(self, meeting_id: str | None = None) -> dict[str, Any] | None:
         if self.capture.is_recording:
             log.warning("Запись уже идёт, повторный старт проигнорирован")
-            return self.get_meeting(self.active_meeting_id) if self.active_meeting_id else None
+            if not self.active_meeting_id:
+                return None
+            # Окно спросило «начать» во время записи, значит оно думает,
+            # что записи нет. Расхождение чинится тут же: рассказываем
+            # заново, что встреча пишется. Иначе кнопка так и останется
+            # мёртвой до перезапуска программы.
+            встреча = self.store.get_meeting(self.active_meeting_id)
+            bus.emit(
+                RECORDING_STARTED,
+                {
+                    "meeting_id": self.active_meeting_id,
+                    "started_at": getattr(встреча, "started_at", None),
+                },
+            )
+            return self.get_meeting(self.active_meeting_id)
 
         if meeting_id is None:
             meeting_id = self.create_meeting()["id"]

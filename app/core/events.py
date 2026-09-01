@@ -51,6 +51,11 @@ RECORDING_STARTED = "recording.started"
 RECORDING_STOPPED = "recording.stopped"
 RECORDING_LEVEL = "recording.level"
 RECORDING_ERROR = "recording.error"
+# Дорожка открылась, но звука в ней нет. Это предупреждение, а не
+# обрыв записи: запись идёт дальше, и путать его с ошибкой старта
+# нельзя — окно от такой ошибки считает, что запись кончилась, и
+# кнопка перестаёт слушаться, хотя встреча всё ещё пишется.
+RECORDING_SILENT = "recording.silent"
 TRANSCRIPT_SEGMENT = "transcript.segment"
 # Черновик речи, которая ещё идёт: показать и заменить настоящей.
 TRANSCRIPT_DRAFT = "transcript.draft"

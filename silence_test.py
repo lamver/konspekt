@@ -7,6 +7,8 @@
 расшифровке вышла каша из огрызков. Программа об этом молчала, и
 человек узнал о беде только по бессмысленному тексту.
 """
+import testenv  # noqa: F401  русский вывод в консоли Windows
+
 import sys
 import time
 from pathlib import Path
@@ -16,7 +18,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).parent))
 
 from app.audio import devices, wasapi
-from app.core.events import RECORDING_ERROR, bus
+from app.core.events import RECORDING_SILENT, bus
 
 
 class ПустоеУстройство:
@@ -51,7 +53,7 @@ class ТихийНоЖивой(ПустоеУстройство):
 def записать(устройство, секунд):
     """Прогнать дорожку и вернуть пойманные предупреждения."""
     пойманное = []
-    отписаться = bus.on(RECORDING_ERROR, пойманное.append)
+    отписаться = bus.on(RECORDING_SILENT, пойманное.append)
     дорожка = wasapi._Track(
         name=devices.TRACK_THEM,
         opener=lambda: устройство,
@@ -92,5 +94,46 @@ assert not беды, (
     f"будет кричать на каждой негромкой встрече"
 )
 print("[ok] тихий, но живой звук тревоги не поднимает")
+
+# --- Окно разошлось с сервисом: повторный старт чинит его ----------------
+#
+# Если окно всё-таки решит, что записи нет (а именно так и вышло в
+# 0.7.3 из-за предупреждения о тишине), человек нажмёт кнопку — и до
+# этой правки сервис молча писал в журнал «Запись уже идёт», ничего не
+# отвечая. Кнопка оставалась мёртвой до перезапуска программы.
+class ЗанятыйЗахват:
+    is_recording = True
+
+
+class ПустаяБаза:
+    def get_meeting(self, _id):
+        return None
+
+
+class ФальшивыйСервис:
+    """Только то, что трогает start_recording на занятой записи."""
+
+    capture = ЗанятыйЗахват()
+    store = ПустаяБаза()
+    active_meeting_id = "встреча-1"
+
+    def get_meeting(self, _id):
+        return {"id": "встреча-1"}
+
+
+from app.core.events import RECORDING_STARTED  # noqa: E402
+from app.core.service import AppService  # noqa: E402
+
+пойманное = []
+отписаться = bus.on(RECORDING_STARTED, пойманное.append)
+AppService.start_recording(ФальшивыйСервис())
+отписаться()
+
+assert пойманное, (
+    "на повторный «начать» во время записи сервис ничего не ответил: "
+    "разошедшееся окно останется с мёртвой кнопкой до перезапуска"
+)
+assert пойманное[0]["meeting_id"] == "встреча-1", пойманное[0]
+print("[ok] повторный старт возвращает окну состояние записи")
 
 print("\nПустая дорожка больше не проходит незамеченной")

@@ -18,7 +18,7 @@ from typing import Any, Callable
 
 import numpy as np
 
-from ..core.events import RECORDING_ERROR, RECORDING_LEVEL, bus
+from ..core.events import RECORDING_LEVEL, RECORDING_SILENT, bus
 from ..core.paths import audio_dir
 from . import devices
 from .buffers import SAMPLE_RATE, ChunkBuffer, WavWriter, float_to_int16, rms_level
@@ -144,7 +144,7 @@ class _Track:
             "но звука в нём нет", self.name, self._тишина_секунд
         )
         bus.emit(
-            RECORDING_ERROR,
+            RECORDING_SILENT,
             {
                 "track": self.name,
                 "silent": True,
