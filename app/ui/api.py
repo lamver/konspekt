@@ -70,7 +70,7 @@ class Api:
 
     def transcription_languages(self) -> list[str]:
         """Языки, на которых программа умеет пересчитать реплику."""
-        return list(getattr(self._service.asr, "languages", ("ru",)))
+        return list(getattr(self._service.transcriber, "languages", ("ru",)))
 
     def storage_usage(self) -> dict[str, Any]:
         """Сколько места занимают записи и база.

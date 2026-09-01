@@ -71,7 +71,25 @@ class Маршрутизатор:
         self.languages = ("ru", "en", "de")
 
 
+def проверить_поле() -> None:
+    """Заглушка должна вешаться на то же поле, что и настоящая модель.
+
+    Первая версия этого теста подменяла `service.asr` — поля, которого у
+    AppService нет вовсе. Тест был зелёный, а на живой программе
+    пересчёт падал с AttributeError на первом же клике. Поэтому имя поля
+    проверяем у настоящего класса, а не у выдуманного.
+    """
+    import inspect
+
+    from app.core.service import AppService
+
+    исходник = inspect.getsource(AppService.__init__)
+    проверить("self.transcriber" in исходник,
+              "AppService правда держит распознаватель в поле transcriber")
+
+
 def main() -> int:
+    проверить_поле()
     tmp = Path(tempfile.mkdtemp(prefix="konspekt-lang-"))
     from app.core import paths as paths_mod
 
@@ -105,7 +123,7 @@ def main() -> int:
 
     служба = AppService.__new__(AppService)
     служба.store = store
-    служба.asr = Маршрутизатор(русская, чужая)
+    служба.transcriber = Маршрутизатор(русская, чужая)
 
     # --- пересчёт на русский ---------------------------------------------
     ответ = служба.retranscribe_segment(реплика.id, "ru")
@@ -160,7 +178,7 @@ def main() -> int:
                        speaker="them", **_):
             return []
 
-    служба.asr = Маршрутизатор(Молчун("молчун"), чужая)
+    служба.transcriber = Маршрутизатор(Молчун("молчун"), чужая)
     было = store.get_segment(реплика.id).text
     проверить(служба.retranscribe_segment(реплика.id, "ru") is None,
               "молчание модели не стирает текст реплики")

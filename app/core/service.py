@@ -957,14 +957,18 @@ class AppService:
         return {"id": segment_id, "text": текст, "lang": lang}
 
     def _pick_engine(self, lang: str):
-        """Распознаватель под язык: русская модель или иноязычная."""
-        router = getattr(self.asr, "russian", None)
-        if router is None:
-            # Не маршрутизатор, а один распознаватель: он и решает.
-            return self.asr
+        """Распознаватель под язык: русская модель или иноязычная.
+
+        Обычно `transcriber` — это LanguageRouter, внутри которого две
+        модели. Но он же может быть и одиночным распознавателем (когда
+        иноязычной модели нет вовсе), и тогда выбирать не из чего.
+        """
+        russian = getattr(self.transcriber, "russian", None)
+        if russian is None:
+            return self.transcriber
         if lang in CYRILLIC_LANGS:
-            return self.asr.russian
-        return self.asr.foreign
+            return russian
+        return getattr(self.transcriber, "foreign", None)
 
     def _segment_pcm(self, seg) -> tuple:
         """Звук реплики из записи встречи, как для прослушивания."""
