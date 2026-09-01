@@ -84,6 +84,17 @@ def проверить() -> int:
             "turn--draft" in стили and "showDraft" in скрипт,
             "черновик речи отрисуется",
         )
+
+        # Мало уметь рисовать: событие должно доехать до окна. В 0.7.0
+        # всё было на месте по отдельности, а список пересылаемых тем
+        # про черновик не знал, и людям не показывалось ничего.
+        from .core.events import TRANSCRIPT_DRAFT
+        from .ui.window import FORWARDED_EVENTS
+
+        _проверить(
+            TRANSCRIPT_DRAFT in FORWARDED_EVENTS,
+            "черновик доходит до окна, а не теряется по дороге",
+        )
     except Exception as беда:
         _проверить(False, f"файлы окна не читаются: {беда}")
 
