@@ -1428,11 +1428,35 @@ async function createMeeting() {
 
 /* --- Перетаскивание frameless-окна -------------------------------------- */
 
-/** pywebview easy_drag ломает выделение текста, поэтому тащим сами. */
+/**
+ * pywebview easy_drag ломает выделение текста, поэтому тащим сами.
+ *
+ * Смещения копим и отправляем не чаще раза на кадр — ровно как при
+ * изменении размера. Раньше здесь этой защиты не было: каждый mousemove
+ * шёл через мост в Python отдельным вызовом, а мышь их сыплет сотнями в
+ * секунду. Пока ничего не происходит, это сходило с рук, но во время
+ * записи питон занят распознаванием, очередь вызовов не разгребается, и
+ * окно повисало прямо в руках у человека.
+ */
 function setupDrag() {
   let dragging = false;
   let originX = 0;
   let originY = 0;
+  let pendingX = 0;
+  let pendingY = 0;
+  let frame = null;
+
+  const flush = () => {
+    frame = null;
+    const dx = pendingX;
+    const dy = pendingY;
+    pendingX = 0;
+    pendingY = 0;
+    if (!dragging || (!dx && !dy)) return;
+    if (window.pywebview && window.pywebview.api && window.pywebview.api.move_window) {
+      window.pywebview.api.move_window(dx, dy);
+    }
+  };
 
   ui.titlebar.addEventListener('mousedown', (e) => {
     if (e.button !== 0 || e.target.closest('.no-drag')) return;
@@ -1444,18 +1468,21 @@ function setupDrag() {
 
   window.addEventListener('mousemove', (e) => {
     if (!dragging) return;
-    const dx = e.screenX - originX;
-    const dy = e.screenY - originY;
-    if (dx || dy) {
-      originX = e.screenX;
-      originY = e.screenY;
-      if (window.pywebview && window.pywebview.api) {
-        window.pywebview.api.move_window && window.pywebview.api.move_window(dx, dy);
-      }
-    }
+    pendingX += e.screenX - originX;
+    pendingY += e.screenY - originY;
+    originX = e.screenX;
+    originY = e.screenY;
+    if (!frame) frame = requestAnimationFrame(flush);
   });
 
-  window.addEventListener('mouseup', () => { dragging = false; });
+  window.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    // Последний кусочек пути: без него окно не доезжает до места,
+    // где человек отпустил кнопку.
+    flush();
+    dragging = false;
+    if (frame) { cancelAnimationFrame(frame); frame = null; }
+  });
 }
 
 /* --- Изменение размера окна --------------------------------------------- */
