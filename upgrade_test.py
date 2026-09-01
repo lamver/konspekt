@@ -34,14 +34,15 @@ def main() -> int:
         paths_mod.models_dir = lambda: models  # type: ignore[assignment]
         paths_mod.settings_path = lambda: tmp / "settings.json"  # type: ignore[assignment]
 
-        from app.asr import MODEL_FILES
+        from app.asr import MODEL_DIR_NAME, MODEL_FILES
         from app.audio import NullCapture
         from app.core.service import AppService
         from app.storage.db import Store
 
         # Модель «уже скачана» прошлой версией: кладём файлы на место.
+        (models / MODEL_DIR_NAME).mkdir(parents=True, exist_ok=True)
         for name in MODEL_FILES:
-            (models / "gigaam-v3-e2e" / name).write_bytes(b"x" * 16)
+            (models / MODEL_DIR_NAME / name).write_bytes(b"x" * 16)
         print(f"[ok] у пользователя уже лежат веса: {len(MODEL_FILES)} файлов")
 
         service = AppService(store=Store(str(tmp / "konspekt.db")), capture=NullCapture())

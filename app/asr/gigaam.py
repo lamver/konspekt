@@ -30,27 +30,42 @@ from .base import SAMPLE_RATE
 log = logging.getLogger(__name__)
 
 # Имя модели в каталоге onnx-asr и репозиторий на Hugging Face.
-MODEL_NAME = "gigaam-v3-e2e-ctc"
+#
+# Берём RNNT, а не CTC. Уши у них одни и те же, разница в том, как из
+# услышанного собираются буквы: CTC решает про каждый кусочек звука
+# отдельно и на трудной записи склеивает несуществующие слова
+# («сумасодия» вместо «с ума сойти», «лохо» вместо «плохо»). RNNT
+# помнит, что уже написал, и тянет к настоящим словам. Замер на живых
+# встречах: на чистой речи разницы почти нет, на трудной CTC выдумывает,
+# RNNT нет. Скорость та же (x11-12 быстрее реального времени на одном
+# ядре), вес тот же (214 МБ).
+MODEL_NAME = "gigaam-v3-e2e-rnnt"
 MODEL_REPO = "istupakov/gigaam-v3-onnx"
 QUANTIZATION = "int8"
 # Каталог с весами внутри models_dir(). Держим рядом с именем модели:
 # иначе при смене модели легко забыть поправить путь в сервисе.
-MODEL_DIR_NAME = "gigaam-v3-e2e"
+MODEL_DIR_NAME = "gigaam-v3-e2e-rnnt"
+# Папка весов прошлой модели. До 0.7.3 распознавала CTC-сборка, и её
+# файлы так и лежат у людей мёртвым грузом на 214 МБ. Подхватить их
+# нельзя, файлы другие, поэтому просто убираем.
+СТАРАЯ_ПАПКА_МОДЕЛИ = "gigaam-v3-e2e"
 # Короче этого модель отдаёт пустую строку. Дополняем тишиной до предела.
 MIN_INPUT_SECONDS = 6.0
 
 # Файлы, без которых модель не заработает. Список нужен и для скачивания,
 # и для проверки «а всё ли уже на диске».
 MODEL_FILES = (
-    "v3_e2e_ctc.int8.onnx",
-    "v3_e2e_ctc.yaml",
-    "v3_e2e_ctc_vocab.txt",
+    "v3_e2e_rnnt_encoder.int8.onnx",
+    "v3_e2e_rnnt_decoder.int8.onnx",
+    "v3_e2e_rnnt_joint.int8.onnx",
+    "v3_e2e_rnnt.yaml",
+    "v3_e2e_rnnt_vocab.txt",
     "config.json",
 )
 
 # Общий вес всех файлов. Нужен только чтобы показать честные проценты
 # до того, как сервер ответит с Content-Length.
-MODEL_TOTAL_BYTES = 224_724_330
+MODEL_TOTAL_BYTES = 226_421_849
 
 
 class ModelMissing(RuntimeError):
@@ -69,7 +84,7 @@ class ModelBroken(RuntimeError):
 class GigaamTranscriber:
     """Русский ASR. Один чанк на входе, один сегмент на выходе."""
 
-    name = "gigaam-v3-e2e-ctc"
+    name = "gigaam-v3-e2e-rnnt"
     languages = ("ru",)
 
     def __init__(self, model_dir: Path, auto_load: bool = True) -> None:

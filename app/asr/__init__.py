@@ -4,6 +4,7 @@ from .base import NullTranscriber, Transcriber, SAMPLE_RATE
 from .download import ModelDownloader
 from .gigaam import (
     MODEL_DIR_NAME,
+    СТАРАЯ_ПАПКА_МОДЕЛИ,
     MODEL_FILES,
     MODEL_REPO,
     MODEL_TOTAL_BYTES,
@@ -20,6 +21,7 @@ __all__ = [
     "ModelDownloader",
     "ModelMissing",
     "MODEL_DIR_NAME",
+    "СТАРАЯ_ПАПКА_МОДЕЛИ",
     "MODEL_REPO",
     "MODEL_FILES",
     "MODEL_TOTAL_BYTES",

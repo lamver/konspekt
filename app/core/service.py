@@ -22,6 +22,7 @@ import numpy as np
 
 from ..asr import (
     MODEL_DIR_NAME,
+    СТАРАЯ_ПАПКА_МОДЕЛИ,
     MODEL_FILES,
     MODEL_REPO,
     MODEL_TOTAL_BYTES,
@@ -156,6 +157,7 @@ class AppService:
         self.downloader = ModelDownloader(
             MODEL_REPO, MODEL_FILES, paths.models_dir() / MODEL_DIR_NAME
         )
+        self._убрать_прошлую_модель()
         self.active_meeting_id: str | None = None
         # Модель для саммари и чата. Сервер поднимается только когда
         # человек действительно что-то спросит.
@@ -203,6 +205,28 @@ class AppService:
         if not self.settings.auto_update:
             return
         self.updater.download_later(str(payload.get("latest") or ""))
+
+    def _убрать_прошлую_модель(self) -> None:
+        """Удалить веса модели, которой мы больше не пользуемся.
+
+        До 0.7.3 русскую речь распознавала CTC-сборка GigaAM. Она
+        путала похожие слова и на трудной записи выдавала несуществующие
+        («сумасодия» вместо «с ума сойти»), поэтому мы перешли на RNNT.
+        Файлы у них разные, подхватить старые нельзя, и без уборки они
+        так и лежали бы у человека мёртвым грузом на 214 МБ.
+        """
+        старая = paths.models_dir() / СТАРАЯ_ПАПКА_МОДЕЛИ
+        if not старая.is_dir():
+            return
+        try:
+            весило = sum(f.stat().st_size for f in старая.rglob("*") if f.is_file())
+            shutil.rmtree(старая)
+        except OSError:
+            # Не смогли — не беда: место занято, но работе не мешает.
+            log.warning("Не удалось убрать прошлую модель из %s", старая)
+            return
+        log.info("Убрана прошлая модель распознавания, освобождено %.0f МБ",
+                 весило / 1024 ** 2)
 
     def _prefetch_asr_model(self) -> None:
         """Начать загрузку весов в фоне сразу после запуска.
