@@ -98,6 +98,36 @@ def проверить() -> int:
     except Exception as беда:
         _проверить(False, f"файлы окна не читаются: {беда}")
 
+    # Настройки, доставшиеся от старых версий. Из-за chunk_seconds = 5.0
+    # в файле настроек три выпуска подряд не давали давним пользователям
+    # ничего: текст по-прежнему ждал секунды, потому что файл настроек
+    # сильнее умолчания в коде.
+    try:
+        import json
+        import tempfile
+        from pathlib import Path as _Path
+
+        from .core import paths as _paths
+        from .core import settings as _settings
+
+        with tempfile.TemporaryDirectory() as врем:
+            файл = _Path(врем) / "settings.json"
+            файл.write_text(
+                json.dumps({"audio": {"chunk_seconds": 5.0}}), encoding="utf-8"
+            )
+            было = _paths.settings_path
+            _paths.settings_path = lambda: файл  # type: ignore[assignment]
+            try:
+                с = _settings.load()
+            finally:
+                _paths.settings_path = было  # type: ignore[assignment]
+        _проверить(
+            с.audio.chunk_seconds <= 1.0,
+            "настройка от старой версии чинится, а не держит задержку",
+        )
+    except Exception as беда:
+        _проверить(False, f"проверка старых настроек не прошла: {беда}")
+
     # Окно: без него программа запустится и не покажет ничего.
     try:
         import webview  # noqa: F401
