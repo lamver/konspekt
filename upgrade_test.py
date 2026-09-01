@@ -83,7 +83,59 @@ def main() -> int:
         print("[ok] веса лежат в данных пользователя, установка их не затирает")
 
         service.shutdown()
-        print("\nОбновление не заставляет качать модель заново.")
+
+        # --- Настройки, доставшиеся от старой версии ---
+        #
+        # Самая дорогая находка: у человека, который пользовался
+        # Konspekt до 0.6.1, в settings.json лежит chunk_seconds = 5.0.
+        # Файл настроек сильнее умолчания в коде, поэтому уменьшение
+        # умолчания до 0.5 не давало ему ничего: и 0.6.1, и 0.7.0, и
+        # 0.7.1 у него вели себя ровно как раньше — текст ждал секунды.
+        # Проверяем на настоящем старом файле настроек, а не на объекте
+        # в памяти: ошибка была именно в чтении файла.
+        import json
+        from app.core import settings as settings_mod
+
+        старый = {
+            "audio": {"chunk_seconds": 5.0, "capture_mic": True},
+            "asr": {"language": "ru"},
+        }
+        (tmp / "settings.json").write_text(
+            json.dumps(старый, ensure_ascii=False), encoding="utf-8"
+        )
+        s = settings_mod.load()
+        assert s.audio.chunk_seconds <= 1.0, (
+            f"настройка от старой версии не починена: chunk_seconds="
+            f"{s.audio.chunk_seconds}, человек по-прежнему ждёт текст "
+            f"секундами, сколько ни обновляйся"
+        )
+        print(f"[ok] chunk_seconds от старой версии починен: 5.0 -> {s.audio.chunk_seconds}")
+
+        # Осознанный выбор пользователя не трогаем: чиним только то самое
+        # унаследованное значение, а не любую настройку не по вкусу.
+        (tmp / "settings.json").write_text(
+            json.dumps({"audio": {"chunk_seconds": 1.5}}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        assert settings_mod.load().audio.chunk_seconds == 1.5, (
+            "переписали значение, которое пользователь выставил сам"
+        )
+        print("[ok] выбранное пользователем значение не трогаем")
+
+        # Обратный конец: настройка должна доезжать до захвата звука.
+        # Починить чтение и забыть про использование — ровно тот же
+        # обрыв пути, что был с черновиками в 0.7.0.
+        import inspect
+        src = inspect.getsource(type(service)._start_capture) if hasattr(
+            type(service), "_start_capture"
+        ) else inspect.getsource(type(service))
+        assert "chunk_seconds=audio.chunk_seconds" in src, (
+            "настройка не доходит до захвата звука"
+        )
+        print("[ok] настройка доходит до захвата звука")
+
+        print("\nОбновление не заставляет качать модель заново,")
+        print("а настройки от старых версий чинятся при чтении.")
         return 0
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

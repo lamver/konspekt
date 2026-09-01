@@ -24,6 +24,15 @@ class WindowGeometry:
     sidebar_width: int = 240
 
 
+# До 0.6.1 звук доходил до распознавания кусками по 5 секунд, и это
+# число попало в settings.json у всех, кто пользовался программой
+# раньше. Уменьшение значения по умолчанию таких людей не спасало:
+# файл настроек всегда сильнее умолчания, и обновление до 0.6.1, 0.7.0
+# и 0.7.1 не меняло у них ровным счётом ничего. Поэтому старое значение
+# правится при чтении, один раз.
+УСТАРЕВШИЙ_ЧАНК = 5.0
+
+
 @dataclass
 class AudioSettings:
     """Что и с чего писать. id пустой — устройство по умолчанию."""
@@ -119,6 +128,14 @@ def load() -> Settings:
         raw = json.loads(path.read_text(encoding="utf-8"))
         window = WindowGeometry(**raw.pop("window", {}))
         audio = _section(AudioSettings, raw.pop("audio", {}))
+        if audio.chunk_seconds >= УСТАРЕВШИЙ_ЧАНК:
+            # Ровно то, из-за чего у давних пользователей текст
+            # по-прежнему появлялся только через несколько секунд.
+            log.info(
+                "Чиним унаследованный chunk_seconds %.1f -> %.1f",
+                audio.chunk_seconds, AudioSettings.chunk_seconds,
+            )
+            audio.chunk_seconds = AudioSettings.chunk_seconds
         asr = _section(AsrSettings, raw.pop("asr", {}))
         llm = _section(LlmSettings, raw.pop("llm", {}))
         known = {k: v for k, v in raw.items() if k in Settings.__dataclass_fields__}
