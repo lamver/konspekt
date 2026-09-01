@@ -112,4 +112,55 @@ res = det.detect(noise, 16000)
 assert res is None or res[1] >= MIN_CONFIDENCE
 print(f"[ok] на шуме ответ либо отсутствует, либо уверенный: {res}")
 
+# --- Регрессия: боевая встреча 30.08 (issue #2) ----------------------------
+# Вся встреча по-русски, но короткие фразы (в среднем 1.2с) при пороге 0.5
+# уверенно определялись как 24 разных языка. Проверяем на настоящих
+# репликах из базы, не на синтетике: если порог когда-нибудь снова
+# просядет, тест должен упасть раньше пользователя.
+import sqlite3
+import wave as _wave
+
+MEETING = "93b3a94f2bca4e39"
+audio_dir = paths.audio_dir() / MEETING
+if audio_dir.exists() and paths.db_path().exists():
+    db = sqlite3.connect(str(paths.db_path()))
+    db.row_factory = sqlite3.Row
+    segs = db.execute(
+        "SELECT speaker, start_s, end_s FROM transcript_segments"
+        " WHERE meeting_id=? ORDER BY start_s",
+        (MEETING,),
+    ).fetchall()
+
+    def _load_track(speaker: str):
+        files = sorted(audio_dir.glob(f"*-{speaker}.wav"))
+        chunks, sr = [], 16000
+        for f in files:
+            with _wave.open(str(f), "rb") as w:
+                sr = w.getframerate()
+                chunks.append(np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16))
+        return (np.concatenate(chunks) if chunks else np.zeros(0, dtype=np.int16)), sr
+
+    tracks = {sp: _load_track(sp) for sp in ("me", "them")}
+    ложных = 0
+    всего_ответов = 0
+    for s in segs:
+        pcm, sr = tracks[s["speaker"] if s["speaker"] == "me" else "them"]
+        if sr == 0 or pcm.size == 0:
+            continue
+        a, b = int(s["start_s"] * sr), int(s["end_s"] * sr)
+        piece = pcm[max(0, a):min(pcm.size, b)]
+        result = det.detect(piece, sr)
+        if result is None:
+            continue
+        всего_ответов += 1
+        if result[0] not in CYRILLIC_LANGS:
+            ложных += 1
+            print(f"  [!!] ложный язык {result} на 'русской' фразе {s['start_s']:.1f}с")
+    print(f"[ok] боевая встреча: {всего_ответов} ответов, ложных {ложных}")
+    # Не ноль: модель не обязана быть идеальной, но регресс на десятки
+    # ошибок (как было при пороге 0.5) должен ронять тест.
+    assert ложных <= 2, f"порог снова пропускает кашу языков: {ложных} ложных ответов"
+else:
+    print("[skip] боевая запись встречи 30.08 недоступна на этой машине")
+
 print("\nОпределение языка работает.")
