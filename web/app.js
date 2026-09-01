@@ -887,6 +887,9 @@ function appendSegment(seg, scroll = true) {
     const body = last.querySelector('.turn__text');
     body.textContent = `${body.textContent} ${seg.text}`.trim();
     last.dataset.end = seg.end;
+    // Блок склеен из нескольких реплик: чтобы поправить язык, надо
+    // знать номера всех, а не только первой.
+    last.dataset.ids = `${last.dataset.ids || ''} ${seg.id}`.trim();
   } else {
     const turn = document.createElement('div');
     turn.className = 'turn' + (isMe ? ' turn--me' : '');
@@ -896,6 +899,8 @@ function appendSegment(seg, scroll = true) {
     // сюда из поиска.
     turn.dataset.start = seg.start;
     turn.dataset.voice = seg.voice_id || '';
+    turn.dataset.ids = seg.id || '';
+    turn.dataset.lang = seg.lang || '';
 
     const head = document.createElement('div');
     head.className = 'turn__head';
@@ -932,8 +937,20 @@ function appendSegment(seg, scroll = true) {
     // чем кнопка, которая всегда отвечает «записи нет».
     play.hidden = state.hasAudio === false;
 
+    // Поправить язык фразы. Определитель языка ошибается редко, но
+    // одна испорченная реплика в часовой встрече заметна, а сделать с
+    // ней человеку было нечего.
+    const lang = document.createElement('button');
+    lang.className = 'turn__lang';
+    lang.type = 'button';
+    lang.title = 'Фраза распознана не на том языке?';
+    lang.textContent = (seg.lang || '').toUpperCase() || 'ЯЗ';
+    lang.addEventListener('click', () => pickLanguage(lang, turn));
+    lang.hidden = state.hasAudio === false;
+
     head.appendChild(who);
     head.appendChild(time);
+    head.appendChild(lang);
     head.appendChild(play);
 
     const text = document.createElement('div');
@@ -951,6 +968,104 @@ function appendSegment(seg, scroll = true) {
     const pane = ui.transcript.parentElement;
     const nearBottom = pane.scrollHeight - pane.scrollTop - pane.clientHeight < 80;
     if (nearBottom) pane.scrollTop = pane.scrollHeight;
+  }
+}
+
+// Языки, на которых можно пересчитать реплику. Спрашиваем у программы
+// один раз: список зависит от того, какие модели у неё есть.
+let LANGS = null;
+
+const LANG_NAMES = {
+  ru: 'Русский', en: 'Английский', de: 'Немецкий', fr: 'Французский',
+  es: 'Испанский', it: 'Итальянский', pt: 'Португальский', pl: 'Польский',
+  uk: 'Украинский', sr: 'Сербский', tr: 'Турецкий', nl: 'Нидерландский',
+};
+
+/**
+ * Поправить язык реплики.
+ *
+ * Автоматика ошибается редко, но метко: фраза уезжает в чужую модель и
+ * возвращается кашей. Человек говорит, на каком языке она была, и
+ * программа пересчитывает этот кусок записи заново.
+ */
+async function pickLanguage(button, turn) {
+  if (button.dataset.busy === '1') return;
+  const ids = (turn.dataset.ids || '').split(/\s+/).filter(Boolean);
+  if (!ids.length) return;
+
+  if (!LANGS) {
+    try {
+      LANGS = await api.transcription_languages();
+    } catch (e) {
+      LANGS = ['ru'];
+    }
+  }
+
+  const menu = document.createElement('div');
+  menu.className = 'lang-menu';
+  for (const code of LANGS) {
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'lang-menu__item';
+    item.textContent = LANG_NAMES[code] || code.toUpperCase();
+    if (code === turn.dataset.lang) item.classList.add('is-current');
+    item.addEventListener('click', async () => {
+      menu.remove();
+      await applyLanguage(button, turn, ids, code);
+    });
+    menu.appendChild(item);
+  }
+
+  // Меню закрывается кликом мимо: иначе оно висит поверх текста и мешает
+  // читать то самое место, ради которого его открыли.
+  const close = (e) => {
+    if (menu.contains(e.target) || e.target === button) return;
+    menu.remove();
+    document.removeEventListener('click', close, true);
+  };
+  document.addEventListener('click', close, true);
+
+  button.after(menu);
+}
+
+function showFailure(button, was, why) {
+  button.textContent = '—';
+  button.title = why;
+  button.classList.add('turn__lang--failed');
+  setTimeout(() => {
+    button.textContent = was;
+    button.title = 'Фраза распознана не на том языке?';
+    button.classList.remove('turn__lang--failed');
+  }, 2500);
+}
+
+async function applyLanguage(button, turn, ids, code) {
+  const was = button.textContent;
+  button.dataset.busy = '1';
+  button.textContent = '...';
+  const body = turn.querySelector('.turn__text');
+  const prevText = body.textContent;
+  try {
+    const parts = [];
+    for (const id of ids) {
+      const res = await api.retranscribe_segment(id, code);
+      if (res && res.text) parts.push(res.text);
+    }
+    if (parts.length) {
+      body.textContent = parts.join(' ');
+      turn.dataset.lang = code;
+      button.textContent = code.toUpperCase();
+    } else {
+      // Пересчитать не вышло: нет записи или модель промолчала. Текст
+      // не трогаем, иначе человек потеряет и то, что было.
+      body.textContent = prevText;
+      showFailure(button, was, 'Нет записи этой фразы, пересчитать нечего');
+    }
+  } catch (e) {
+    body.textContent = prevText;
+    showFailure(button, was, 'Пересчитать не удалось');
+  } finally {
+    button.dataset.busy = '';
   }
 }
 

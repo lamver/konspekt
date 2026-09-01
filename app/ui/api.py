@@ -59,6 +59,19 @@ class Api:
         """Кусок записи под репликой, чтобы переслушать спорную фразу."""
         return self._service.audio_clip(meeting_id, start, end, track)
 
+    def retranscribe_segment(self, segment_id: str, lang: str) -> dict[str, Any] | None:
+        """Пересчитать реплику на языке, который назвал человек.
+
+        Возвращает новый текст или None, если пересчитать не вышло: нет
+        записи, нет модели под язык, распознавание молчит. Интерфейс по
+        None показывает, что ничего не изменилось.
+        """
+        return self._service.retranscribe_segment(str(segment_id), str(lang))
+
+    def transcription_languages(self) -> list[str]:
+        """Языки, на которых программа умеет пересчитать реплику."""
+        return list(getattr(self._service.asr, "languages", ("ru",)))
+
     def storage_usage(self) -> dict[str, Any]:
         """Сколько места занимают записи и база.
 

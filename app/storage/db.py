@@ -543,6 +543,36 @@ class Store:
             for r in rows
         ]
 
+    def update_segment(self, segment_id: str, text: str, lang: str) -> None:
+        """Заменить текст и язык одной реплики.
+
+        Нужно для ручной правки языка: человек говорит, на каком языке
+        фраза была на самом деле, и она пересчитывается заново. Индекс
+        поиска обновляется триггером вместе с текстом.
+        """
+        with self._lock:
+            self._conn.execute(
+                "UPDATE transcript_segments SET text=?, lang=? WHERE id=?",
+                (text, lang, segment_id),
+            )
+            self._conn.commit()
+
+    def get_segment(self, segment_id: str) -> TranscriptSegment | None:
+        """Одна реплика по её номеру."""
+        with self._lock:
+            r = self._conn.execute(
+                "SELECT * FROM transcript_segments WHERE id=?", (segment_id,)
+            ).fetchone()
+        if r is None:
+            return None
+        return TranscriptSegment(
+            id=r["id"], meeting_id=r["meeting_id"],
+            speaker=Speaker(r["speaker"]), text=r["text"],
+            start=r["start_s"], end=r["end_s"], lang=r["lang"],
+            voice_id=r["voice_id"], person_id=r["person_id"],
+            voice_label=r["voice_label"],
+        )
+
     def relabel_segments(self, meeting_id: str, voice_id: str, label: str) -> int:
         """Переименовать участника во всех его репликах этой встречи."""
         with self._lock:

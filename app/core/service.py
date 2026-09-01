@@ -38,7 +38,7 @@ from ..asr.embedder import MODEL_FILES as EMBEDDER_FILES
 from ..asr.embedder import MODEL_REPO as EMBEDDER_REPO
 from ..asr.embedder import VoiceEmbedder
 from ..asr.langid import MODEL_DIR_NAME as LANGID_DIR_NAME
-from ..asr.langid import LanguageDetector
+from ..asr.langid import CYRILLIC_LANGS, LanguageDetector
 from ..asr.router import LanguageRouter
 from ..asr.whisper import DEFAULT_SIZE as WHISPER_DEFAULT_SIZE
 from ..asr.whisper import SIZES as WHISPER_SIZES
@@ -904,6 +904,80 @@ class AppService:
             "wav": base64.b64encode(buf.getvalue()).decode("ascii"),
             "duration": len(data) / 2 / rate,
         }
+
+    def retranscribe_segment(self, segment_id: str, lang: str) -> dict | None:
+        """Пересчитать одну реплику на указанном языке.
+
+        Защитная сетка на случай, когда автоматика всё же ошиблась с
+        языком. Порог уверенности и сверка по тексту закрывают почти все
+        случаи, но «почти» здесь недостаточно: одна испорченная фраза в
+        часовой встрече заметна, а исправить её человеку было нечем.
+
+        Звук берём из записи по времени реплики — тот же путь, что у
+        кнопки «переслушать». Значит работает только там, где запись
+        сохранена; у встреч без звука пересчитывать нечего.
+        """
+        seg = self.store.get_segment(segment_id)
+        if seg is None:
+            return None
+
+        engine = self._pick_engine(lang)
+        if engine is None:
+            log.info("Нет модели для языка %s, пересчёт невозможен", lang)
+            return None
+
+        pcm, rate = self._segment_pcm(seg)
+        if pcm is None:
+            return None
+
+        try:
+            куски = list(engine.transcribe(
+                pcm, sample_rate=rate, meeting_id=seg.meeting_id,
+                offset=seg.start, speaker=seg.speaker.value, lang=lang,
+            ))
+        except TypeError:
+            # У части распознавателей нет параметра языка: они его не
+            # выбирают, а знают заранее.
+            куски = list(engine.transcribe(
+                pcm, sample_rate=rate, meeting_id=seg.meeting_id,
+                offset=seg.start, speaker=seg.speaker.value,
+            ))
+        except Exception:
+            log.exception("Пересчёт реплики %s не удался", segment_id)
+            return None
+
+        текст = " ".join(к.text.strip() for к in куски if к.text.strip()).strip()
+        if not текст:
+            log.info("Пересчёт реплики %s дал пустой текст, оставляем как было",
+                     segment_id)
+            return None
+
+        self.store.update_segment(segment_id, текст, lang)
+        log.info("Реплика %s пересчитана как %s", segment_id, lang)
+        return {"id": segment_id, "text": текст, "lang": lang}
+
+    def _pick_engine(self, lang: str):
+        """Распознаватель под язык: русская модель или иноязычная."""
+        router = getattr(self.asr, "russian", None)
+        if router is None:
+            # Не маршрутизатор, а один распознаватель: он и решает.
+            return self.asr
+        if lang in CYRILLIC_LANGS:
+            return self.asr.russian
+        return self.asr.foreign
+
+    def _segment_pcm(self, seg) -> tuple:
+        """Звук реплики из записи встречи, как для прослушивания."""
+        clip = self.audio_clip(seg.meeting_id, seg.start, seg.end,
+                               seg.speaker.value)
+        if not clip or not clip.get("wav"):
+            log.info("Записи для реплики нет, пересчитывать нечего")
+            return None, 0
+        raw = base64.b64decode(clip["wav"])
+        with wave.open(io.BytesIO(raw), "rb") as w:
+            rate = w.getframerate()
+            data = w.readframes(w.getnframes())
+        return np.frombuffer(data, dtype=np.int16), rate
 
     def _delete_audio(self, meeting_id: str) -> None:
         """Убрать записи встречи с диска.
