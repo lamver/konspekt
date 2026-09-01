@@ -176,6 +176,49 @@ def check_forwarded_to_ui() -> None:
     print("[ok] новость об обновлении доезжает до окна")
 
 
+def check_keeps_watching() -> None:
+    """Программа, висящая в трее неделями, тоже узнаёт об обновлении.
+
+    Проверка версии шла только при запуске. Konspekt закрывают крестиком
+    в трей, а не выходом, поэтому такой человек не увидел бы ни одного
+    обновления, сколько их ни выпускай. Ждём не сутки: промежуток
+    пробуждения задаётся переменной окружения.
+    """
+    saved: list = []
+    service = FakeService()
+    events: list[dict] = []
+    off = bus.on(NEW_VERSION, events.append)
+
+    real_get = version_check.httpx.get
+    real_save = version_check.settings_mod.save
+    real_wake = version_check.WAKE_INTERVAL
+    version_check.httpx.get = lambda *a, **kw: fake_response({"version": "99.0.0"})
+    version_check.settings_mod.save = lambda s: saved.append(s)
+    version_check.WAKE_INTERVAL = 0.05
+    try:
+        checker = version_check.VersionChecker(service)
+        checker.watch()
+        # Ждём максимум секунду: будильник должен сработать сам.
+        deadline = time.time() + 1.0
+        while not events and time.time() < deadline:
+            time.sleep(0.02)
+        assert events, "программа проработала дольше промежутка и не проверила версию"
+
+        # И останавливается по команде, а не живёт вечным потоком.
+        checker.stop()
+        time.sleep(0.15)
+        было = len(events)
+        service.settings.last_version_check = 0  # разрешаем следующую проверку
+        time.sleep(0.15)
+        assert len(events) == было, "перепроверка продолжается после остановки"
+    finally:
+        version_check.httpx.get = real_get
+        version_check.settings_mod.save = real_save
+        version_check.WAKE_INTERVAL = real_wake
+        off()
+    print("[ok] долго живущая программа сама перепроверяет обновления")
+
+
 def main() -> int:
     check_versions()
     check_notifies()
@@ -183,6 +226,7 @@ def main() -> int:
     check_disabled()
     check_daily()
     check_survives_junk()
+    check_keeps_watching()
     check_forwarded_to_ui()
     check_published_matches_build()
     print("\nВсе проверки пройдены.")

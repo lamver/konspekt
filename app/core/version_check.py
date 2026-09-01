@@ -44,6 +44,11 @@ URL = os.environ.get(
 )
 USER_AGENT = f"Konspekt/{__version__} ({platform.system()} {platform.machine()})"
 CHECK_INTERVAL = 86400  # сутки
+# Как часто просыпаться и смотреть, не пора ли проверить снова.
+# Сама проверка всё равно ходит в сеть не чаще CHECK_INTERVAL, это
+# лишь будильник: без него программа, висящая в трее неделями,
+# спрашивала про обновления ровно один раз, при запуске.
+WAKE_INTERVAL = float(os.environ.get("KONSPEKT_VERSION_WAKE", 3600))
 TIMEOUT = 8.0
 
 
@@ -83,6 +88,8 @@ class VersionChecker:
     def __init__(self, service: "AppService") -> None:
         self._service = service
         self._thread: threading.Thread | None = None
+        self._loop: threading.Thread | None = None
+        self._stop = threading.Event()
 
     def check_later(self) -> None:
         """Запустить проверку в фоне, не блокируя старт."""
@@ -90,6 +97,30 @@ class VersionChecker:
             return
         self._thread = threading.Thread(target=self._check, daemon=True, name="version")
         self._thread.start()
+
+    def watch(self) -> None:
+        """Просыпаться и перепроверять, пока программа живёт.
+
+        Проверка при запуске закрывает только тех, кто перезапускается.
+        Konspekt закрывается крестиком в трей и может работать неделями:
+        такой человек не узнавал о новой версии вовсе, сколько её ни
+        выпускай. Ходить в сеть чаще от этого не станем, `_check` сам
+        соблюдает суточный промежуток.
+        """
+        if self._loop is not None and self._loop.is_alive():
+            return
+        self._loop = threading.Thread(
+            target=self._watch_loop, daemon=True, name="version-watch"
+        )
+        self._loop.start()
+
+    def _watch_loop(self) -> None:
+        while not self._stop.wait(WAKE_INTERVAL):
+            self.check_later()
+
+    def stop(self) -> None:
+        """Прекратить перепроверку: программа закрывается."""
+        self._stop.set()
 
     def _check(self) -> None:
         settings = self._service.settings
