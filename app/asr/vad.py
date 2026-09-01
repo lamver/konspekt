@@ -29,6 +29,8 @@ MIN_SPEECH = 0.35             # короче этого — щелчок, а н�
 MAX_SEGMENT = 18.0            # принудительная резка, чтобы не копить вечно, с
 PAD = 0.15                    # прихватываем немного до и после, с
 QUIET_SEARCH = 2.0            # где искать тихий стык при резке длинной речи, с
+PEEK_EVERY = 1.0              # как часто показывать черновик идущей речи, с
+PEEK_MIN = 0.6                # короче этого показывать нечего, с
 NOISE_MARGIN = 3.0            # во сколько раз речь громче фона
 ABS_FLOOR = 0.004             # ниже этого молчим даже в полной тишине
 NOISE_CEILING = 0.05          # выше этого «фон» уже не фон, а голос
@@ -65,6 +67,7 @@ class SpeechSegmenter:
     _in_speech: bool = False
     _speech_start: int = 0            # индекс кадра, где началась речь
     _silence_run: int = 0             # подряд идущих тихих кадров
+    _peeked: int = 0                  # сколько кадров речи уже показали
 
     # --- внутреннее ------------------------------------------------------
 
@@ -112,12 +115,18 @@ class SpeechSegmenter:
             self._noise = float(np.percentile(self._quiet, 10))
         return loud
 
-    def _cut(self, start_frame: int, end_frame: int) -> Speech | None:
-        """Вырезать кусок буфера по номерам кадров, с запасом по краям."""
+    def _cut(self, start_frame: int, end_frame: int,
+             pad: bool = True) -> Speech | None:
+        """Вырезать кусок буфера по номерам кадров, с запасом по краям.
+
+        `pad=False` для черновика идущей речи: справа добавлять нечего,
+        там ещё не сказано, а лишний хвост тишины модель принимает за
+        конец фразы и дописывает точку посреди слова.
+        """
         n = self._frame
-        pad = int(PAD * self.sample_rate)
-        a = max(0, start_frame * n - pad)
-        b = min(len(self._buf), end_frame * n + pad)
+        pad_n = int(PAD * self.sample_rate) if pad else 0
+        a = max(0, start_frame * n - pad_n)
+        b = min(len(self._buf), end_frame * n + pad_n)
         # Меряем речь, а не кусок: PAD добавляет 0.3с с двух сторон, и
         # при сравнении длины вместе с ним порог 0.35с пропускал всплеск
         # в 0.05с звука. До модели доезжала крупица, а обратно — огрызок
@@ -202,6 +211,7 @@ class SpeechSegmenter:
                     self._in_speech = True
                     self._speech_start = idx
                     self._silence_run = 0
+                    self._peeked = 0
                 continue
 
             if loud:
@@ -224,6 +234,7 @@ class SpeechSegmenter:
                 found.append((self._speech_start, end))
                 self._speech_start = end
                 self._silence_run = 0
+                self._peeked = 0
 
         self._seen = total
 
@@ -243,6 +254,38 @@ class SpeechSegmenter:
                 self._drop_before((len(self._buf) - keep) // self._frame)
         return out
 
+    def peek(self) -> Speech | None:
+        """Показать речь, которая ещё идёт.
+
+        Человек говорит, а экран пуст: фраза отдаётся только после паузы,
+        и на длинной реплике кажется, что программа не работает. Здесь мы
+        отдаём то, что уже сказано, не трогая накопленное: настоящая
+        фраза придёт целиком, когда человек договорит, и заменит собой
+        черновик.
+
+        Возвращаем None, когда показывать нечего: речь не идёт, с прошлого
+        раза добавилось слишком мало или речь совсем короткая. Дёргать
+        модель ради полуслова дороже, чем подождать.
+        """
+        if not self._in_speech:
+            return None
+        сейчас = len(self._buf) // self._frame
+        # Считаем от начала фразы, а не по номеру кадра в буфере: буфер
+        # обрезается после каждой готовой фразы, и абсолютная нумерация
+        # уезжает. На этом черновики молчали почти всю запись.
+        кадров = сейчас - self._speech_start
+        if кадров < int(PEEK_MIN * 1000 / FRAME_MS):
+            return None
+        # Первый черновик — сразу, как только есть что показать. Ждать
+        # ради него полный шаг значит вернуть ту самую паузу, из-за
+        # которой всё затевалось.
+        шаг = int(PEEK_EVERY * 1000 / FRAME_MS)
+        if self._peeked and кадров - self._peeked < шаг:
+            return None
+        self._peeked = кадров
+        # Без PAD: хвост черновика всё равно уточнится следующим показом.
+        return self._cut(self._speech_start, сейчас, pad=False)
+
     def flush(self) -> list[Speech]:
         """Отдать недоговорённое. Зовём по кнопке «стоп»."""
         out: list[Speech] = []
@@ -261,5 +304,6 @@ class SpeechSegmenter:
         self._in_speech = False
         self._silence_run = 0
         self._speech_start = 0
+        self._peeked = 0
         self._noise = 0.0
         self._quiet.clear()

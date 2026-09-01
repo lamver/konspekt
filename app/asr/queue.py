@@ -30,6 +30,10 @@ log = logging.getLogger(__name__)
 
 # Примерно две минуты речи в ожидании. Дальше отставание уже не догнать.
 MAX_PENDING = 48
+# Насколько занятой должна быть очередь, чтобы черновики не слались.
+# Настоящие реплики всегда важнее: лучше показать текст на секунду
+# позже, чем задержать то, что пойдёт в базу.
+DRAFT_SKIP_AT = 2
 
 
 @dataclass
@@ -38,6 +42,10 @@ class Job:
     speaker: str
     pcm: np.ndarray
     offset: float
+    # Черновик идущей речи: показать и забыть. В базу не идёт, говорящего
+    # не ищет, и его всегда можно выбросить — настоящая фраза придёт
+    # следом и заменит его целиком.
+    draft: bool = False
 
 
 class TranscriptionQueue:
@@ -52,6 +60,7 @@ class TranscriptionQueue:
         self,
         transcriber: Transcriber,
         on_segment: Callable[[TranscriptSegment], None],
+        on_draft: Callable[[TranscriptSegment], None] | None = None,
         sample_rate: int = SAMPLE_RATE,
         use_vad: bool = True,
         embedder: VoiceEmbedder | None = None,
@@ -60,6 +69,9 @@ class TranscriptionQueue:
     ) -> None:
         self.transcriber = transcriber
         self.on_segment = on_segment
+        # Черновики показываются мимо базы. Не задан — программа работает
+        # ровно как раньше, текст появляется после паузы.
+        self.on_draft = on_draft
         self.sample_rate = sample_rate
         self.use_vad = use_vad
         # Веса могут быть ещё не скачаны. Ждём их здесь, в своём потоке:
@@ -144,6 +156,38 @@ class TranscriptionQueue:
             self._put(Job(meeting_id, speaker, pcm, offset), block)
         for piece in pieces:
             self._put(Job(meeting_id, speaker, piece.pcm, piece.offset), block)
+
+        # Человек всё ещё говорит: покажем, что уже сказано, чтобы экран
+        # не стоял пустым. Только для живой записи: при разборе файла
+        # показывать некому, а лишний счёт замедлит импорт вдвое.
+        if self.on_draft is not None and not block:
+            self._peek(meeting_id, speaker)
+
+
+    def _peek(self, meeting_id: str, speaker: str) -> None:
+        """Отправить черновик идущей речи, если пора.
+
+        Очередь может быть занята настоящими фразами: тогда черновик
+        просто пропускаем. Он не ценен — через секунду будет следующий,
+        а вставать в очередь перед настоящей репликой ему нельзя.
+        """
+        try:
+            with self._vad_lock:
+                vad = self._vad.get(speaker)
+                piece = vad.peek() if vad is not None else None
+            if piece is None:
+                return
+            if self._queue.qsize() > DRAFT_SKIP_AT:
+                return
+            try:
+                self._queue.put_nowait(
+                    Job(meeting_id, speaker, piece.pcm, piece.offset, draft=True)
+                )
+            except queue.Full:
+                pass
+        except Exception:
+            # Черновик — украшение. Ни одна его беда не стоит записи.
+            log.exception("Не удалось показать черновик речи")
 
     @staticmethod
     def _as_float(pcm: np.ndarray) -> np.ndarray:
@@ -241,6 +285,13 @@ class TranscriptionQueue:
                     speaker=job.speaker,
                 )
                 for segment in segments:
+                    if job.draft:
+                        # Черновик: показать и забыть. Ни в базу, ни в
+                        # поиск говорящего — отпечаток голоса по куску
+                        # недоговорённой фразы всё равно ненадёжен.
+                        if self.on_draft is not None:
+                            self.on_draft(segment)
+                        continue
                     self._identify(segment, job)
                     self.on_segment(segment)
             except Exception:

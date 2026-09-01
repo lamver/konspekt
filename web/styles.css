@@ -1460,3 +1460,30 @@ body.is-resizing * { user-select: none !important; }
   white-space: pre;
   user-select: text;
 }
+
+/* Речь, которую человек ещё не договорил. Бледнее готовых реплик и без
+   выделения: это предположение программы, а не текст встречи. */
+.turn--draft {
+  opacity: 0.62;
+}
+
+.turn--draft .turn__text {
+  font-style: italic;
+  user-select: none;
+}
+
+/* Мигающая чёрточка в конце: видно, что программа слушает дальше. */
+.turn--draft .turn__text::after {
+  content: '';
+  display: inline-block;
+  width: 2px;
+  height: 0.95em;
+  margin-left: 3px;
+  vertical-align: text-bottom;
+  background: currentColor;
+  animation: draft-caret 1s steps(2, start) infinite;
+}
+
+@keyframes draft-caret {
+  to { visibility: hidden; }
+}

@@ -52,6 +52,8 @@ RECORDING_STOPPED = "recording.stopped"
 RECORDING_LEVEL = "recording.level"
 RECORDING_ERROR = "recording.error"
 TRANSCRIPT_SEGMENT = "transcript.segment"
+# Черновик речи, которая ещё идёт: показать и заменить настоящей.
+TRANSCRIPT_DRAFT = "transcript.draft"
 MODEL_DOWNLOAD = "model.download"
 # Импорт готовых записей: список файлов целиком и прогресс по одному.
 IMPORT_CHANGED = "import.changed"

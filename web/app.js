@@ -87,6 +87,9 @@ window.__konspekt_event = function (payload) {
     case 'recording.stopped':
       state.isRecording = false;
       state.recordingId = null;
+      // Запись кончилась: недоговорённое дошлётся настоящими репликами,
+      // а висящий черновик — это текст, который уже никогда не уточнится.
+      clearDraft();
       // Запись только что появилась, значит и переслушивать теперь есть
       // что: иначе кнопки не было бы до перехода на другую встречу.
       if (payload.meeting_id === state.currentId) state.hasAudio = true;
@@ -117,7 +120,16 @@ window.__konspekt_event = function (payload) {
     case 'transcript.segment':
       // Реплика распознана: показываем сразу, если открыта её встреча.
       if (payload.segment && payload.segment.meeting_id === state.currentId) {
+        // Готовая реплика приходит на смену черновику того же куска речи.
+        clearDraft(payload.segment.speaker);
         appendSegment(payload.segment);
+      }
+      break;
+    case 'transcript.draft':
+      // Человек ещё говорит: показываем сказанное, чтобы экран не стоял
+      // пустым всю длинную фразу.
+      if (payload.segment && payload.segment.meeting_id === state.currentId) {
+        showDraft(payload.segment);
       }
       break;
     case 'model.download':
@@ -793,8 +805,69 @@ function revealTranscriptAt(start) {
 
 /* --- Транскрипт --------------------------------------------------------- */
 
+/* --- Речь, которая ещё идёт ---------------------------------------------- */
+
+// Черновик на каждую дорожку: собеседник и микрофон говорят одновременно,
+// и один черновик затирал бы другой.
+const drafts = new Map();
+
+/**
+ * Показать речь, которую человек ещё не договорил.
+ *
+ * Виден бледнее готовых реплик и не даёт себя выделить: это ещё не текст
+ * встречи, а предположение программы. Настоящая реплика придёт следом и
+ * встанет на его место.
+ */
+function showDraft(seg) {
+  if (!seg.text) return;
+  let turn = drafts.get(seg.speaker);
+  if (!turn) {
+    turn = document.createElement('div');
+    turn.className = 'turn turn--draft' + (seg.speaker === 'me' ? ' turn--me' : '');
+
+    const head = document.createElement('div');
+    head.className = 'turn__head';
+    const who = document.createElement('span');
+    who.className = 'turn__who turn__who--plain';
+    who.textContent = seg.speaker === 'me' ? 'Я' : 'Собеседник';
+    head.appendChild(who);
+
+    const body = document.createElement('div');
+    body.className = 'turn__text';
+    turn.appendChild(head);
+    turn.appendChild(body);
+    ui.transcript.appendChild(turn);
+    drafts.set(seg.speaker, turn);
+  }
+  turn.querySelector('.turn__text').textContent = seg.text;
+  updateTranscriptEmpty();
+
+  // Прокручиваем только если человек и так внизу: иначе выдернем его из
+  // места, которое он читает.
+  const pane = ui.transcript.parentElement;
+  if (pane.scrollHeight - pane.scrollTop - pane.clientHeight < 120) {
+    pane.scrollTop = pane.scrollHeight;
+  }
+}
+
+/** Убрать черновик дорожки: пришла готовая реплика или встреча кончилась. */
+function clearDraft(speaker) {
+  if (speaker === undefined) {
+    for (const turn of drafts.values()) turn.remove();
+    drafts.clear();
+    return;
+  }
+  const turn = drafts.get(speaker);
+  if (turn) {
+    turn.remove();
+    drafts.delete(speaker);
+  }
+}
+
 /** Отрисовать транскрипт встречи целиком. */
 function renderTranscript(segments) {
+  // Черновики принадлежали прошлой встрече: их узлы уже не в дереве.
+  drafts.clear();
   ui.transcript.innerHTML = '';
   for (const seg of segments) appendSegment(seg, false);
   updateTranscriptEmpty();

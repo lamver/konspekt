@@ -74,6 +74,7 @@ from ..core.events import (
     SUMMARY_ERROR,
     SUMMARY_READY,
     SUMMARY_STATUS,
+    TRANSCRIPT_DRAFT,
     TRANSCRIPT_SEGMENT,
     bus,
 )
@@ -135,6 +136,7 @@ class AppService:
         self.asr_queue = TranscriptionQueue(
             self.transcriber,
             self._on_segment,
+            on_draft=self._on_draft,
             embedder=self.embedder,
             roster=self.roster,
             # Веса качаются при первой же реплике, а не при установке:
@@ -321,6 +323,18 @@ class AppService:
             log.exception("Не удалось прочитать транскрипт встречи %s", meeting_id)
             return 0.0
         return max((s.end for s in segments), default=0.0)
+
+    def _on_draft(self, segment: TranscriptSegment) -> None:
+        """Черновик идущей речи: только на экран, мимо базы.
+
+        Человек говорит, а текст появляется лишь после паузы: на длинной
+        фразе кажется, что программа не работает. Показываем сказанное на
+        ходу. Черновик живёт до конца фразы, потом на его месте появится
+        настоящая реплика — она и попадёт в базу, поиск и саммари.
+        """
+        if not segment.text or not segment.text.strip():
+            return
+        bus.emit(TRANSCRIPT_DRAFT, {"segment": segment.to_dict()})
 
     def _on_segment(self, segment: TranscriptSegment) -> None:
         """Распознанный кусок: в базу и сразу во фронт."""
