@@ -1,7 +1,6 @@
 ﻿__pycache__/
 *.py[cod]
 .venv/
-uv.lock
 
 # Локальные данные и веса моделей
 models/
