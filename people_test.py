@@ -50,6 +50,10 @@ for p in svc.store.list_people():
     svc.store.delete_person(p["id"] if isinstance(p, dict) else p.id)
 
 emb = svc.embedder
+if not emb.is_downloaded():
+    print("[пропуск] модель различения голосов не скачана")
+    svc.shutdown()
+    raise SystemExit(0)
 emb.load()
 
 

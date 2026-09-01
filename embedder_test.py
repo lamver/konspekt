@@ -48,7 +48,9 @@ print("голоса в системе:", names)
 assert len(names) >= 2, "нужно хотя бы два голоса синтезатора"
 
 emb = VoiceEmbedder(paths.models_dir() / "wespeaker")
-assert emb.is_downloaded(), "модель эмбеддера не скачана"
+if not emb.is_downloaded():
+    print("[пропуск] модель эмбеддера не скачана")
+    raise SystemExit(0)
 emb.load()
 print(f"[ok] модель загружена, вход: {emb._input_name}")
 

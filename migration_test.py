@@ -2,7 +2,6 @@
 
 import testenv  # noqa: F401  русский вывод в консоли Windows
 
-import shutil
 import sqlite3
 import tempfile
 from pathlib import Path
@@ -16,8 +15,45 @@ from app.storage.db import SCHEMA_VERSION, Store
 src = paths.db_path()
 print("боевая база:", src, src.exists())
 
+# Смысл теста — проверить миграцию на настоящей базе. Если программой
+# ещё не пользовались (чистая машина, CI), мигрировать нечего.
+#
+# Существования файла мало: соседний тест мог оставить пустую заготовку
+# базы, где ещё нет ни одной таблицы. Спрашиваем саму базу, что в ней
+# есть, а не файловую систему.
+def таблицы_есть(путь) -> bool:
+    if not путь.exists() or путь.stat().st_size == 0:
+        return False
+    try:
+        con = sqlite3.connect(f"file:{путь}?mode=ro", uri=True)
+        try:
+            есть = con.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' "
+                "AND name='meetings'"
+            ).fetchone()
+        finally:
+            con.close()
+        return есть is not None
+    except sqlite3.Error:
+        return False
+
+
+if not таблицы_есть(src):
+    print("[пропуск] боевой базы нет, миграцию проверять не на чем")
+    raise SystemExit(0)
+
 tmp = Path(tempfile.mkdtemp()) / "copy.db"
-shutil.copy(src, tmp)
+# Копируем базу средствами sqlite, а не файловой системой. SQLite здесь
+# работает в режиме WAL: свежие записи лежат в соседнем konspekt.db-wal,
+# и обычное копирование одного файла берёт только то, что успело
+# слиться на диск. На боевой базе это давало заниженные цифры «до
+# миграции», а на свежей — копию вообще без единой таблицы.
+источник = sqlite3.connect(f"file:{src}?mode=ro", uri=True)
+приёмник = sqlite3.connect(str(tmp))
+with приёмник:
+    источник.backup(приёмник)
+приёмник.close()
+источник.close()
 
 # Что было до миграции
 con = sqlite3.connect(tmp)
@@ -53,6 +89,39 @@ assert sample == after_sample, "тексты сегментов изменили
 print("[ok] тексты старых реплик на месте")
 assert {"voice_id", "person_id", "voice_label"} <= cols, f"колонок нет: {cols}"
 print("[ok] новые колонки добавлены к существующей таблице")
+
+# --- Подъём со старой версии --------------------------------------------
+# Выше база уже была текущей версии, и мигрировать в ней было нечего:
+# проверка «версия стала правильной» проходила сама собой, даже если
+# миграция вообще ничего не делает. Поэтому отдельно берём копию,
+# объявляем её старой и смотрим, что схему действительно подняли.
+старая = tmp.parent / "старая.db"
+источник = sqlite3.connect(f"file:{tmp}?mode=ro", uri=True)
+приёмник = sqlite3.connect(str(старая))
+with приёмник:
+    источник.backup(приёмник)
+приёмник.execute("PRAGMA user_version=1")
+приёмник.commit()
+приёмник.close()
+источник.close()
+
+было_встреч = sqlite3.connect(str(старая)).execute(
+    "SELECT COUNT(*) FROM meetings").fetchone()[0]
+
+старый_store = Store(str(старая))
+con = sqlite3.connect(старая)
+стало_версия = con.execute("PRAGMA user_version").fetchone()[0]
+стало_встреч = con.execute("SELECT COUNT(*) FROM meetings").fetchone()[0]
+con.close()
+
+assert стало_версия == SCHEMA_VERSION, (
+    f"база версии 1 осталась на версии {стало_версия}: обновление у "
+    f"пользователя не довело схему до {SCHEMA_VERSION}"
+)
+assert стало_встреч == было_встреч, (
+    f"при подъёме со старой версии встреч стало {стало_встреч} вместо {было_встреч}"
+)
+print(f"[ok] база версии 1 поднята до {стало_версия}, встречи целы")
 
 # Старые сегменты читаются, и говорящий у них ровно тот, что лежит в
 # базе. Раньше здесь стояло «у первой реплики говорящий пуст», но в

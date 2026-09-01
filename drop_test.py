@@ -7,6 +7,7 @@
 что нужно.
 """
 
+import time
 import testenv  # noqa: F401  русский вывод в консоли Windows
 
 import os
@@ -69,6 +70,17 @@ print("[ok] бросок без файлов ничего не добавляе�
 
 service.importer.stop()
 service.shutdown()
-db_file.unlink(missing_ok=True)
-good.unlink(missing_ok=True)
+
+# Windows не даёт удалить файл, пока его кто-то держит. Ввоз мог не
+# успеть отпустить наш образец, и уборка роняла уже пройденный тест.
+def убрать(путь):
+    for _ in range(20):
+        try:
+            путь.unlink(missing_ok=True)
+            return
+        except PermissionError:
+            time.sleep(0.1)
+
+убрать(db_file)
+убрать(good)
 print("\nПриём брошенных файлов работает.")
