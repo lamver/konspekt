@@ -30,7 +30,7 @@ from ..core.models import (
 
 log = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS meetings (
@@ -213,7 +213,40 @@ class Store:
             # нет: без этого кнопка «переслушать» молчала бы на всём архиве.
             self._index_existing_audio()
 
+        if was < 7:
+            # В архиве остались реплики с ярлыком «УК» или «БЕ», хотя
+            # текст у них русский. Определитель языка часто слышит в
+            # русской речи украинскую, а отправить её всё равно некуда,
+            # кроме русской модели: что бы ни послышалось, текст выходит
+            # русским. Ярлык при этом сохранялся тот, что послышался, и
+            # человек видел в расшифровке язык, которого там нет.
+            self._исправить_ложные_языки()
+
         self.search_ready = self._init_search(rebuild=was < 5)
+
+    def _исправить_ложные_языки(self) -> None:
+        """Снять ярлык чужого языка с реплик, которые распознала русская модель.
+
+        Кириллические соседи русского (uk, be, bg, mk, sr) уходят в
+        GigaAM, а он говорит только по-русски. Значит текст такой
+        реплики русский, и ярлык нужно поправить. Латиницу не трогаем:
+        там реплику и правда распознавал Whisper, и его ответ осмыслен.
+        """
+        with self._lock:
+            похожие = ("uk", "be", "bg", "mk", "sr")
+            вопросы = ",".join("?" * len(похожие))
+            сколько = self._conn.execute(
+                f"SELECT COUNT(*) FROM transcript_segments WHERE lang IN ({вопросы})",
+                похожие,
+            ).fetchone()[0]
+            if not сколько:
+                return
+            self._conn.execute(
+                f"UPDATE transcript_segments SET lang='ru' WHERE lang IN ({вопросы})",
+                похожие,
+            )
+            self._conn.commit()
+        log.info("Поправлен язык у %d реплик: их распознавала русская модель", сколько)
 
     def _index_existing_audio(self) -> None:
         """Записать в базу файлы уже записанных встреч.
