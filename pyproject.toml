@@ -24,12 +24,14 @@ dependencies = [
 [project.scripts]
 konspekt = "app.__main__:main"
 
-# Нужны только тестам. В приложение не попадают: fonttools читает шрифты
-# ради проверки кириллицы, самой программе это не требуется.
+# Нужны разработке, но не приложению: fonttools/brotli — тестам (проверка
+# кириллицы в шрифтах), pyinstaller/pywin32 — сборке установщика.
 [dependency-groups]
 dev = [
     "fonttools>=4.60",
     "brotli>=1.1",
+    "pyinstaller>=6.22",
+    "pywin32>=306; sys_platform == 'win32'",
 ]
 
 [build-system]
