@@ -27,6 +27,7 @@ FAST = [
     "router_test.py",
     "vad_test.py",
     "relang_test.py",
+    "langui_test.py",
     "langid_test.py",
     "voices_test.py",
     "embedder_test.py",
