@@ -28,6 +28,7 @@ SILENCE_TAIL = 0.6            # сколько тишины считаем ко�
 MIN_SPEECH = 0.35             # короче этого — щелчок, а не речь, с
 MAX_SEGMENT = 18.0            # принудительная резка, чтобы не копить вечно, с
 PAD = 0.15                    # прихватываем немного до и после, с
+QUIET_SEARCH = 2.0            # где искать тихий стык при резке длинной речи, с
 NOISE_MARGIN = 3.0            # во сколько раз речь громче фона
 ABS_FLOOR = 0.004             # ниже этого молчим даже в полной тишине
 NOISE_CEILING = 0.05          # выше этого «фон» уже не фон, а голос
@@ -117,12 +118,43 @@ class SpeechSegmenter:
         pad = int(PAD * self.sample_rate)
         a = max(0, start_frame * n - pad)
         b = min(len(self._buf), end_frame * n + pad)
-        if b - a < int(self.min_speech * self.sample_rate):
+        # Меряем речь, а не кусок: PAD добавляет 0.3с с двух сторон, и
+        # при сравнении длины вместе с ним порог 0.35с пропускал всплеск
+        # в 0.05с звука. До модели доезжала крупица, а обратно — огрызок
+        # слова вроде «са» или «Д.».
+        if (end_frame - start_frame) * n < int(self.min_speech * self.sample_rate):
             return None
         return Speech(
             pcm=self._buf[a:b].copy(),
             offset=self._buf_offset + a / self.sample_rate,
         )
+
+    def _тихая_точка(self, start: int, end: int) -> int:
+        """Кадр с самым тихим местом в конце длинной речи.
+
+        Когда человек говорит без пауз дольше max_segment, резать всё
+        равно приходится. Вслепую по таймеру — значит ровно посередине
+        слова: на боевой записи так получилось 172 реплики, где следующая
+        начиналась огрызком («П прогон», «Кз Электрогриль»). Полной паузы
+        там нет, но есть места потише: стык слов, вдох. Ищем самое тихое
+        место в последних секундах куска и режем там.
+
+        Окно поиска — QUIET_SEARCH секунд. Меньше секунды может не
+        застать ни одного стыка (слово окажется длиннее окна), а слишком
+        большое сдвигает резку далеко назад и зря дробит речь.
+        """
+        окно = max(1, int(QUIET_SEARCH * 1000 / FRAME_MS))
+        искать_от = max(start + 1, end - окно)
+        if искать_от >= end:
+            return end
+        # Громкость считаем по тем же кадрам буфера, что и при разборе.
+        n = self._frame
+        звук = self._buf[искать_от * n: end * n]
+        кадры = len(звук) // n
+        if кадры < 1:
+            return end
+        громкость = self._energy(звук[: кадры * n])
+        return искать_от + int(np.argmin(громкость))
 
     def _drop_before(self, frame: int) -> None:
         """Забыть всё до кадра: обработанное держать незачем."""
@@ -178,10 +210,19 @@ class SpeechSegmenter:
                 self._silence_run += 1
 
             long_enough = idx - self._speech_start >= max_frames
-            if self._silence_run >= tail_frames or long_enough:
+            if self._silence_run >= tail_frames:
                 end = idx - self._silence_run if self._silence_run else idx
                 found.append((self._speech_start, end))
                 self._in_speech = False
+                self._silence_run = 0
+            elif long_enough:
+                # Человек говорит без пауз дольше max_segment. Режем по
+                # самому тихому месту, а не по таймеру, и продолжаем
+                # считать речь идущей: иначе остаток фразы до следующего
+                # громкого кадра потеряется вовсе.
+                end = self._тихая_точка(self._speech_start, idx)
+                found.append((self._speech_start, end))
+                self._speech_start = end
                 self._silence_run = 0
 
         self._seen = total
