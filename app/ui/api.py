@@ -120,6 +120,14 @@ class Api:
     def set_asr_enabled(self, enabled: bool) -> dict[str, Any]:
         return self._service.set_asr_enabled(enabled)
 
+    def asr_settings(self) -> dict[str, Any]:
+        """Язык распознавания, размер Whisper и что из этого скачано."""
+        return self._service.asr_settings()
+
+    def save_asr_settings(self, fields: dict[str, Any]) -> dict[str, Any]:
+        """Сохранить настройки распознавания и применить их сразу."""
+        return self._service.save_asr_settings(**fields)
+
     # --- импорт готовых записей -------------------------------------------
 
     def import_files(self, paths: list[str]) -> list[dict[str, Any]]:

@@ -1533,6 +1533,7 @@ async function showVersion() {
 
 const PREFS_TITLES = {
   audio: 'Звук',
+  speech: 'Распознавание',
   voices: 'Голоса',
   notes: 'Заметки',
   look: 'Оформление',
@@ -1555,6 +1556,83 @@ function showPrefsTab(tab) {
   ui.prefsTitle.textContent = PREFS_TITLES[tab];
   if (tab === 'about') loadAbout();
   if (tab === 'data') loadUsage();
+  if (tab === 'speech') loadAsrSettings();
+}
+
+/* --- Распознавание ------------------------------------------------------- */
+
+// Языки, на которых говорит основная модель. Whisper знает больше, но
+// список из сотни строк в выпадашке бесполезен: оставляем те, что
+// реально встречаются на встречах.
+const ASR_LANGS = [
+  ['ru', 'Русский'], ['en', 'Английский'], ['de', 'Немецкий'],
+  ['fr', 'Французский'], ['es', 'Испанский'], ['it', 'Итальянский'],
+  ['pt', 'Португальский'], ['pl', 'Польский'], ['uk', 'Украинский'],
+  ['sr', 'Сербский'], ['tr', 'Турецкий'], ['nl', 'Нидерландский'],
+];
+
+const SIZE_NAMES = {
+  base: 'Быстрая',
+  small: 'Точная',
+};
+
+async function loadAsrSettings() {
+  const s = await api.asr_settings();
+  if (!s) return;
+
+  if (!ui.asrLanguage.options.length) {
+    for (const [code, name] of ASR_LANGS) {
+      const o = document.createElement('option');
+      o.value = code;
+      o.textContent = name;
+      ui.asrLanguage.appendChild(o);
+    }
+  }
+  ui.asrLanguage.value = s.language || 'ru';
+
+  ui.asrSize.textContent = '';
+  for (const size of s.sizes || []) {
+    const o = document.createElement('option');
+    o.value = size.code;
+    // Честно пишем, что модели нет на диске: иначе человек выберет её,
+    // а распознавание молча продолжит работать на прежней.
+    o.textContent = (SIZE_NAMES[size.code] || size.code)
+      + ' (' + fmtBytes(size.bytes) + ')'
+      + (size.downloaded ? '' : ' — не скачана');
+    ui.asrSize.appendChild(o);
+  }
+  ui.asrSize.value = s.whisper_size || 'small';
+
+  ui.asrDetect.checked = s.detect_language !== false;
+  // Определитель языка не скачан: галочка ничего не даст, и врать об
+  // этом хуже, чем показать причину.
+  ui.asrDetect.disabled = s.langid_ready === false;
+  ui.asrDetectHint.textContent = s.langid_ready === false
+    ? 'Нужна модель определения языка, она ещё не скачана.'
+    : 'Без этого иностранная речь записывается кириллицей: «холло дис из зе фест сентинс».';
+  updateAsrForeign();
+}
+
+/** Настройки чужого языка не нужны, если он выключен. */
+function updateAsrForeign() {
+  ui.asrForeign.hidden = !ui.asrDetect.checked;
+}
+
+async function saveAsrSettings() {
+  updateAsrForeign();
+  const s = await api.save_asr_settings({
+    language: ui.asrLanguage.value,
+    detect_language: ui.asrDetect.checked,
+    whisper_size: ui.asrSize.value,
+  });
+  // Программа могла не согласиться (например, откатиться на скачанную
+  // модель). Показываем то, что получилось на самом деле.
+  if (s && s.active_size) {
+    const выбран = (s.sizes || []).find((x) => x.code === s.whisper_size);
+    ui.asrSizeHint.textContent = выбран && !выбран.downloaded
+      ? 'Эта модель ещё не скачана, пока распознаём прежней.'
+      : '';
+  }
 }
 
 /** Человеческий размер: 1.2 ГБ понятнее, чем 1288490188 байт. */
@@ -2070,6 +2148,12 @@ function bindUi() {
     micSelect: el('mic-select'),
     loopbackSelect: el('loopback-select'),
     micEnabled: el('mic-enabled'),
+    asrLanguage: el('asr-language'),
+    asrDetect: el('asr-detect'),
+    asrDetectHint: el('asr-detect-hint'),
+    asrSize: el('asr-size'),
+    asrSizeHint: el('asr-size-hint'),
+    asrForeign: el('asr-foreign'),
     systemEnabled: el('system-enabled'),
     enrollState: el('enroll-state'),
     enrollPrompt: el('enroll-prompt'),
@@ -2171,6 +2255,9 @@ function bindUi() {
 
   ui.llmBackend.addEventListener('change', saveLlmSettings);
   ui.llmAuto.addEventListener('change', saveLlmSettings);
+  ui.asrLanguage.addEventListener('change', saveAsrSettings);
+  ui.asrDetect.addEventListener('change', saveAsrSettings);
+  ui.asrSize.addEventListener('change', saveAsrSettings);
   ui.llmUrl.addEventListener('change', saveLlmSettings);
   ui.llmKey.addEventListener('change', saveLlmSettings);
   ui.llmModel.addEventListener('change', saveLlmSettings);

@@ -249,6 +249,7 @@
         <p class="prefs__nav-title">Настройки</p>
         <button type="button" class="prefs__tab is-active" data-tab="audio">Звук</button>
         <button type="button" class="prefs__tab" data-tab="voices">Голоса</button>
+        <button type="button" class="prefs__tab" data-tab="speech">Распознавание</button>
         <button type="button" class="prefs__tab" data-tab="notes">Заметки</button>
         <button type="button" class="prefs__tab" data-tab="look">Оформление</button>
         <button type="button" class="prefs__tab" data-tab="data">Данные</button>
@@ -288,6 +289,35 @@
             <p class="hint">Системный звук берётся с того же устройства, куда идёт
             воспроизведение. Если собеседника не слышно, выберите то устройство,
             в котором вы его слушаете.</p>
+          </div>
+        </section>
+
+        <!-- Распознавание -->
+        <section class="prefs__page" data-page="speech" hidden>
+          <div class="card">
+            <label class="field">
+              <span class="field__label">Основной язык встреч</span>
+              <select id="asr-language"></select>
+            </label>
+            <p class="hint">На этом языке говорят чаще всего. Речь на нём
+            распознаётся точной моделью, остальная уходит в запасную.</p>
+          </div>
+
+          <div class="card">
+            <label class="check">
+              <input type="checkbox" id="asr-detect" checked>
+              <span>Понимать речь на других языках</span>
+            </label>
+            <p class="hint" id="asr-detect-hint">Без этого иностранная речь
+            записывается кириллицей: «холло дис из зе фест сентинс».</p>
+
+            <div id="asr-foreign">
+              <label class="field">
+                <span class="field__label">Модель для других языков</span>
+                <select id="asr-size"></select>
+              </label>
+              <p class="hint" id="asr-size-hint"></p>
+            </div>
           </div>
         </section>
 

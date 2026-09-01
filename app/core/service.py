@@ -640,6 +640,62 @@ class AppService:
         settings_mod.save(self.settings)
         return self.model_status()
 
+    def asr_settings(self) -> dict[str, Any]:
+        """Что показать на экране настроек распознавания.
+
+        Вместе со значениями отдаём и то, скачан ли каждый размер
+        Whisper: выбирать размер, которого нет на диске, человек должен
+        осознанно, а не обнаружить потом, что речь опять пишется
+        кириллицей.
+        """
+        asr = self.settings.asr
+        sizes = []
+        for код, о in WHISPER_SIZES.items():
+            путь = paths.models_dir() / о["dir"]
+            sizes.append({
+                "code": код,
+                "bytes": о["bytes"],
+                "downloaded": WhisperTranscriber(путь).is_downloaded(),
+            })
+        langid = LanguageDetector(paths.models_dir() / LANGID_DIR_NAME)
+        return {
+            "language": asr.language,
+            "detect_language": asr.detect_language,
+            "whisper_size": getattr(asr, "whisper_size", WHISPER_DEFAULT_SIZE),
+            "sizes": sizes,
+            # Определять язык не на чем, если весов определителя нет.
+            "langid_ready": langid.is_downloaded(),
+            "active_size": self._whisper_dir(),
+        }
+
+    def save_asr_settings(self, **fields: Any) -> dict[str, Any]:
+        """Применить настройки распознавания.
+
+        Движок пересобираем сразу, иначе смена языка или размера Whisper
+        доходила бы только до следующего запуска программы, а человек
+        решил бы, что настройка не работает. Посреди записи не трогаем:
+        подмена движка на ходу теряет накопленный кусок звука.
+        """
+        asr = self.settings.asr
+        было = (asr.language, asr.detect_language,
+                getattr(asr, "whisper_size", WHISPER_DEFAULT_SIZE))
+
+        язык = fields.get("language")
+        if isinstance(язык, str) and язык.strip():
+            asr.language = язык.strip()
+        if "detect_language" in fields:
+            asr.detect_language = bool(fields["detect_language"])
+        размер = fields.get("whisper_size")
+        if размер in WHISPER_SIZES:
+            asr.whisper_size = размер
+
+        settings_mod.save(self.settings)
+
+        стало = (asr.language, asr.detect_language, asr.whisper_size)
+        if стало != было and not self.capture.is_recording:
+            self.transcriber = self._build_transcriber()
+        return self.asr_settings()
+
     def _ensure_asr_model(self) -> bool:
         """Дождаться весов распознавания, скачав их при необходимости.
 
