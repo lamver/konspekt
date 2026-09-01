@@ -13,6 +13,7 @@
 import testenv  # noqa: F401  русский вывод в консоли Windows
 
 import subprocess
+import os
 import re
 import sys
 import tomllib
@@ -73,6 +74,25 @@ def main() -> int:
     # вместо метаданных данные.
     check((internal / "py3langid" / "data" / "model.plzma").exists(),
           "модель py3langid на месте (без неё сверка языка падает)")
+
+    # Наличие файла ещё не значит, что библиотека его найдёт: путь к
+    # модели строится от __file__, а PyInstaller его подменяет. И
+    # проверить это снаружи нельзя — код библиотек лежит внутри exe, а
+    # импорт здесь молча возьмётся из окружения разработчика и соврёт.
+    # Поэтому спрашиваем саму сборку: она проверяет себя изнутри и
+    # пишет отчёт в файл (окна и консоли у неё нет).
+    отчёт = Path("_самопроверка.txt").resolve()
+    отчёт.unlink(missing_ok=True)
+    окружение = dict(os.environ, KONSPEKT_ОТЧЁТ=str(отчёт))
+    subprocess.run([str(EXE), "--самопроверка"], env=окружение, timeout=300)
+    строки = отчёт.read_text(encoding="utf-8").splitlines() \
+        if отчёт.exists() else ["сборка ничего не ответила"]
+    for строка in строки:
+        print("  сборка: " + строка)
+    отчёт.unlink(missing_ok=True)
+    check(not any(s.startswith("[FAIL]") for s in строки) and len(строки) > 1,
+          "сборка прошла самопроверку изнутри "
+          "(распознавание, сверка языка, окно)")
 
     if FAILS:
         print(f"\nПровалено проверок: {len(FAILS)}")
