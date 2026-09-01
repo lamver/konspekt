@@ -12,8 +12,11 @@ is the first sentence» превращается в «холло дис из з�
 
 Осторожность. Если язык определить не удалось (короткая фраза, шум,
 неуверенный ответ), берём язык предыдущей фразы того же говорящего:
-человек редко переключает язык посреди разговора. А если и этого нет,
-считаем речь русской, потому что программа прежде всего русская.
+человек редко переключает язык посреди разговора. А если и этого нет
+(самая первая фраза встречи), берём язык распознавания по умолчанию из
+настроек. Раньше тут было жёстко зашитое «ru» — верно только пока у
+Konspekt один пользователь, говорящий по-русски. Испаноязычному
+человеку такой отказ ломает первую же фразу.
 
 Пометка языка. Whisper многоязычный: он одинаково распознаёт немецкую,
 французскую и любую другую речь, сам определяя язык по звуку. Поэтому в
@@ -47,10 +50,16 @@ class LanguageRouter:
         russian: Transcriber,
         detector: LanguageDetector | None = None,
         foreign: Transcriber | None = None,
+        fallback_lang: str = "ru",
     ) -> None:
         self.russian = russian
         self.detector = detector
         self.foreign = foreign
+        # Язык на случай, когда определить нечего и вспомнить нечего:
+        # самая первая фраза встречи. Берётся из настроек распознавания,
+        # а не зашит намертво, иначе не по-русски говорящий человек
+        # ломает себе первую же фразу.
+        self.fallback_lang = fallback_lang or "ru"
         # Последний язык каждой дорожки: им подменяем неуверенные ответы.
         self._last: dict[str, str] = {}
         self._lock = threading.Lock()
@@ -101,19 +110,20 @@ class LanguageRouter:
         return segments
 
     def _decide(self, pcm, sample_rate: int, speaker: str) -> str:
-        """Код языка фразы. Ошибаться в сторону русского безопаснее."""
+        """Код языка фразы. Ошибаться в сторону настроенного языка безопаснее."""
         if self.detector is None or self.foreign is None:
-            return "ru"
+            return self.fallback_lang
         try:
             verdict = self.detector.detect(pcm, sample_rate)
         except Exception:
-            log.exception("Определение языка упало, считаем речь русской")
-            return "ru"
+            log.exception("Определение языка упало, берём язык по умолчанию")
+            return self.fallback_lang
 
         with self._lock:
             if verdict is None:
-                # Не разобрали: продолжаем на языке прошлой фразы.
-                return self._last.get(speaker, "ru")
+                # Не разобрали: продолжаем на языке прошлой фразы дорожки,
+                # а если её ещё не было — на языке по умолчанию.
+                return self._last.get(speaker, self.fallback_lang)
             lang = verdict[0]
             self._last[speaker] = lang
         return lang

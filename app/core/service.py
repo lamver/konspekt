@@ -249,7 +249,10 @@ class AppService:
             log.info("Определение языка выключено: нет весов")
             return russian
         log.info("Нерусская речь идёт в %s", foreign.name)
-        return LanguageRouter(russian, detector, foreign)
+        return LanguageRouter(
+            russian, detector, foreign,
+            fallback_lang=self.settings.asr.language,
+        )
 
     def _whisper_dir(self) -> str:
         """Каталог Whisper по настройке, с откатом на тот, что скачан.
