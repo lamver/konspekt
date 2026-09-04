@@ -60,6 +60,19 @@ log = logging.getLogger(__name__)
 # а от двух слов ни разу не ошибся на настоящей русской речи пользователя.
 MIN_WORDS_FOR_TEXT_CHECK = 2
 
+# Сколько коротких фраз подряд можно унаследовать акустически определённый
+# иностранный язык дорожки, ни разу не подтвердив его заново. Без этого
+# предела одна ложная акустическая детекция (короткая фраза, шум) сажала
+# дорожку в чужой язык навсегда: следующие короткие реплики того же
+# говорящего наследуют lang из памяти без проверки, а текстовая сверка
+# срабатывает только от двух слов. На боевой часовой встрече так набежало
+# 114 потерянных чанков подряд — очередь распознавания захлебнулась,
+# потому что Whisper на CPU в ~50 раз медленнее GigaAM (11с против 0.2с на
+# фразу), а рвать поток захвата нельзя. Предел не чинит саму акустическую
+# ошибку, а не даёт ей длиться дольше горстки фраз: не подтвердилась
+# заново — откатываемся на язык по умолчанию, самый быстрый путь.
+MAX_UNCONFIRMED_INHERIT = 4
+
 
 class LanguageRouter:
     """Распознаватель, который сам выбирает модель под язык фразы."""
@@ -83,6 +96,11 @@ class LanguageRouter:
         self.fallback_lang = fallback_lang or "ru"
         # Последний язык каждой дорожки: им подменяем неуверенные ответы.
         self._last: dict[str, str] = {}
+        # Сколько раз подряд язык дорожки унаследован, а не подтверждён
+        # заново акустикой или текстом. Растёт только для нерусских языков:
+        # ошибиться в сторону GigaAM не страшно и без счётчика, он и так
+        # самый быстрый путь и самый частый язык.
+        self._inherited_streak: dict[str, int] = {}
         self._lock = threading.Lock()
 
     @property
@@ -107,6 +125,7 @@ class LanguageRouter:
         """Забыть языки дорожек. Зовём при старте новой встречи."""
         with self._lock:
             self._last.clear()
+            self._inherited_streak.clear()
 
     def transcribe(
         self,
@@ -172,6 +191,7 @@ class LanguageRouter:
         segment.lang = text_lang
         with self._lock:
             self._last[speaker] = text_lang
+            self._inherited_streak[speaker] = 0
 
     def _decide(self, pcm, sample_rate: int, speaker: str) -> str:
         """Код языка фразы. Ошибаться в сторону настроенного языка безопаснее."""
@@ -186,8 +206,28 @@ class LanguageRouter:
         with self._lock:
             if verdict is None:
                 # Не разобрали: продолжаем на языке прошлой фразы дорожки,
-                # а если её ещё не было — на языке по умолчанию.
-                return self._last.get(speaker, self.fallback_lang)
+                # а если её ещё не было — на языке по умолчанию. Но не
+                # бесконечно: если прошлый язык нерусский и подряд идущие
+                # короткие фразы (тут акустика вовсе промолчала) ни разу
+                # не подтвердили его заново, одна случайная детекция не
+                # должна сажать дорожку в Whisper до конца встречи — это
+                # и есть источник лага на длинной записи.
+                last = self._last.get(speaker, self.fallback_lang)
+                if last in CYRILLIC_LANGS:
+                    return last
+                streak = self._inherited_streak.get(speaker, 0) + 1
+                if streak > MAX_UNCONFIRMED_INHERIT:
+                    log.info(
+                        "Дорожка %s %d фраз подряд молча тянула язык %s "
+                        "без подтверждения: возвращаю язык по умолчанию",
+                        speaker, streak - 1, last,
+                    )
+                    self._last[speaker] = self.fallback_lang
+                    self._inherited_streak[speaker] = 0
+                    return self.fallback_lang
+                self._inherited_streak[speaker] = streak
+                return last
             lang = verdict[0]
             self._last[speaker] = lang
+            self._inherited_streak[speaker] = 0
         return lang
