@@ -154,7 +154,16 @@ def check_published_matches_build() -> None:
         print(f"[пропуск] нет связи с сервером обновлений: {e}")
         return
 
-    assert not version_check.is_newer(__version__, release.version), (
+    # Если наша версия новее той, что в latest.json — релиз ещё не
+    # опубликован. Это нормально для сборки в CI до публикации.
+    # Падать надо только когда latest.json новее (значит забыли обновить),
+    # или когда наша версия старше (регресс).
+    if version_check.is_newer(__version__, release.version):
+        print(f"[пропуск] версия {__version__} ещё не опубликована "
+              f"(latest.json на {release.version})")
+        return
+
+    assert not version_check.is_newer(release.version, __version__), (
         f"latest.json отдаёт {release.version}, а собрана {__version__}: "
         "у пользователей проверка обновлений будет молчать"
     )
