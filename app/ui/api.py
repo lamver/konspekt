@@ -259,9 +259,16 @@ class Api:
 
         Тащим вручную вместо easy_drag: тот перехватывает мышь на всём
         документе и ломает выделение текста в заметках.
+
+        Приоритет: системный захват заголовка через Win32. Он не блокируется
+        распознаванием и не ходит через UI-поток. Если Win32 недоступен,
+        тащим через pywebview по одному смещению за раз.
         """
         if self._window:
             try:
+                if win32.AVAILABLE:
+                    win32.start_drag(self._window)
+                    return True
                 rect = win32.get_rect(self._window) if win32.AVAILABLE else None
                 if rect:
                     x, y, w, h = rect

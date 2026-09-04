@@ -410,7 +410,9 @@ function scrollChat() {
 
 async function sendQuestion() {
   const text = ui.chatText.value.trim();
-  if (!text || !state.currentId || state.llmBusy) return;
+  if (!text) { showToast('Пустой вопрос'); return; }
+  if (!state.currentId) { showToast('Сначала откройте встречу'); return; }
+  if (state.llmBusy) return;
   ui.chatText.value = '';
   resizeChatInput();
   setBusy(true, state.currentId);
@@ -1447,59 +1449,23 @@ async function createMeeting() {
 /* --- Перетаскивание frameless-окна -------------------------------------- */
 
 /**
- * pywebview easy_drag ломает выделение текста, поэтому тащим сами.
+ * Перетаскивание frameless-окна.
  *
- * Смещения копим и отправляем не чаще раза на кадр — ровно как при
- * изменении размера. Раньше здесь этой защиты не было: каждый mousemove
- * шёл через мост в Python отдельным вызовом, а мышь их сыплет сотнями в
- * секунду. Пока ничего не происходит, это сходило с рук, но во время
- * записи питон занят распознаванием, очередь вызовов не разгребается, и
- * окно повисало прямо в руках у человека.
+ * pywebview easy_drag ломает выделение текста, поэтому тащим сами.
+ * На Windows move_window захватывает окно системным перетаскиванием через
+ * SendMessage: Windows сама двигает окно в своём цикле сообщений, и никакие
+ * блокировки Python этому не мешают. На других платформах — запасной путь
+ * через мост со сглаживанием через requestAnimationFrame.
  */
 function setupDrag() {
-  let dragging = false;
-  let originX = 0;
-  let originY = 0;
-  let pendingX = 0;
-  let pendingY = 0;
-  let frame = null;
-
-  const flush = () => {
-    frame = null;
-    const dx = pendingX;
-    const dy = pendingY;
-    pendingX = 0;
-    pendingY = 0;
-    if (!dragging || (!dx && !dy)) return;
-    if (window.pywebview && window.pywebview.api && window.pywebview.api.move_window) {
-      window.pywebview.api.move_window(dx, dy);
-    }
-  };
-
   ui.titlebar.addEventListener('mousedown', (e) => {
     if (e.button !== 0 || e.target.closest('.no-drag')) return;
-    dragging = true;
-    originX = e.screenX;
-    originY = e.screenY;
     e.preventDefault();
-  });
-
-  window.addEventListener('mousemove', (e) => {
-    if (!dragging) return;
-    pendingX += e.screenX - originX;
-    pendingY += e.screenY - originY;
-    originX = e.screenX;
-    originY = e.screenY;
-    if (!frame) frame = requestAnimationFrame(flush);
-  });
-
-  window.addEventListener('mouseup', () => {
-    if (!dragging) return;
-    // Последний кусочек пути: без него окно не доезжает до места,
-    // где человек отпустил кнопку.
-    flush();
-    dragging = false;
-    if (frame) { cancelAnimationFrame(frame); frame = null; }
+    if (window.pywebview && window.pywebview.api && window.pywebview.api.move_window) {
+      // Один вызов: на Win32 это SendMessage(WM_NCLBUTTONDOWN),
+      // который блокируется до отпускания мыши.
+      window.pywebview.api.move_window(0, 0);
+    }
   });
 }
 

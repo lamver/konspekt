@@ -37,6 +37,8 @@ if AVAILABLE:
     _u.ShowWindow.restype = wintypes.BOOL
     _u.GetDpiForWindow.argtypes = [wintypes.HWND]
     _u.GetDpiForWindow.restype = wintypes.UINT
+    _u.SendMessageW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
+    _u.SendMessageW.restype = wintypes.LPARAM
 
     HWND_TOPMOST = wintypes.HWND(-1)
     HWND_NOTOPMOST = wintypes.HWND(-2)
@@ -45,6 +47,10 @@ if AVAILABLE:
     SWP_NOZORDER = 0x0004
     SWP_NOACTIVATE = 0x0010
     SW_MINIMIZE = 6
+
+    # Сообщения окна
+    WM_NCLBUTTONDOWN = 0x00A1
+    HTCAPTION = 2
 
 
 def _hwnd(window) -> int:
@@ -125,4 +131,23 @@ def minimize(window) -> bool:
     if not hwnd:
         return False
     _u.ShowWindow(hwnd, SW_MINIMIZE)
+    return True
+
+
+def start_drag(window) -> bool:
+    """Захватить окно для перетаскивания мышью.
+
+    Вместо того чтобы каждый mousemove слать через pywebview мост (который
+    блокируется, когда Python занят распознаванием), эмулируем системный
+    захват заголовка. Windows сама двигает окно в цикле сообщений, и никакие
+    блокировки Python этому не мешают.
+
+    Вызов абсолютно синхронный: SendMessage уходит в UI-поток окна и
+    возвращается только после отпускания мыши. Поэтому звать эту функцию
+    надо из JS-обработчика mousedown, до того как мост загрузится ответом.
+    """
+    hwnd = _hwnd(window)
+    if not hwnd:
+        return False
+    _u.SendMessageW(hwnd, WM_NCLBUTTONDOWN, HTCAPTION, 0)
     return True
