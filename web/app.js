@@ -103,8 +103,19 @@ window.__konspekt_event = function (payload) {
       // а висящий черновик — это текст, который уже никогда не уточнится.
       clearDraft();
       // Запись только что появилась, значит и переслушивать теперь есть
-      // что: иначе кнопки не было бы до перехода на другую встречу.
-      if (payload.meeting_id === state.currentId) state.hasAudio = true;
+      // что. state.hasAudio решает только для будущих реплик — уже
+      // отрисованные кнопки .turn__play/.turn__lang были скрыты в момент
+      // появления реплики (пока шла запись, hasAudio был false) и сами
+      // не перерисуются, поэтому снимаем hidden с них здесь же. Без
+      // этого кнопки появлялись только после переключения на другую
+      // встречу и обратно — regressed в 0.6, когда live-транскрипт стал
+      // рисовать реплики сразу по ходу записи.
+      if (payload.meeting_id === state.currentId) {
+        state.hasAudio = true;
+        ui.transcript.querySelectorAll('.turn__play, .turn__lang').forEach((btn) => {
+          btn.hidden = false;
+        });
+      }
       renderRecordingState();
       stopTimer();
       // Именно refreshMeta, а не selectMeeting: перезагрузка встречи

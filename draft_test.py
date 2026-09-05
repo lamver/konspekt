@@ -344,6 +344,125 @@ def проверить_окно() -> None:
         проверить(bool(ок), что)
 
 
+СЦЕНАРИЙ_КНОПОК = r"""
+const fs = require('fs');
+const path = require('path');
+
+class El {
+  constructor(tag) {
+    this.tagName = (tag || '').toUpperCase();
+    this.children = [];
+    this.classList = new Set();
+    this.dataset = {};
+    this._text = '';
+    this.parent = null;
+    this.hidden = false;
+  }
+  set className(v) { this.classList = new Set(String(v).split(/\s+/).filter(Boolean)); }
+  get className() { return [...this.classList].join(' '); }
+  appendChild(c) { c.parent = this; this.children.push(c); return c; }
+  querySelectorAll(sel) {
+    const классы = sel.split(',').map((s) => s.trim().replace('.', ''));
+    const итог = [];
+    const обойти = (узел) => {
+      for (const c of узел.children) {
+        if (классы.some((cls) => c.classList.has(cls))) итог.push(c);
+        обойти(c);
+      }
+    };
+    обойти(this);
+    return итог;
+  }
+  addEventListener() {}
+}
+
+global.document = { createElement: (t) => new El(t) };
+global.window = global;
+const transcript = new El('div');
+global.ui = { transcript };
+global.state = { currentId: 'встреча', isRecording: true, recordingId: 'встреча' };
+global.refreshMeta = () => {};
+global.renderRecordingState = () => {};
+global.stopTimer = () => {};
+global.startTimer = () => {};
+global.maybeAutoSummary = () => {};
+global.clearDraft = () => {};
+global.appendSegment = () => {};
+global.showDraft = () => {};
+global.setSummaryStatus = () => {};
+global.onModelProgress = () => {};
+global.showUpdateNote = () => {};
+global.onUpdateState = () => {};
+global.onSummaryChunk = () => {};
+global.onSummaryReady = () => {};
+global.renderSummary = () => ({});
+global.setBusy = () => {};
+global.showToast = () => {};
+global.renderMeta = () => {};
+global.loadMeetings = () => {};
+global.onChatChunk = () => {};
+global.onChatMessage = () => {};
+global.onChatError = () => {};
+global.renderImports = () => {};
+global.onImportProgress = () => {};
+
+const src = fs.readFileSync(path.join(process.argv[2], 'web', 'app.js'), 'utf8');
+const от = src.indexOf('window.__konspekt_event = function (payload) {');
+const до = src.indexOf('/* --- Саммари и чат');
+if (от < 0 || до < 0) throw new Error('не нашёл обработчик событий __konspekt_event');
+eval(src.slice(от, до));
+
+// Реплика, отрисованная во время записи: кнопки были скрыты, потому что
+// в этот момент state.hasAudio ещё не true (has_audio на сервере false,
+// пока нет ни одного audio-чанка).
+const turn = new El('div');
+const play = new El('button');
+play.className = 'turn__play';
+play.hidden = true;
+const lang = new El('button');
+lang.className = 'turn__lang';
+lang.hidden = true;
+turn.appendChild(play);
+turn.appendChild(lang);
+transcript.appendChild(turn);
+
+(async () => {
+  const итог = [];
+  await window.__konspekt_event({ topic: 'recording.stopped', meeting_id: 'встреча' });
+  итог.push(['кнопка "переслушать" открылась после остановки записи', play.hidden === false]);
+  итог.push(['кнопка "язык" открылась после остановки записи', lang.hidden === false]);
+  console.log(JSON.stringify(итог));
+})();
+"""
+
+
+def проверить_кнопки_после_записи() -> None:
+    """Кнопки «переслушать» и «язык» появляются сразу по завершении записи.
+
+    Реплики рисуются по ходу записи, когда has_audio ещё false, и кнопки
+    у них создаются скрытыми (иначе они всегда отвечали бы «записи нет»).
+    Регресс: recording.stopped выставлял state.hasAudio = true, но не
+    трогал уже нарисованные кнопки — они оставались скрытыми до
+    переключения на другую встречу и обратно (полный renderTranscript).
+    """
+    node = shutil.which("node")
+    if not node:
+        print("[пропуск] нет node")
+        return
+    tmp = Path(tempfile.mkdtemp(prefix="konspekt-buttons-"))
+    ф = tmp / "проба.js"
+    ф.write_text(СЦЕНАРИЙ_КНОПОК, encoding="utf-8")
+    r = subprocess.run([node, str(ф), str(Path(__file__).resolve().parent)],
+                       capture_output=True, text=True, encoding="utf-8",
+                       errors="replace", timeout=60)
+    if r.returncode != 0:
+        print(r.stderr.strip()[:1200])
+        проверить(False, "сценарий кнопок после записи отработал")
+        return
+    for что, ок in json.loads(r.stdout.strip().splitlines()[-1]):
+        проверить(bool(ок), что)
+
+
 def проверить_путь_до_окна() -> None:
     """Событие черновика доходит до окна, а не теряется по дороге.
 
@@ -377,6 +496,7 @@ def main() -> int:
     проверить_путь_до_окна()
     проверить_очередь()
     проверить_окно()
+    проверить_кнопки_после_записи()
     if БЕДЫ:
         print(f"\nПровалено проверок: {len(БЕДЫ)}")
         return 1
