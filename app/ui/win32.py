@@ -41,6 +41,8 @@ if AVAILABLE:
     _u.SendMessageW.restype = wintypes.LPARAM
     _u.PostMessageW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
     _u.PostMessageW.restype = wintypes.BOOL
+    _u.ReleaseCapture.argtypes = []
+    _u.ReleaseCapture.restype = wintypes.BOOL
 
     HWND_TOPMOST = wintypes.HWND(-1)
     HWND_NOTOPMOST = wintypes.HWND(-2)
@@ -147,9 +149,16 @@ def start_drag(window) -> bool:
     PostMessage кладёт сообщение в очередь окна и возвращается мгновенно.
     Если бы здесь стоял SendMessage, он бы блокировал мост pywebview на всё
     время перетаскивания — окно не двигалось бы вообще.
+
+    ReleaseCapture обязателен: настоящий mousedown, который дошёл до JS,
+    уже отдал захват мыши дочернему окну WebView2/Chromium. Пока захват
+    держит он, Windows не отдаст WM_NCLBUTTONDOWN циклу перетаскивания
+    заголовка — сообщение уйдёт в очередь и там и останется, а окно вообще
+    перестанет двигаться. Без этого вызова весь механизм молча не работал.
     """
     hwnd = _hwnd(window)
     if not hwnd:
         return False
+    _u.ReleaseCapture()
     _u.PostMessageW(hwnd, WM_NCLBUTTONDOWN, HTCAPTION, 0)
     return True
