@@ -31,6 +31,7 @@ from ..core.events import (
     MODEL_DOWNLOAD,
     LLM_DOWNLOAD,
     NEW_VERSION,
+    RECOGNITION_BACKFILL,
     UPDATE_STATE,
     RECORDING_LEVEL,
     RECORDING_ERROR,
@@ -81,6 +82,8 @@ FORWARDED_EVENTS = (
     NEW_VERSION,
     # Ход тихого обновления: полоса загрузки и кнопка «поставить сейчас».
     UPDATE_STATE,
+    # Докатка после «стоп»: сколько кусков ещё досчитывается.
+    RECOGNITION_BACKFILL,
 )
 
 

@@ -11,13 +11,14 @@ from .gigaam import (
     GigaamTranscriber,
     ModelMissing,
 )
-from .queue import TranscriptionQueue
+from .queue import MissedSpan, TranscriptionQueue
 
 __all__ = [
     "Transcriber",
     "NullTranscriber",
     "GigaamTranscriber",
     "TranscriptionQueue",
+    "MissedSpan",
     "ModelDownloader",
     "ModelMissing",
     "MODEL_DIR_NAME",

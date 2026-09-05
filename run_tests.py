@@ -32,6 +32,7 @@ FAST = [
     "langui_test.py",
     "asrset_test.py",
     "draft_test.py",
+    "backfill_test.py",
     "live_test.py",
     "langid_test.py",
     "voices_test.py",

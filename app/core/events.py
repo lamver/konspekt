@@ -85,5 +85,8 @@ APP_QUIT = "app.quit"
 NEW_VERSION = "app.new_version"
 # Ход тихого обновления: качаем, готово к установке, не вышло.
 UPDATE_STATE = "app.update_state"
+# Докат распознавания: живая очередь не успела за какими-то кусками
+# речи, и после «стоп» они досчитываются по записанному звуку отдельно.
+RECOGNITION_BACKFILL = "recognition.backfill"
 
 bus = EventBus()

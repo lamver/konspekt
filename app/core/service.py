@@ -68,6 +68,7 @@ from ..core.events import (
     MEETING_UPDATED,
     MODEL_DOWNLOAD,
     NEW_VERSION,
+    RECOGNITION_BACKFILL,
     RECORDING_ERROR,
     RECORDING_STARTED,
     RECORDING_STOPPED,
@@ -1270,9 +1271,22 @@ class AppService:
         # Даём распознаванию доделать хвост очереди: последние фразы
         # встречи важнее пары секунд ожидания.
         self.asr_queue.stop()
-        # Голоса запоминаем только теперь: за время встречи эталон каждого
-        # участника собрался из всех его фраз, а не из первой попавшейся.
-        self._remember_voices(meeting_id)
+        # Что-то могло не поместиться в живую очередь при перегрузке.
+        # Сам звук цел на диске (пишется отдельно от распознавания), и
+        # теперь, когда спешить уже некуда, можно вырезать те же куски
+        # из записи и досчитать их не торопясь.
+        missed = self.asr_queue.take_missed(meeting_id)
+        if missed:
+            # Эталон голосов сохраняем только после докатки: иначе фразы,
+            # которые она добавит, в счёт не попадут.
+            threading.Thread(
+                target=self._run_backfill, args=(meeting_id, missed),
+                name="asr-backfill", daemon=True,
+            ).start()
+        else:
+            # Голоса запоминаем только теперь: за время встречи эталон каждого
+            # участника собрался из всех его фраз, а не из первой попавшейся.
+            self._remember_voices(meeting_id)
         self.active_meeting_id = None
         self.store.update_meeting(
             meeting_id,
@@ -1283,6 +1297,77 @@ class AppService:
         bus.emit(RECORDING_STOPPED, {"meeting_id": meeting_id})
         bus.emit(MEETINGS_CHANGED)
         return self.get_meeting(meeting_id)
+
+    def _run_backfill(self, meeting_id: str, missed: list) -> None:
+        """Досчитать куски речи, не попавшие в живую очередь.
+
+        Идёт в своём потоке и не спешит: встреча уже видна человеку как
+        готовая, а докатка просто дозаполняет пропуски в транскрипте по
+        мере готовности, как только распознавание до них доберётся.
+        """
+        total = len(missed)
+        log.info("Докатываем %d пропущенных кусков речи встречи %s", total, meeting_id)
+        bus.emit(RECOGNITION_BACKFILL,
+                 {"meeting_id": meeting_id, "state": "start", "total": total})
+        done = 0
+        try:
+            for span in missed:
+                try:
+                    pcm = self._read_missed_pcm(meeting_id, span)
+                    if pcm is not None and pcm.size > 0:
+                        self.asr_queue.submit_raw(
+                            meeting_id, span.speaker, pcm, span.offset, block=True
+                        )
+                except Exception:
+                    log.exception(
+                        "Не удалось докатить кусок %s@%.1fс встречи %s",
+                        span.speaker, span.offset, meeting_id,
+                    )
+                finally:
+                    done += 1
+                    bus.emit(RECOGNITION_BACKFILL, {
+                        "meeting_id": meeting_id, "state": "progress",
+                        "done": done, "total": total,
+                    })
+            # wait_idle, а не stop: докатка не должна гасить поток
+            # распознавания, если человек уже начал следующую встречу.
+            self.asr_queue.wait_idle()
+        finally:
+            self._remember_voices(meeting_id)
+            bus.emit(RECOGNITION_BACKFILL,
+                     {"meeting_id": meeting_id, "state": "done", "total": total})
+            bus.emit(MEETING_UPDATED, {"meeting_id": meeting_id})
+
+    def _read_missed_pcm(self, meeting_id: str, span) -> np.ndarray | None:
+        """Вырезать звук пропущенного куска из уже записанного WAV.
+
+        Тот же путь, что у кнопки «переслушать»: файл на диске цел, нужно
+        только найти, какой из кусков записи покрывает нужное время.
+        """
+        chunks = self.store.list_audio_chunks(meeting_id)
+        if not chunks:
+            return None
+        wanted = [c for c in chunks if c["track"] == span.speaker]
+        pool = wanted or chunks
+        chunk = None
+        for c in pool:
+            if c["start_s"] <= span.offset < c["start_s"] + c["duration_s"]:
+                chunk = c
+                break
+        if chunk is None:
+            return None
+        path = Path(chunk["path"])
+        if not path.exists():
+            return None
+        local_offset = max(0.0, span.offset - chunk["start_s"])
+        try:
+            raw, _rate = _read_wav_part(path, local_offset, span.duration)
+        except Exception:
+            log.exception("Не удалось прочитать пропущенный кусок записи %s", path)
+            return None
+        if not raw:
+            return None
+        return np.frombuffer(raw, dtype=np.int16)
 
     @property
     def is_recording(self) -> bool:

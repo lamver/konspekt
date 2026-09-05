@@ -48,6 +48,22 @@ class Job:
     draft: bool = False
 
 
+@dataclass
+class MissedSpan:
+    """Кусок звука, который не влез в живую очередь.
+
+    Сам звук никуда не делся — он лежит в WAV на диске, как и всегда.
+    Пропало только распознавание. Эту запись достаточно, чтобы после
+    остановки записи вырезать тот же интервал из файла и досчитать его,
+    не торопясь: место в очереди уже не проблема, спешить некуда.
+    """
+
+    meeting_id: str
+    speaker: str
+    offset: float
+    duration: float
+
+
 class TranscriptionQueue:
     """Фоновое распознавание чанков по одному.
 
@@ -90,6 +106,12 @@ class TranscriptionQueue:
         self._queue: queue.Queue[Job | None] = queue.Queue(maxsize=MAX_PENDING)
         self._thread: threading.Thread | None = None
         self._dropped = 0
+        # Куда именно выпали чанки при переполнении. Список, а не только
+        # счётчик: без него после «стоп» нечего было бы досчитывать, кроме
+        # общего числа потерь, а звук на диске точно есть, только с какого
+        # места его брать — было бы неизвестно.
+        self._missed: list[MissedSpan] = []
+        self._missed_lock = threading.Lock()
         # start() зовут из потоков захвата, stop() — из потока UI.
         # Без замка они рвут друг у друга _thread: то поток запускается
         # дважды, то stop() падает на уже обнулённой ссылке.
@@ -102,6 +124,22 @@ class TranscriptionQueue:
     @property
     def dropped(self) -> int:
         return self._dropped
+
+    def take_missed(self, meeting_id: str) -> list[MissedSpan]:
+        """Забрать и очистить список пропущенных кусков этой встречи.
+
+        Зовут по кнопке «стоп», один раз: после этого докатка сама
+        вырежет нужные интервалы из уже сохранённого WAV и досчитает их
+        не спеша. «Забрать» вместо «посмотреть» — чтобы повторный вызов
+        (например, из другой встречи) не досчитал те же куски дважды.
+        """
+        with self._missed_lock:
+            keep: list[MissedSpan] = []
+            taken: list[MissedSpan] = []
+            for span in self._missed:
+                (taken if span.meeting_id == meeting_id else keep).append(span)
+            self._missed = keep
+        return taken
 
     def start(self) -> None:
         with self._lock:
@@ -163,6 +201,26 @@ class TranscriptionQueue:
         if self.on_draft is not None and not block:
             self._peek(meeting_id, speaker)
 
+    def submit_raw(
+        self,
+        meeting_id: str,
+        speaker: str,
+        pcm: np.ndarray,
+        offset: float,
+        block: bool = True,
+    ) -> None:
+        """Положить уже готовый кусок речи, минуя VAD.
+
+        Для докатки после «стоп»: кусок и так был вырезан VAD ещё в
+        первый раз, до того как не поместился в очередь. Прогонять его
+        через VAD второй раз незачем и рискованно — на короткой синтетике
+        порог тишины может решить иначе, и кусок беззвучно потеряется
+        снова, хотя звук на диске давно есть.
+        """
+        with self._lock:
+            self._start_locked()
+        self._put(Job(meeting_id, speaker, pcm, offset), block)
+
 
     def _peek(self, meeting_id: str, speaker: str) -> None:
         """Отправить черновик идущей речи, если пора.
@@ -207,6 +265,16 @@ class TranscriptionQueue:
             self._queue.put_nowait(job)
         except queue.Full:
             self._dropped += 1
+            if not job.draft:
+                # Черновики не считаем: они и так пересчитываются заново
+                # на каждой следующей фразе, докатывать там нечего. А вот
+                # настоящую реплику, которая не влезла, нужно запомнить,
+                # чтобы позже вырезать этот же кусок из записанного WAV.
+                duration = job.pcm.size / float(self.sample_rate)
+                with self._missed_lock:
+                    self._missed.append(
+                        MissedSpan(job.meeting_id, job.speaker, job.offset, duration)
+                    )
             log.warning(
                 "Очередь распознавания переполнена, чанк %s@%.1fс пропущен (всего %d)",
                 job.speaker,
