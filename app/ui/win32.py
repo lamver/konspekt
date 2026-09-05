@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import ctypes
 import sys
+import threading
+import time
 from ctypes import wintypes
 
 AVAILABLE = sys.platform == "win32"
@@ -43,6 +45,10 @@ if AVAILABLE:
     _u.PostMessageW.restype = wintypes.BOOL
     _u.ReleaseCapture.argtypes = []
     _u.ReleaseCapture.restype = wintypes.BOOL
+    _u.GetCursorPos.argtypes = [ctypes.POINTER(wintypes.POINT)]
+    _u.GetCursorPos.restype = wintypes.BOOL
+    _u.GetAsyncKeyState.argtypes = [ctypes.c_int]
+    _u.GetAsyncKeyState.restype = ctypes.c_short
 
     HWND_TOPMOST = wintypes.HWND(-1)
     HWND_NOTOPMOST = wintypes.HWND(-2)
@@ -55,6 +61,10 @@ if AVAILABLE:
     # Сообщения окна
     WM_NCLBUTTONDOWN = 0x00A1
     HTCAPTION = 2
+    VK_LBUTTON = 0x01
+
+_drag_lock = threading.Lock()
+_drag_active = False
 
 
 def _hwnd(window) -> int:
@@ -141,24 +151,61 @@ def minimize(window) -> bool:
 def start_drag(window) -> bool:
     """Захватить окно для перетаскивания мышью.
 
-    Вместо того чтобы каждый mousemove слать через pywebview мост (который
-    блокируется, когда Python занят распознаванием), эмулируем системный
-    захват заголовка. Windows сама двигает окно в своём цикле сообщений, и
-    никакие блокировки Python этому не мешают.
+    Системный захват заголовка (ReleaseCapture + WM_NCLBUTTONDOWN) здесь не
+    работает: ReleaseCapture отпускает мышь только в своём потоке, а захват
+    держит поток WebView2. Поэтому цикл перетаскивания просто не стартовал,
+    и окно стояло на месте.
 
-    PostMessage кладёт сообщение в очередь окна и возвращается мгновенно.
-    Если бы здесь стоял SendMessage, он бы блокировал мост pywebview на всё
-    время перетаскивания — окно не двигалось бы вообще.
-
-    ReleaseCapture обязателен: настоящий mousedown, который дошёл до JS,
-    уже отдал захват мыши дочернему окну WebView2/Chromium. Пока захват
-    держит он, Windows не отдаст WM_NCLBUTTONDOWN циклу перетаскивания
-    заголовка — сообщение уйдёт в очередь и там и останется, а окно вообще
-    перестанет двигаться. Без этого вызова весь механизм молча не работал.
+    Вместо этого водим окно сами: отдельный поток следит за курсором и
+    двигает окно через SetWindowPos, пока не отпущена левая кнопка. Поток
+    свой, UI-поток и мост pywebview не задействованы, так что занятость
+    Python распознаванием перетаскиванию не мешает.
     """
+    global _drag_active
     hwnd = _hwnd(window)
     if not hwnd:
         return False
-    _u.ReleaseCapture()
-    _u.PostMessageW(hwnd, WM_NCLBUTTONDOWN, HTCAPTION, 0)
+    with _drag_lock:
+        if _drag_active:
+            return True
+        _drag_active = True
+    threading.Thread(target=_drag_loop, args=(hwnd,), daemon=True).start()
     return True
+
+
+def _cursor() -> tuple[int, int]:
+    p = wintypes.POINT()
+    _u.GetCursorPos(ctypes.byref(p))
+    return int(p.x), int(p.y)
+
+
+def _pressed() -> bool:
+    return bool(_u.GetAsyncKeyState(VK_LBUTTON) & 0x8000)
+
+
+def _drag_loop(hwnd: int) -> None:
+    """Двигать окно вслед за курсором, пока держат левую кнопку."""
+    global _drag_active
+    try:
+        r = wintypes.RECT()
+        if not _u.GetWindowRect(hwnd, ctypes.byref(r)):
+            return
+        start_x, start_y = _cursor()
+        left, top = int(r.left), int(r.top)
+        # Кнопку могли отпустить, пока сообщение шло через мост.
+        deadline = time.monotonic() + 0.2
+        while not _pressed() and time.monotonic() < deadline:
+            time.sleep(0.005)
+        while _pressed():
+            x, y = _cursor()
+            _u.SetWindowPos(
+                hwnd, wintypes.HWND(0),
+                left + (x - start_x), top + (y - start_y), 0, 0,
+                SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOSIZE,
+            )
+            time.sleep(0.008)
+    except Exception:
+        pass
+    finally:
+        with _drag_lock:
+            _drag_active = False

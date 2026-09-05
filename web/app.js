@@ -1463,18 +1463,17 @@ async function createMeeting() {
  * Перетаскивание frameless-окна.
  *
  * pywebview easy_drag ломает выделение текста, поэтому тащим сами.
- * На Windows move_window захватывает окно системным перетаскиванием через
- * SendMessage: Windows сама двигает окно в своём цикле сообщений, и никакие
- * блокировки Python этому не мешают. На других платформах — запасной путь
- * через мост со сглаживанием через requestAnimationFrame.
+ * На Windows move_window запускает в Python отдельный поток, который водит
+ * окно за курсором, пока зажата левая кнопка. Мост при этом свободен, так что
+ * занятость Python распознаванием перетаскиванию не мешает. На других
+ * платформах — запасной путь через мост, по смещению за раз.
  */
 function setupDrag() {
   ui.titlebar.addEventListener('mousedown', (e) => {
     if (e.button !== 0 || e.target.closest('.no-drag')) return;
     e.preventDefault();
     if (window.pywebview && window.pywebview.api && window.pywebview.api.move_window) {
-      // Один вызов: на Win32 это SendMessage(WM_NCLBUTTONDOWN),
-      // который блокируется до отпускания мыши.
+      // Один вызов: дальше окно ведёт Python, до отпускания кнопки.
       window.pywebview.api.move_window(0, 0);
     }
   });
