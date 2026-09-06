@@ -28,6 +28,7 @@ from ..asr import (
     MODEL_TOTAL_BYTES,
     GigaamTranscriber,
     ModelDownloader,
+    MissedSpan,
     NullTranscriber,
     Transcriber,
     TranscriptionQueue,
@@ -179,6 +180,7 @@ class AppService:
         # открытым до конца разбора, а не открываем на каждый кусок.
         self._import_writers: dict[str, dict[str, WavWriter]] = {}
         self._recover_stale_recordings()
+        self._добрать_недосчитанное()
         # Проверка новой версии идёт в фоне и не задерживает старт.
         self._version_checker = VersionChecker(self)
         # Обновление скачиваем сами: гонять человека на страницу релиза
@@ -883,6 +885,40 @@ class AppService:
             )
             log.info("Восстановлена прерванная запись: %s", meeting.id)
 
+    def _добрать_недосчитанное(self) -> None:
+        """Досчитать то, что не успели в прошлый раз.
+
+        Досчёт идёт фоном и на длинной встрече занимает минуты, а
+        встреча к этому времени уже помечена готовой. Человек закрывает
+        программу, не дожидаясь конца, и повода ждать у него нет.
+        Звук при этом цел, пропадало только распознавание — значит
+        досчитать можно и потом, просто на следующем запуске.
+
+        Не задерживает старт: чтение списка дёшевое, а сам досчёт
+        уходит в свой поток, как и после кнопки «стоп».
+        """
+        try:
+            rows = self.store.list_missed_spans()
+        except Exception:
+            log.exception("Не удалось прочитать список недосчитанного")
+            return
+        if not rows:
+            return
+        по_встречам: dict[str, list[MissedSpan]] = {}
+        for r in rows:
+            по_встречам.setdefault(r["meeting_id"], []).append(
+                MissedSpan(r["meeting_id"], r["speaker"], r["offset_s"], r["duration_s"])
+            )
+        log.info(
+            "Осталось досчитать с прошлого запуска: %d кусков в %d встречах",
+            len(rows), len(по_встречам),
+        )
+        for meeting_id, spans in по_встречам.items():
+            threading.Thread(
+                target=self._run_backfill, args=(meeting_id, spans),
+                name="asr-backfill-старый", daemon=True,
+            ).start()
+
     # --- встречи ---------------------------------------------------------
 
     def list_meetings(self) -> list[dict[str, Any]]:
@@ -1277,6 +1313,15 @@ class AppService:
         # из записи и досчитать их не торопясь.
         missed = self.asr_queue.take_missed(meeting_id)
         if missed:
+            # Записываем до начала досчёта, а не после. Досчёт идёт
+            # фоном и на длинной встрече занимает минуты, а встреча уже
+            # помечена готовой: человек вправе закрыть программу, не
+            # дожидаясь конца. Список в памяти ушёл бы вместе с ней,
+            # и дыра в расшифровке осталась бы навсегда.
+            try:
+                self.store.add_missed_spans(meeting_id, missed)
+            except Exception:
+                log.exception("Не удалось запомнить пропущенные куски встречи %s", meeting_id)
             # Эталон голосов сохраняем только после докатки: иначе фразы,
             # которые она добавит, в счёт не попадут.
             threading.Thread(
@@ -1319,8 +1364,24 @@ class AppService:
                 try:
                     pcm = self._read_missed_pcm(meeting_id, span)
                     if pcm is not None and pcm.size > 0:
+                        # Вычёркиваем кусок не здесь, а когда он действительно
+                        # распознан. Между постановкой в очередь и готовым
+                        # текстом десятки кусков разницы, и если программу
+                        # закроют в этот промежуток, всё стоявшее в очереди
+                        # считалось бы сделанным и пропало бы молча.
                         self.asr_queue.submit_raw(
-                            meeting_id, span.speaker, pcm, span.offset, block=True
+                            meeting_id, span.speaker, pcm, span.offset, block=True,
+                            done=lambda s=span: self.store.drop_missed_span(
+                                meeting_id, s.speaker, s.offset
+                            ),
+                        )
+                    else:
+                        # Звука для этого куска нет вовсе: файл удалён или
+                        # запись оборвалась. Досчитать его не выйдет никогда,
+                        # и держать его в списке значит пробовать снова при
+                        # каждом запуске до конца времён.
+                        self.store.drop_missed_span(
+                            meeting_id, span.speaker, span.offset
                         )
                 except Exception:
                     log.exception(

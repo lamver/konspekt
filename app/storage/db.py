@@ -30,7 +30,7 @@ from ..core.models import (
 
 log = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS meetings (
@@ -121,6 +121,22 @@ CREATE TABLE IF NOT EXISTS audio_chunks (
     duration_s  REAL NOT NULL DEFAULT 0
 );
 
+-- Куски речи, которые не успели распознать.
+--
+-- Звук их цел в WAV, пропало только распознавание, и досчёт после
+-- «стоп» берёт тот же интервал из файла. В памяти этот список держать
+-- нельзя: досчёт идёт фоном и может занять минуты, а встреча уже помечена
+-- готовой, и человек вправе закрыть программу. Запись в базе значит, что
+-- недосчитанное досчитается при следующем запуске, а не пропадёт молча.
+CREATE TABLE IF NOT EXISTS missed_spans (
+    id          TEXT PRIMARY KEY,
+    meeting_id  TEXT NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,
+    speaker     TEXT NOT NULL DEFAULT 'me',   -- me | them
+    offset_s    REAL NOT NULL DEFAULT 0,      -- место во времени встречи
+    duration_s  REAL NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_missed_meeting ON missed_spans(meeting_id, offset_s);
 CREATE INDEX IF NOT EXISTS idx_chunks_meeting ON audio_chunks(meeting_id, start_s);
 CREATE INDEX IF NOT EXISTS idx_notes_meeting ON note_lines(meeting_id);
 CREATE INDEX IF NOT EXISTS idx_segments_meeting ON transcript_segments(meeting_id, start_s);
@@ -650,6 +666,56 @@ class Store:
                 " WHERE meeting_id=? ORDER BY start_s",
                 (meeting_id,),
             ).fetchall()
+        return [dict(r) for r in rows]
+
+    # --- недосчитанные куски речи -------------------------------------
+
+    def add_missed_spans(self, meeting_id: str, spans: list) -> None:
+        """Запомнить куски, которые ещё предстоит досчитать.
+
+        Пишется до начала досчёта, а не после: если программу
+        закроют посреди досчёта, список уже должен лежать на диске.
+        """
+        if not spans:
+            return
+        with self._lock:
+            self._conn.executemany(
+                "INSERT INTO missed_spans(id, meeting_id, speaker, offset_s, duration_s)"
+                " VALUES (?,?,?,?,?)",
+                [(new_id(), meeting_id, s.speaker, s.offset, s.duration) for s in spans],
+            )
+            self._conn.commit()
+
+    def drop_missed_span(self, meeting_id: str, speaker: str, offset: float) -> None:
+        """Вычеркнуть досчитанный кусок.
+
+        По одному, а не все сразу в конце: досчёт могут прервать
+        на любом месте, и тогда в базе должно остаться ровно то, что
+        ещё не сделано. Сравнение времени с допуском: в базе REAL,
+        и точное равенство дробных чисел ненадёжно.
+        """
+        with self._lock:
+            self._conn.execute(
+                "DELETE FROM missed_spans WHERE meeting_id=? AND speaker=?"
+                " AND abs(offset_s - ?) < 0.001",
+                (meeting_id, speaker, offset),
+            )
+            self._conn.commit()
+
+    def list_missed_spans(self, meeting_id: str | None = None) -> list[dict[str, Any]]:
+        """Что осталось досчитать. Без встречи — по всем сразу."""
+        with self._lock:
+            if meeting_id is None:
+                rows = self._conn.execute(
+                    "SELECT meeting_id, speaker, offset_s, duration_s FROM missed_spans"
+                    " ORDER BY meeting_id, offset_s"
+                ).fetchall()
+            else:
+                rows = self._conn.execute(
+                    "SELECT meeting_id, speaker, offset_s, duration_s FROM missed_spans"
+                    " WHERE meeting_id=? ORDER BY offset_s",
+                    (meeting_id,),
+                ).fetchall()
         return [dict(r) for r in rows]
 
     # --- знакомые голоса --------------------------------------------------

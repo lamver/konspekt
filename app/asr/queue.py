@@ -56,6 +56,12 @@ class Job:
     # не ищет, и его всегда можно выбросить — настоящая фраза придёт
     # следом и заменит его целиком.
     draft: bool = False
+    # Что сделать, когда кусок действительно распознан и текст ушёл
+    # дальше. Нужно досчёту: вычеркивать кусок из списка недоделанного
+    # по факту постановки в очередь нельзя. Очередь всегда на десятки
+    # кусков длиннее того, что уже распознано, и при закрытии программы
+    # всё, что в ней стояло, считалось бы сделанным и пропадало бы молча.
+    done: Callable[[], None] | None = None
 
 
 @dataclass
@@ -222,6 +228,7 @@ class TranscriptionQueue:
         pcm: np.ndarray,
         offset: float,
         block: bool = True,
+        done: Callable[[], None] | None = None,
     ) -> None:
         """Положить уже готовый кусок речи, минуя VAD.
 
@@ -233,7 +240,7 @@ class TranscriptionQueue:
         """
         with self._lock:
             self._start_locked()
-        self._put(Job(meeting_id, speaker, pcm, offset), block)
+        self._put(Job(meeting_id, speaker, pcm, offset, done=done), block)
 
 
     def _peek(self, meeting_id: str, speaker: str) -> None:
@@ -405,6 +412,10 @@ class TranscriptionQueue:
                         continue
                     self._identify(segment, job)
                     self.on_segment(segment)
+                if job.done is not None:
+                    # Только здесь, после успешного распознавания: при
+                    # ошибке кусок обязан остаться в списке недоделанного.
+                    job.done()
             except Exception:
                 # Один плохой чанк не должен останавливать распознавание.
                 log.exception("Ошибка обработки чанка %s@%.1fс", job.speaker, job.offset)
