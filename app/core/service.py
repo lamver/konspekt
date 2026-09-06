@@ -1294,7 +1294,11 @@ class AppService:
             status=MeetingStatus.READY,
             audio_path=audio_path,
         )
-        bus.emit(RECORDING_STOPPED, {"meeting_id": meeting_id})
+        # Окну важно знать, что расшифровка ещё дополняется: иначе оно
+        # сразу отправит неполный транскрипт в заметки, а человек решит,
+        # что куски речи просто потерялись.
+        bus.emit(RECORDING_STOPPED,
+                 {"meeting_id": meeting_id, "backfill": bool(missed)})
         bus.emit(MEETINGS_CHANGED)
         return self.get_meeting(meeting_id)
 

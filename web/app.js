@@ -26,6 +26,10 @@ const state = {
   // Какую встречу сейчас разбирает модель.
   busyMeetingId: null,
   summaryText: '',
+  // Идёт ли досчёт кусков, не влезших в живую очередь распознавания,
+  // и какой встрече после этого полагаются автоматические заметки.
+  backfilling: false,
+  pendingSummaryId: null,
 };
 
 const el = (id) => document.getElementById(id);
@@ -121,7 +125,15 @@ window.__konspekt_event = function (payload) {
       // Именно refreshMeta, а не selectMeeting: перезагрузка встречи
       // затёрла бы текст, который пользователь печатает прямо сейчас.
       if (state.currentId) refreshMeta(state.currentId);
-      maybeAutoSummary(payload.meeting_id);
+      if (payload.backfill) {
+        // Часть речи ещё досчитывается из записи. Заметки по такой
+        // расшифровке потеряли бы ровно те куски, ради которых всё
+        // и затевалось, поэтому ждём конца докатки.
+        state.backfilling = true;
+        state.pendingSummaryId = payload.meeting_id;
+      } else {
+        maybeAutoSummary(payload.meeting_id);
+      }
       break;
     case 'recording.level':
       renderLevels(payload.me, payload.them);
@@ -221,8 +233,57 @@ window.__konspekt_event = function (payload) {
     case 'chat.error':
       onChatError(payload);
       break;
+    case 'recognition.backfill':
+      onBackfill(payload);
+      break;
   }
 };
+
+/**
+ * Докатка пропущенного: показать, что расшифровка ещё дополняется.
+ *
+ * Встреча уже помечена готовой, но куски, не влезшие в живую очередь,
+ * досчитываются из записи. Без этой строки человек видит расшифровку с
+ * дырами и не знает, что они вот-вот заполнятся сами.
+ */
+function onBackfill(payload) {
+  if (payload.meeting_id !== state.currentId && payload.state !== 'done') {
+    // Не своя встреча: молчим, но факт незавершённой докатки помним,
+    // чтобы автосаммари не ушло в модель по неполной расшифровке.
+    state.backfilling = payload.state !== 'done';
+    return;
+  }
+  if (payload.state === 'done') {
+    state.backfilling = false;
+    hideToast();
+    // Докатка кончилась: теперь расшифровка полная, и можно за заметки.
+    if (state.pendingSummaryId) {
+      const id = state.pendingSummaryId;
+      state.pendingSummaryId = null;
+      maybeAutoSummary(id);
+    }
+    return;
+  }
+  state.backfilling = true;
+  const total = payload.total || 0;
+  const done = payload.done || 0;
+  showToast(
+    payload.state === 'start'
+      ? `Досчитываем пропущенное: ${total} ${plural(total, 'кусок', 'куска', 'кусков')}`
+      : `Досчитываем пропущенное: ${done} из ${total}`,
+    60000,
+  );
+}
+
+/** Русское склонение числительного: 1 кусок, 2 куска, 5 кусков. */
+function plural(n, one, few, many) {
+  const mod100 = n % 100;
+  if (mod100 >= 11 && mod100 <= 14) return many;
+  const mod10 = n % 10;
+  if (mod10 === 1) return one;
+  if (mod10 >= 2 && mod10 <= 4) return few;
+  return many;
+}
 
 /* --- Саммари и чат ------------------------------------------------------ */
 
@@ -970,7 +1031,23 @@ async function playTurn(btn, turn) {
 }
 
 /**
- * Добавить реплику в конец транскрипта.
+ * Найти блок, перед которым должна встать реплика.
+ *
+ * Обычно реплики приходят по порядку и место — конец списка. Но после
+ * «стоп» докатка досчитывает куски, пропущенные при перегрузке, и они
+ * приходят из середины встречи. Дописывать их в конец значит показать
+ * человеку разговор с перепутанным порядком реплик.
+ */
+function findTurnAfter(start) {
+  const turns = ui.transcript.children;
+  for (let i = turns.length - 1; i >= 0; i -= 1) {
+    if (Number(turns[i].dataset.start || 0) <= start) return turns[i].nextElementSibling;
+  }
+  return turns[0] || null;
+}
+
+/**
+ * Добавить реплику в транскрипт, на её место по времени.
  *
  * Реплики одного источника склеиваем в один блок, но только пока между
  * ними нет заметной паузы: без склейки связная речь рвётся на лесенку,
@@ -978,7 +1055,13 @@ async function playTurn(btn, turn) {
  */
 function appendSegment(seg, scroll = true) {
   const isMe = seg.speaker === 'me';
-  const last = ui.transcript.lastElementChild;
+  // Куда встаёт реплика. Для живой речи это конец, для досчитанного
+  // куска — середина, перед первой репликой, которая началась позже.
+  const before = findTurnAfter(seg.start);
+  // Склеивать можно только с предыдущим по времени блоком, а не с
+  // последним нарисованным: иначе досчитанный кусок из начала встречи
+  // прилипал бы к её концу.
+  const last = before ? before.previousElementSibling : ui.transcript.lastElementChild;
 
   // Склеиваем только то, что человек сказал подряд. Если между репликами
   // была заметная пауза, это уже новая мысль и новый абзац, иначе весь
@@ -1063,12 +1146,14 @@ function appendSegment(seg, scroll = true) {
 
     turn.appendChild(head);
     turn.appendChild(text);
-    ui.transcript.appendChild(turn);
+    ui.transcript.insertBefore(turn, before);
   }
 
   updateTranscriptEmpty();
   // Прокручиваем к свежей реплике, но только если человек не листает выше.
-  if (scroll) {
+  // За досчитанным куском из середины встречи не прыгаем: человек в этот
+  // момент читает конец расшифровки, и рывок вверх был бы неожиданным.
+  if (scroll && !before) {
     const pane = ui.transcript.parentElement;
     const nearBottom = pane.scrollHeight - pane.scrollTop - pane.clientHeight < 80;
     if (nearBottom) pane.scrollTop = pane.scrollHeight;
