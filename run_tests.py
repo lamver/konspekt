@@ -37,6 +37,7 @@ FAST = [
     "backfill_window_test.py",
     "backfill_rivalry_test.py",
     "backfill_restart_test.py",
+    "long_record_test.py",
     "live_test.py",
     "langid_test.py",
     "voices_test.py",
