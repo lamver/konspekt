@@ -202,6 +202,82 @@ class AppService:
         # тогда, когда человек только осматривается, чем когда он уже
         # бросил файл и ждёт результата.
         self._prefetch_asr_model()
+        # Диктовка: своя клавиша, свой микрофон, чужое окно. Поднимается
+        # последней и только если человек её включил: она перехватывает
+        # клавиши глобально, а такое незачем делать без спроса.
+        self.диктовка = None
+        self._клавиша_диктовки = None
+        self.запустить_диктовку()
+
+    # --- диктовка ---------------------------------------------------------
+
+    def запустить_диктовку(self) -> bool:
+        """Поднять или переподнять диктовку по текущим настройкам."""
+        self.остановить_диктовку()
+        настройки = getattr(self.settings, "dictation", None)
+        if настройки is None or not настройки.enabled:
+            return False
+
+        from ..dictation.клавиша import КлавишаДиктовки
+        from ..dictation.служба import СлужбаДиктовки
+
+        self.диктовка = СлужбаДиктовки(self)
+        self._клавиша_диктовки = КлавишаДиктовки(
+            сочетание=настройки.hotkey,
+            режим=настройки.mode,
+            на_старт=self.диктовка.начать,
+            на_стоп=self.диктовка.закончить,
+        )
+        if not self._клавиша_диктовки.старт():
+            self._клавиша_диктовки = None
+            self.диктовка = None
+            return False
+        # Первая загрузка модели занимает пару секунд. Прогреваем её
+        # заранее, иначе человек получит эти секунды в подарок к первой
+        # же диктовке и решит, что она медленная.
+        self.диктовка.прогреть()
+        return True
+
+    def остановить_диктовку(self) -> None:
+        if self._клавиша_диктовки is not None:
+            self._клавиша_диктовки.стоп()
+            self._клавиша_диктовки = None
+        if self.диктовка is not None:
+            self.диктовка.отменить()
+            self.диктовка = None
+
+    def dictation_settings(self) -> dict:
+        """Настройки диктовки для окна плюс то, работает ли она сейчас."""
+        н = self.settings.dictation
+        return {
+            "enabled": н.enabled,
+            "hotkey": н.hotkey,
+            "mode": н.mode,
+            "paste_method": н.paste_method,
+            # Включить мало: клавишу мог не отдать перехватчик другой
+            # программы, а модель может быть не скачана. Человек должен
+            # видеть не своё намерение, а настоящее положение дел.
+            "running": self._клавиша_диктовки is not None,
+            "problem": (
+                self.диктовка._почему_нельзя() if self.диктовка is not None else ""
+            ),
+        }
+
+    def save_dictation_settings(self, **fields) -> dict:
+        н = self.settings.dictation
+        if "enabled" in fields:
+            н.enabled = bool(fields["enabled"])
+        if fields.get("hotkey"):
+            н.hotkey = str(fields["hotkey"])
+        if fields.get("mode") in ("hold", "toggle"):
+            н.mode = str(fields["mode"])
+        if fields.get("paste_method") in ("auto", "type", "clipboard"):
+            н.paste_method = str(fields["paste_method"])
+        settings_mod.save(self.settings)
+        # Переподнимаем сразу: настройка, которая применится «когда-нибудь
+        # потом», для человека выглядит как сломанная.
+        self.запустить_диктовку()
+        return self.dictation_settings()
 
     def _on_new_version(self, payload: dict) -> None:
         """Нашлась новая версия — тихо качаем её в фоне."""
@@ -1988,6 +2064,10 @@ class AppService:
     def shutdown(self) -> None:
         if self.capture.is_recording:
             self.stop_recording()
+        # Клавиша диктовки перехватывает ввод глобально. Не сняв
+        # перехват, мы оставили бы висеть чужой обработчик клавиатуры
+        # после закрытия программы.
+        self.остановить_диктовку()
         # Недосчитанный ответ всё равно некому показать.
         self._llm_cancel = True
         self.llm.shutdown()

@@ -95,11 +95,30 @@ class LlmSettings:
 
 
 @dataclass
+class DictationSettings:
+    """Диктовка: наговорил в любом приложении, получил текст в поле ввода.
+
+    Выключена по умолчанию. Она перехватывает клавиши глобально и пишет
+    микрофон, а такое нельзя включать за человека молча: он не просил.
+    """
+
+    enabled: bool = False
+    hotkey: str = "<ctrl>+<shift>+d"
+    # hold — держать клавишу, пока говоришь; toggle — нажал/нажал.
+    mode: str = "hold"
+    # auto — короткое печатаем, длинное вставляем буфером.
+    # type — всегда по буквам (не трогает буфер, но медленно).
+    # clipboard — всегда буфером (быстро, но буфер на миг чужой).
+    paste_method: str = "auto"
+
+
+@dataclass
 class Settings:
     window: WindowGeometry = field(default_factory=WindowGeometry)
     audio: AudioSettings = field(default_factory=AudioSettings)
     asr: AsrSettings = field(default_factory=AsrSettings)
     llm: LlmSettings = field(default_factory=LlmSettings)
+    dictation: DictationSettings = field(default_factory=DictationSettings)
     always_on_top: bool = True
     theme: str = "system"          # system | light | dark
     hotkey: str = "<ctrl>+<shift>+k"
@@ -138,8 +157,12 @@ def load() -> Settings:
             audio.chunk_seconds = AudioSettings.chunk_seconds
         asr = _section(AsrSettings, raw.pop("asr", {}))
         llm = _section(LlmSettings, raw.pop("llm", {}))
+        dictation = _section(DictationSettings, raw.pop("dictation", {}))
         known = {k: v for k, v in raw.items() if k in Settings.__dataclass_fields__}
-        return Settings(window=window, audio=audio, asr=asr, llm=llm, **known)
+        return Settings(
+            window=window, audio=audio, asr=asr, llm=llm,
+            dictation=dictation, **known,
+        )
     except Exception:
         # Битый конфиг не повод не запуститься.
         log.exception("Не удалось прочитать настройки, берём значения по умолчанию")

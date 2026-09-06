@@ -130,6 +130,14 @@ class Api:
 
     # --- импорт готовых записей -------------------------------------------
 
+    def dictation_settings(self) -> dict[str, Any]:
+        """Настройки диктовки и её текущее состояние."""
+        return self._service.dictation_settings()
+
+    def save_dictation_settings(self, fields: dict[str, Any]) -> dict[str, Any]:
+        """Сохранить настройки диктовки и сразу переподнять её."""
+        return self._service.save_dictation_settings(**fields)
+
     def import_files(self, paths: list[str]) -> list[dict[str, Any]]:
         """Разобрать готовые записи: на каждый файл своя встреча."""
         return self._service.import_files(list(paths or []))
