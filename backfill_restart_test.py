@@ -62,6 +62,13 @@ import numpy as np
 tmp = Path(sys.argv[1])
 медленно = float(sys.argv[2])
 
+# Берём `app` из того же дерева, что и сам тест, а не из установленного
+# пакета. В .venv лежит editable-ссылка на боевой каталог, поэтому без
+# этой строки дочерний процесс импортировал бы код из рабочей копии,
+# даже когда тест запущен в отдельном git worktree, и проверка «сломай
+# код, тест должен покраснеть» была бы обманом: он бы всегда зеленел.
+sys.path.insert(0, sys.argv[3])
+
 from app.core import paths as paths_mod
 audio_root = tmp / "audio"
 paths_mod.data_dir = lambda: tmp
@@ -133,7 +140,8 @@ def main() -> int:
     скрипт.write_text(textwrap.dedent(ПЕРВЫЙ_ЗАПУСК), encoding="utf-8")
 
     p = subprocess.Popen(
-        [sys.executable, str(скрипт), str(tmp), "0.3"],
+        [sys.executable, str(скрипт), str(tmp), "0.3",
+         str(Path(__file__).resolve().parent)],
         cwd=str(Path(__file__).parent),
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
         text=True, encoding="utf-8", errors="replace",
