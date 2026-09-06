@@ -250,6 +250,7 @@
         <button type="button" class="prefs__tab is-active" data-tab="audio">Звук</button>
         <button type="button" class="prefs__tab" data-tab="voices">Голоса</button>
         <button type="button" class="prefs__tab" data-tab="speech">Распознавание</button>
+        <button type="button" class="prefs__tab" data-tab="dictation">Диктовка</button>
         <button type="button" class="prefs__tab" data-tab="notes">Заметки</button>
         <button type="button" class="prefs__tab" data-tab="look">Оформление</button>
         <button type="button" class="prefs__tab" data-tab="data">Данные</button>
@@ -289,6 +290,63 @@
             <p class="hint">Системный звук берётся с того же устройства, куда идёт
             воспроизведение. Если собеседника не слышно, выберите то устройство,
             в котором вы его слушаете.</p>
+          </div>
+        </section>
+
+        <!-- Диктовка -->
+        <section class="prefs__page" data-page="dictation" hidden>
+          <div class="card">
+            <label class="check">
+              <input type="checkbox" id="dictation-enabled">
+              <span>Диктовать в любое приложение</span>
+            </label>
+            <p class="hint">Зажмите сочетание клавиш, наговорите, отпустите —
+            текст появится там, где стоит курсор: в письме, в чате, в редакторе.
+            Konspekt при этом можно не открывать.</p>
+            <p class="hint" id="dictation-problem" hidden></p>
+          </div>
+
+          <div class="card">
+            <label class="field">
+              <span class="field__label">Сочетание клавиш</span>
+              <select id="dictation-hotkey">
+                <option value="&lt;ctrl&gt;+&lt;shift&gt;+d">Ctrl + Shift + D</option>
+                <option value="&lt;ctrl&gt;+&lt;shift&gt;+space">Ctrl + Shift + Пробел</option>
+                <option value="&lt;ctrl&gt;+&lt;alt&gt;+d">Ctrl + Alt + D</option>
+                <option value="&lt;alt&gt;+q">Alt + Q</option>
+              </select>
+            </label>
+            <label class="field">
+              <span class="field__label">Как включать</span>
+              <select id="dictation-mode">
+                <option value="hold">Держать клавиши, пока говорю</option>
+                <option value="toggle">Нажал — пошло, нажал ещё раз — хватит</option>
+              </select>
+            </label>
+            <p class="hint">Пока держите клавиши, невозможно забыть выключить
+            запись. Второй способ удобнее для длинного текста, но требует
+            помнить, что диктовка идёт.</p>
+          </div>
+
+          <div class="card">
+            <label class="field">
+              <span class="field__label">Как вставлять текст</span>
+              <select id="dictation-paste">
+                <option value="auto">Через буфер обмена (быстро)</option>
+                <option value="type">Печатать по буквам (не трогает буфер)</option>
+              </select>
+            </label>
+            <p class="hint">Через буфер текст появляется мгновенно, а прежнее
+            содержимое буфера возвращается на место. Печать по буквам буфер не
+            трогает вовсе, но занимает около секунды на строку и в некоторых
+            программах теряет символы.</p>
+          </div>
+
+          <div class="card">
+            <p class="hint">Диктовка не работает во время записи встречи: модель
+            одна, и на два дела сразу её не хватит. В окна, запущенные от имени
+            администратора, Windows не пропускает ввод ни от одной программы —
+            в этом случае текст останется в буфере обмена.</p>
           </div>
         </section>
 

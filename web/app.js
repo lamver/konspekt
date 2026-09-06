@@ -1713,6 +1713,7 @@ async function showVersion() {
 const PREFS_TITLES = {
   audio: 'Звук',
   speech: 'Распознавание',
+  dictation: 'Диктовка',
   voices: 'Голоса',
   notes: 'Заметки',
   look: 'Оформление',
@@ -1736,6 +1737,46 @@ function showPrefsTab(tab) {
   if (tab === 'about') loadAbout();
   if (tab === 'data') loadUsage();
   if (tab === 'speech') loadAsrSettings();
+  if (tab === 'dictation') loadDictation();
+}
+
+/* --- Диктовка ------------------------------------------------------------ */
+
+async function loadDictation() {
+  const s = await api.dictation_settings();
+  if (!s) return;
+  ui.dictEnabled.checked = !!s.enabled;
+  ui.dictHotkey.value = s.hotkey || '<ctrl>+<shift>+d';
+  ui.dictMode.value = s.mode || 'hold';
+  ui.dictPaste.value = s.paste_method === 'type' ? 'type' : 'auto';
+  showDictationProblem(s);
+}
+
+/** Показать, почему диктовка не работает, даже если галочка стоит.
+ *
+ * Включить мало: клавишу мог перехватить кто-то другой, а модель может
+ * быть не скачана. Промолчать здесь значит оставить человека наедине с
+ * молчащей программой. */
+function showDictationProblem(s) {
+  let текст = '';
+  if (s.enabled && !s.running) {
+    текст = 'Не удалось перехватить эти клавиши: возможно, их уже занимает '
+      + 'другая программа. Попробуйте другое сочетание.';
+  } else if (s.enabled && s.problem) {
+    текст = s.problem[0].toUpperCase() + s.problem.slice(1) + '.';
+  }
+  ui.dictProblem.textContent = текст;
+  ui.dictProblem.hidden = !текст;
+}
+
+async function saveDictation() {
+  const s = await api.save_dictation_settings({
+    enabled: ui.dictEnabled.checked,
+    hotkey: ui.dictHotkey.value,
+    mode: ui.dictMode.value,
+    paste_method: ui.dictPaste.value,
+  });
+  if (s) showDictationProblem(s);
 }
 
 /* --- Распознавание ------------------------------------------------------- */
@@ -2333,6 +2374,11 @@ function bindUi() {
     asrSize: el('asr-size'),
     asrSizeHint: el('asr-size-hint'),
     asrForeign: el('asr-foreign'),
+    dictEnabled: el('dictation-enabled'),
+    dictHotkey: el('dictation-hotkey'),
+    dictMode: el('dictation-mode'),
+    dictPaste: el('dictation-paste'),
+    dictProblem: el('dictation-problem'),
     systemEnabled: el('system-enabled'),
     enrollState: el('enroll-state'),
     enrollPrompt: el('enroll-prompt'),
@@ -2437,6 +2483,10 @@ function bindUi() {
   ui.asrLanguage.addEventListener('change', saveAsrSettings);
   ui.asrDetect.addEventListener('change', saveAsrSettings);
   ui.asrSize.addEventListener('change', saveAsrSettings);
+  ui.dictEnabled.addEventListener('change', saveDictation);
+  ui.dictHotkey.addEventListener('change', saveDictation);
+  ui.dictMode.addEventListener('change', saveDictation);
+  ui.dictPaste.addEventListener('change', saveDictation);
   ui.llmUrl.addEventListener('change', saveLlmSettings);
   ui.llmKey.addEventListener('change', saveLlmSettings);
   ui.llmModel.addEventListener('change', saveLlmSettings);
