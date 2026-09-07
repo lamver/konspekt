@@ -59,6 +59,7 @@ FAST = [
     "bundle_test.py",
     "upgrade_test.py",
     "version_test.py",
+    "лицензии_test.py",
     "update_test.py",
     "migration_test.py",
     "profile_test.py",
