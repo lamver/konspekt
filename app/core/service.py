@@ -948,20 +948,32 @@ class AppService:
         return self._ensure_asr_model()
 
     def _recover_stale_recordings(self) -> None:
-        """Чиним встречи, зависшие в статусе «идёт запись».
+        """Чиним встречи, зависшие в записи или в разборе файла.
 
         Приложение могло упасть или быть убито во время записи. Тогда в базе
         остаётся встреча со статусом recording, которой уже никто не пишет,
         и в списке навсегда мигает красная точка.
+
+        То же самое бывает с загруженным файлом: программу закрыли, пока
+        он разбирался, и встреча навсегда остаётся «обрабатывается».
+        Сама она из этого состояния не выйдет, потому что разбирать её
+        больше некому, а человеку видно только вечное ожидание. Текст,
+        который успели распознать, при этом на месте и никуда не денется.
         """
+        зависшие = (MeetingStatus.RECORDING, MeetingStatus.PROCESSING)
         for meeting in self.store.list_meetings():
-            if meeting.status is not MeetingStatus.RECORDING:
+            if meeting.status not in зависшие:
                 continue
+            было = meeting.status
             ended = meeting.ended_at or meeting.started_at or meeting.created_at
             self.store.update_meeting(
                 meeting.id, status=MeetingStatus.READY, ended_at=ended
             )
-            log.info("Восстановлена прерванная запись: %s", meeting.id)
+            log.info(
+                "Восстановлена прерванная %s: %s",
+                "запись" if было is MeetingStatus.RECORDING else "загрузка",
+                meeting.id,
+            )
 
     def _добрать_недосчитанное(self) -> None:
         """Досчитать то, что не успели в прошлый раз.

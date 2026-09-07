@@ -222,6 +222,11 @@ class ImportQueue:
         while True:
             task = self._queue.get()
             if task is None:
+                # Метку тоже отмечаем сделанной. Сейчас счётчик этой
+                # очереди никто не ждёт, но такой же недосмотр в очереди
+                # распознавания стоил нам зависшего импорта, и оставлять
+                # вторую такую же ловушку незачем.
+                self._queue.task_done()
                 break
             try:
                 self._process(task)

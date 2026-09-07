@@ -361,7 +361,20 @@ class TranscriptionQueue:
             time.sleep(0.05)
         # Последний чанк уже вынут из очереди, но ещё считается: без этой
         # паузы его реплики попали бы в следующую встречу.
-        self._queue.join()
+        #
+        # Ждём с тем же потолком, что и выше. Голый join() здесь был
+        # ловушкой: стоило счётчику задач разойтись с действительностью,
+        # и ожидание становилось вечным, а вместе с ним замирал и
+        # единственный поток импорта со всей очередью файлов.
+        with self._queue.all_tasks_done:
+            while self._queue.unfinished_tasks:
+                осталось = deadline - time.monotonic()
+                if осталось <= 0:
+                    log.warning(
+                        "Последний чанк не досчитан за %.0f с, идём дальше", timeout
+                    )
+                    return False
+                self._queue.all_tasks_done.wait(осталось)
         return True
 
     def stop(self, timeout: float = 30.0) -> None:
@@ -388,6 +401,12 @@ class TranscriptionQueue:
         while True:
             job = self._queue.get()
             if job is None:
+                # Метка тоже обязана быть отмечена сделанной. Без этого
+                # у очереди навсегда оставался долг в одну задачу, и
+                # следующий wait_idle ждал его вечно: человек записывал
+                # встречу, потом бросал в окно файлы, и первый замирал
+                # на 100%, а остальные не начинались вовсе.
+                self._queue.task_done()
                 break
             try:
                 if self.ensure_model is not None and not self.ensure_model():
