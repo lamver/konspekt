@@ -6,6 +6,107 @@
 
 'use strict';
 
+/* --- Локализация ---------------------------------------------------------
+ *
+ * Словари лежат в web/i18n/<lang>.json, структура — вложенные объекты
+ * с точечными ключами (titlebar.settings). Язык выбирается в настройках
+ * и хранится в settings.json на стороне Python; здесь только читаем его
+ * из state.settings.language, подставленного при старте.
+ */
+
+const SUPPORTED_LANGS = ['ru', 'en', 'es', 'sr'];
+let i18n = { lang: 'ru', dict: {} };
+
+/**
+ * Загрузить словарь языка.
+ *
+ * Не fetch(): под pywebview страница открыта с file://, и запрос к
+ * соседнему JSON там режется как кросс-origin и тихо проваливается.
+ * Словарь идёт через мост, как и любые другие данные из Python.
+ */
+async function loadDict(lang) {
+  try {
+    const dict = await api.get_i18n_dict(lang);
+    if (!dict || typeof dict !== 'object' || !Object.keys(dict).length) {
+      throw new Error('пустой словарь');
+    }
+    return dict;
+  } catch (e) {
+    console.error(`Не удалось загрузить словарь ${lang}:`, e);
+    return null;
+  }
+}
+
+/**
+ * Перевести ключ вида "prefs.tab.audio" с подстановкой {placeholder}.
+ *
+ * Отсутствующий ключ — не повод падать: возвращаем сам ключ, чтобы
+ * дыра была видна на экране и её нашли, а не тихая пустая строка.
+ */
+function t(key, vars) {
+  const parts = key.split('.');
+  let node = i18n.dict;
+  for (const p of parts) {
+    if (node && typeof node === 'object' && p in node) node = node[p];
+    else { node = null; break; }
+  }
+  if (typeof node !== 'string') return key;
+  if (!vars) return node;
+  return node.replace(/\{(\w+)\}/g, (m, name) => (name in vars ? String(vars[name]) : m));
+}
+
+/** Русское/славянское склонение через ключи вида foo.one/few/many. */
+function tPlural(baseKey, n, vars) {
+  const forms = t(`${baseKey}.one`) !== `${baseKey}.one`
+    ? { one: t(`${baseKey}.one`), few: t(`${baseKey}.few`), many: t(`${baseKey}.many`) }
+    : null;
+  if (!forms) return '';
+  return plural(n, forms.one, forms.few, forms.many);
+}
+
+/** Пройти по DOM и подставить переводы в data-i18n / data-i18n-placeholder. */
+function applyI18n(root = document) {
+  root.querySelectorAll('[data-i18n]').forEach((node) => {
+    const key = node.dataset.i18n;
+    const html = t(key);
+    if (node.dataset.i18nHtml === '1') node.innerHTML = html;
+    else node.textContent = html;
+  });
+  root.querySelectorAll('[data-i18n-placeholder]').forEach((node) => {
+    node.placeholder = t(node.dataset.i18nPlaceholder);
+  });
+  root.querySelectorAll('[data-i18n-title]').forEach((node) => {
+    node.title = t(node.dataset.i18nTitle);
+  });
+  root.querySelectorAll('[data-i18n-aria-label]').forEach((node) => {
+    node.setAttribute('aria-label', t(node.dataset.i18nAriaLabel));
+  });
+}
+
+/** Сменить язык интерфейса: подгружаем словарь и перерисовываем DOM. */
+async function setLanguage(lang, { persist = true } = {}) {
+  if (!SUPPORTED_LANGS.includes(lang)) lang = 'ru';
+  const dict = await loadDict(lang);
+  if (!dict) return;
+  i18n = { lang, dict };
+  document.documentElement.setAttribute('lang', lang === 'sr' ? 'sr-Latn' : lang);
+  applyI18n();
+  refreshDynamicTexts();
+  syncLanguageSwitch();
+  if (persist) await api.set_language(lang);
+}
+
+/** Перерисовать тексты, которые app.js генерирует сам, а не через data-i18n. */
+function refreshDynamicTexts() {
+  if (ui.recLabel) ui.recLabel.textContent = state.isRecording ? t('recording.stop') : t('recording.start');
+  if (ui.summaryRun) {
+    const has = ui.summaryBody && !ui.summaryBody.hidden && ui.summaryBody.innerHTML.trim();
+    ui.summaryRun.textContent = has ? t('summary.redo') : t('summary.run');
+  }
+  if (state.currentId && state.current) renderMeta(state.current);
+  if (ui.list) renderMeetingList();
+}
+
 const state = {
   meetings: [],
   currentId: null,
@@ -78,7 +179,7 @@ const api = new Proxy({}, {
     try {
       return await window.pywebview.api[name](...args);
     } catch (err) {
-      console.error(`Ошибка вызова ${String(name)}:`, err);
+      console.error(`${t('api.call_error')} ${String(name)}:`, err);
       return null;
     }
   },
@@ -142,12 +243,12 @@ window.__konspekt_event = function (payload) {
       // Дорожка немая, но запись идёт: только предупреждаем. Трогать
       // состояние кнопки нельзя, иначе окно решит, что записи нет, и
       // кнопка перестанет слушаться посреди живой встречи.
-      showToast(payload.message || 'На одной из дорожек нет звука', 10000);
+      showToast(payload.message || t('recording.silent'), 10000);
       break;
     case 'recording.error':
       // Запись не началась: сообщаем прямо, иначе человек будет думать,
       // что встреча пишется, и потеряет её.
-      showToast(payload.message || 'Не удалось начать запись');
+      showToast(payload.message || t('recording.error'));
       state.isRecording = false;
       state.recordingId = null;
       renderRecordingState();
@@ -186,18 +287,18 @@ window.__konspekt_event = function (payload) {
       // Модель приезжает при первом запросе, и это полтора гигабайта.
       // Без процентов ожидание неотличимо от зависания.
       if (payload.state === 'downloading') {
-        setSummaryStatus(`Скачиваем модель… ${payload.percent}%`);
+        setSummaryStatus(t('summary.downloading_model', { percent: payload.percent }));
         // И в боковой панели тоже: заголовок саммари видно только на
         // своей вкладке, а ждать полтора гигабайта человек будет где
         // угодно.
-        showModelLoad(payload.bytes, payload.total, 'Качаем модель заметок',
-          'Один раз, 1,7 ГБ. Нужна для саммари и вопросов по встрече.');
+        showModelLoad(payload.bytes, payload.total, t('summary.downloading_model_title'),
+          t('summary.download_hint'));
       } else if (payload.state === 'error') {
         hideModelLoad();
-        showToast(payload.message || 'Не удалось скачать модель');
+        showToast(payload.message || t('summary.download_error'));
       } else {
         hideModelLoad();
-        setSummaryStatus('Модель готова, запускаем…');
+        setSummaryStatus(t('summary.model_ready'));
         refreshLlmStatus();
       }
       break;
@@ -222,7 +323,7 @@ window.__konspekt_event = function (payload) {
     case 'summary.error':
       setBusy(false);
       renderSummary(state.current ? state.current.summary : '');
-      showToast(payload.error || 'Не удалось сделать заметки');
+      showToast(payload.error || t('summary.error'));
       break;
     case 'chat.chunk':
       onChatChunk(payload);
@@ -269,8 +370,8 @@ function onBackfill(payload) {
   const done = payload.done || 0;
   showToast(
     payload.state === 'start'
-      ? `Досчитываем пропущенное: ${total} ${plural(total, 'кусок', 'куска', 'кусков')}`
-      : `Досчитываем пропущенное: ${done} из ${total}`,
+      ? t('summary.backfill_start', { total, piece: tPlural('summary.piece_word', total) })
+      : t('summary.backfill_progress', { done, total }),
     60000,
   );
 }
@@ -323,7 +424,7 @@ function renderSummary(text) {
   ui.summaryBody.innerHTML = has ? renderMarkdown(text) : '';
   ui.summaryBody.hidden = !has;
   ui.summaryEmpty.hidden = has;
-  ui.summaryRun.textContent = has ? 'Пересобрать' : 'Сделать заметки';
+  ui.summaryRun.textContent = has ? t('summary.redo') : t('summary.run');
   setSummaryStatus('');
 }
 
@@ -386,18 +487,18 @@ async function startSummary() {
   ui.summaryBody.hidden = false;
   ui.summaryEmpty.hidden = true;
   setBusy(true, state.currentId);
-  setSummaryStatus('Читаем расшифровку…');
+  setSummaryStatus(t('summary.reading'));
   const res = await api.generate_summary(state.currentId);
   if (!res || !res.ok) {
     setBusy(false);
     renderSummary(state.current ? state.current.summary : '');
-    showToast((res && res.error) || 'Не удалось сделать заметки');
+    showToast((res && res.error) || t('summary.error'));
   }
 }
 
 function onSummaryChunk(payload) {
   if (payload.meeting_id !== state.currentId) return;
-  if (!state.summaryText) setSummaryStatus('Печатаем заметки…');
+  if (!state.summaryText) setSummaryStatus(t('summary.generating'));
   state.summaryText = (state.summaryText || '') + payload.text;
   ui.summaryBody.innerHTML = renderMarkdown(state.summaryText);
   ui.summaryBody.scrollTop = ui.summaryBody.scrollHeight;
@@ -469,7 +570,7 @@ function onChatMessage(payload) {
 
 function onChatError(payload) {
   setBusy(false);
-  showToast(payload.error || 'Не удалось получить ответ');
+  showToast(payload.error || t('chat.error'));
   if (payload.meeting_id !== state.currentId) return;
   // Пустой пузырь без ответа выглядит как зависшая программа: убираем.
   const node = ui.chatList.querySelector(`[data-msg="${payload.message_id}"]`);
@@ -482,8 +583,8 @@ function scrollChat() {
 
 async function sendQuestion() {
   const text = ui.chatText.value.trim();
-  if (!text) { showToast('Пустой вопрос'); return; }
-  if (!state.currentId) { showToast('Сначала откройте встречу'); return; }
+  if (!text) { showToast(t('chat.empty_question')); return; }
+  if (!state.currentId) { showToast(t('chat.no_meeting')); return; }
   if (state.llmBusy) return;
   ui.chatText.value = '';
   resizeChatInput();
@@ -491,7 +592,7 @@ async function sendQuestion() {
   const res = await api.ask(state.currentId, text);
   if (!res || !res.ok) {
     setBusy(false);
-    showToast((res && res.error) || 'Не удалось задать вопрос');
+    showToast((res && res.error) || t('chat.send_error'));
   }
 }
 
@@ -510,9 +611,9 @@ async function clearChat() {
 /* --- Настройки модели --------------------------------------------------- */
 
 const LLM_HINTS = {
-  local: 'Заметки считаются на этом компьютере. Ничего не уходит в сеть, но первый ответ ждёт загрузки модели.',
-  remote: 'Запись уходит на указанный сервер. Быстрее и умнее, но это уже не приватно.',
-  'null': 'Заметки и ответы выключены. Останутся запись, расшифровка и ваши пометки.',
+  local: () => t('notes_settings.hint_local'),
+  remote: () => t('notes_settings.hint_remote'),
+  'null': () => t('notes_settings.hint_off'),
 };
 
 function renderLlmSettings(status) {
@@ -524,9 +625,9 @@ function renderLlmSettings(status) {
   ui.llmModel.value = status.model || '';
   ui.llmAuto.checked = Boolean(status.auto_summary);
 
-  let hint = LLM_HINTS[status.backend] || '';
+  let hint = LLM_HINTS[status.backend] ? LLM_HINTS[status.backend]() : '';
   if (status.backend === 'local' && !status.model_ready) {
-    hint += ' Модель ещё не скачана: полтора гигабайта приедут при первом запросе.';
+    hint += t('notes_settings.hint_local_not_ready');
   }
   ui.llmHint.textContent = hint;
   ui.llmCheckResult.textContent = '';
@@ -552,13 +653,13 @@ async function saveLlmSettings() {
 }
 
 async function checkLlm() {
-  ui.llmCheckResult.textContent = 'Проверяем…';
+  ui.llmCheckResult.textContent = t('notes_settings.checking');
   await saveLlmSettings();
   const res = await api.check_llm();
   if (res && res.ok) {
-    ui.llmCheckResult.textContent = 'Связь есть, модель отвечает';
+    ui.llmCheckResult.textContent = t('notes_settings.check_ok');
   } else {
-    ui.llmCheckResult.textContent = (res && res.error) || 'Связи нет';
+    ui.llmCheckResult.textContent = (res && res.error) || t('notes_settings.check_error');
   }
 }
 
@@ -575,12 +676,13 @@ function fmtDuration(seconds) {
 function fmtDate(ts) {
   const d = new Date(ts * 1000);
   const now = new Date();
-  const time = d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-  if (d.toDateString() === now.toDateString()) return `Сегодня, ${time}`;
+  const locale = i18n.lang === 'ru' ? 'ru-RU' : i18n.lang === 'es' ? 'es-ES' : i18n.lang === 'sr' ? 'sr-Latn-RS' : 'en-US';
+  const time = d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+  if (d.toDateString() === now.toDateString()) return t('date.today', { time });
   const yesterday = new Date(now);
   yesterday.setDate(now.getDate() - 1);
-  if (d.toDateString() === yesterday.toDateString()) return `Вчера, ${time}`;
-  return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }) + `, ${time}`;
+  if (d.toDateString() === yesterday.toDateString()) return t('date.yesterday', { time });
+  return d.toLocaleDateString(locale, { day: 'numeric', month: 'short' }) + `, ${time}`;
 }
 
 /* --- Список встреч ------------------------------------------------------ */
@@ -615,7 +717,7 @@ function renderMeetingList() {
 
     const title = document.createElement('div');
     title.className = 'meeting-item__title';
-    title.textContent = m.title || 'Без названия';
+    title.textContent = m.title || t('meeting.untitled');
 
     const meta = document.createElement('div');
     meta.className = 'meeting-item__meta';
@@ -623,7 +725,7 @@ function renderMeetingList() {
       const dot = document.createElement('span');
       dot.className = 'meeting-item__dot';
       meta.appendChild(dot);
-      meta.appendChild(document.createTextNode('Идёт запись'));
+      meta.appendChild(document.createTextNode(t('meeting.recording_status')));
     } else {
       meta.textContent = fmtDate(m.created_at)
         + (m.duration > 1 ? ` · ${fmtDuration(m.duration)}` : '');
@@ -636,12 +738,12 @@ function renderMeetingList() {
     if (hit && hit.quotes.length) {
       quote = document.createElement('div');
       quote.className = 'meeting-item__quote';
-      quote.title = 'Показать это место в расшифровке';
+      quote.title = t('meeting.quote_tooltip');
       quote.appendChild(highlight(hit.quotes[0].text, q));
       if (hit.hits > 1) {
         const more = document.createElement('span');
         more.className = 'meeting-item__more';
-        more.textContent = ` ещё ${hit.hits - 1}`;
+        more.textContent = t('meeting.more_quotes', { count: hit.hits - 1 });
         quote.appendChild(more);
       }
       // Клик по цитате открывает не просто встречу, а нужное место в
@@ -658,7 +760,7 @@ function renderMeetingList() {
     const del = document.createElement('button');
     del.className = 'meeting-item__del';
     del.type = 'button';
-    del.title = 'Удалить встречу';
+    del.title = t('meeting.delete_tooltip');
     del.innerHTML = '<svg viewBox="0 0 16 16" width="12" height="12">'
       + '<path d="M6.5 3h3M3.5 4.5h9M5 4.5l.6 8h4.8l.6-8M7 7v3.5M9 7v3.5" '
       + 'stroke="currentColor" stroke-width="1.2" fill="none" stroke-linecap="round"/></svg>';
@@ -683,11 +785,10 @@ function renderMeetingList() {
  * часовой встречи вместе с расшифровкой человек по ошибке не вернёт.
  */
 async function askDeleteMeeting(meeting) {
-  const name = meeting.title || 'Без названия';
+  const name = meeting.title || t('meeting.untitled');
   const ok = await confirmDialog(
-    `Удалить встречу «${name}»?`,
-    'Вместе с ней исчезнут запись, расшифровка и заметки. '
-    + 'Отменить это будет нельзя.'
+    t('meeting.delete_confirm_title', { name }),
+    t('meeting.delete_confirm_text'),
   );
   if (!ok) return;
 
@@ -698,7 +799,7 @@ async function askDeleteMeeting(meeting) {
   }
   // loadMeetings сама откроет следующую встречу, если удалили открытую.
   await loadMeetings();
-  showToast('Встреча удалена');
+  showToast(t('meeting.deleted'));
 }
 
 /**
@@ -921,7 +1022,7 @@ function showDraft(seg) {
     head.className = 'turn__head';
     const who = document.createElement('span');
     who.className = 'turn__who turn__who--plain';
-    who.textContent = seg.speaker === 'me' ? 'Я' : 'Собеседник';
+    who.textContent = seg.speaker === 'me' ? t('transcript.speaker_me') : t('transcript.speaker_them');
     head.appendChild(who);
 
     const body = document.createElement('div');
@@ -1016,7 +1117,7 @@ async function playTurn(btn, turn) {
   if (!clip || !clip.wav) {
     // Записи может не быть вовсе: встречу загрузили файлом или запись
     // удалили. Молчать было бы непонятно, поэтому говорим прямо.
-    showToast('Записи этой фразы нет', 3000);
+    showToast(t('transcript.audio_clip_not_found'), 3000);
     return;
   }
 
@@ -1098,10 +1199,10 @@ function appendSegment(seg, scroll = true) {
     const who = document.createElement('button');
     who.className = 'turn__who';
     who.type = 'button';
-    who.textContent = seg.voice_label || (isMe ? 'Я' : 'Собеседник');
+    who.textContent = seg.voice_label || (isMe ? t('transcript.speaker_me') : t('transcript.speaker_them'));
     if (seg.voice_id) {
       who.dataset.voice = seg.voice_id;
-      who.title = 'Нажмите, чтобы назвать говорящего';
+      who.title = t('transcript.rename_tooltip');
       who.addEventListener('click', () => renameVoice(who, seg.voice_id));
     } else {
       who.classList.add('turn__who--plain');
@@ -1117,7 +1218,7 @@ function appendSegment(seg, scroll = true) {
     const play = document.createElement('button');
     play.className = 'turn__play';
     play.type = 'button';
-    play.title = 'Переслушать фразу';
+    play.title = t('transcript.play_tooltip');
     play.innerHTML = ICON_PLAY;
     play.addEventListener('click', () => playTurn(play, turn));
     // У встреч без записи кнопки нет вовсе: лучше её отсутствие,
@@ -1130,8 +1231,8 @@ function appendSegment(seg, scroll = true) {
     const lang = document.createElement('button');
     lang.className = 'turn__lang';
     lang.type = 'button';
-    lang.title = 'Фраза распознана не на том языке?';
-    lang.textContent = (seg.lang || '').toUpperCase() || 'ЯЗ';
+    lang.title = t('transcript.lang_tooltip');
+    lang.textContent = (seg.lang || '').toUpperCase() || t('transcript.lang_placeholder');
     lang.addEventListener('click', () => pickLanguage(lang, turn));
     lang.hidden = state.hasAudio === false;
 
@@ -1165,9 +1266,12 @@ function appendSegment(seg, scroll = true) {
 let LANGS = null;
 
 const LANG_NAMES = {
-  ru: 'Русский', en: 'Английский', de: 'Немецкий', fr: 'Французский',
-  es: 'Испанский', it: 'Итальянский', pt: 'Португальский', pl: 'Польский',
-  uk: 'Украинский', sr: 'Сербский', tr: 'Турецкий', nl: 'Нидерландский',
+  get ru() { return t('lang.ru'); }, get en() { return t('lang.en'); },
+  get de() { return t('lang.de'); }, get fr() { return t('lang.fr'); },
+  get es() { return t('lang.es'); }, get it() { return t('lang.it'); },
+  get pt() { return t('lang.pt'); }, get pl() { return t('lang.pl'); },
+  get uk() { return t('lang.uk'); }, get sr() { return t('lang.sr'); },
+  get tr() { return t('lang.tr'); }, get nl() { return t('lang.nl'); },
 };
 
 /**
@@ -1223,7 +1327,7 @@ function showFailure(button, was, why) {
   button.classList.add('turn__lang--failed');
   setTimeout(() => {
     button.textContent = was;
-    button.title = 'Фраза распознана не на том языке?';
+    button.title = t('transcript.lang_tooltip');
     button.classList.remove('turn__lang--failed');
   }, 2500);
 }
@@ -1248,11 +1352,11 @@ async function applyLanguage(button, turn, ids, code) {
       // Пересчитать не вышло: нет записи или модель промолчала. Текст
       // не трогаем, иначе человек потеряет и то, что было.
       body.textContent = prevText;
-      showFailure(button, was, 'Нет записи этой фразы, пересчитать нечего');
+      showFailure(button, was, t('transcript.lang_failed'));
     }
   } catch (e) {
     body.textContent = prevText;
-    showFailure(button, was, 'Пересчитать не удалось');
+    showFailure(button, was, t('transcript.lang_retry_failed'));
   } finally {
     button.dataset.busy = '';
   }
@@ -1277,7 +1381,7 @@ function renameVoice(button, voiceId) {
   input.className = 'turn__who-input';
   input.value = current;
   input.spellcheck = false;
-  input.setAttribute('aria-label', 'Имя говорящего');
+  input.setAttribute('aria-label', t('transcript.voice_aria_label'));
   button.replaceWith(input);
   input.focus();
   input.select();
@@ -1342,8 +1446,8 @@ async function refreshModelStatus() {
 
   if (st.downloaded) {
     ui.modelText.textContent = st.loaded
-      ? 'Распознавание готово (GigaAM v3)'
-      : 'Модель на месте, загрузится при первой записи';
+      ? t('model.status_ready')
+      : t('model.status_loaded');
     ui.modelProgress.hidden = true;
     ui.modelAction.hidden = true;
     ui.modelBar.classList.add('is-ready');
@@ -1351,21 +1455,21 @@ async function refreshModelStatus() {
   } else if (st.downloading) {
     ui.modelBar.classList.remove('is-ready');
     ui.modelAction.hidden = false;
-    ui.modelAction.textContent = 'Отменить';
+    ui.modelAction.textContent = t('model.action_cancel');
     ui.modelAction.dataset.act = 'cancel';
     setModelProgress(st.bytes, st.total_bytes);
     // Загрузка началась ещё до открытия окна: показываем её сразу, а не
     // ждём первого события прогресса.
-    showModelLoad(st.bytes, st.total_bytes, 'Качаем модель распознавания',
-      'Один раз, 220 МБ. Пользоваться программой можно уже сейчас.');
+    showModelLoad(st.bytes, st.total_bytes, t('model.download_title'),
+      t('model.download_hint'));
   } else {
     ui.modelBar.classList.remove('is-ready');
     ui.modelProgress.hidden = true;
     ui.modelText.textContent = st.bytes
-      ? `Модель скачана частично (${fmtMb(st.bytes)} из ${fmtMb(st.total_bytes)} МБ)`
-      : `Для распознавания нужна модель, ${fmtMb(st.total_bytes)} МБ`;
+      ? t('model.status_partial', { done: fmtMb(st.bytes), total: fmtMb(st.total_bytes) })
+      : t('model.status_need_download', { total: fmtMb(st.total_bytes) });
     ui.modelAction.hidden = false;
-    ui.modelAction.textContent = st.bytes ? 'Продолжить' : 'Скачать';
+    ui.modelAction.textContent = st.bytes ? t('model.action_resume') : t('model.action_download');
     ui.modelAction.dataset.act = 'download';
   }
 }
@@ -1374,37 +1478,36 @@ function setModelProgress(done, total) {
   ui.modelProgress.hidden = false;
   const pct = total ? Math.min(100, Math.round((done / total) * 100)) : 0;
   ui.modelFill.style.width = pct + '%';
-  ui.modelText.textContent = `Качаем модель: ${fmtMb(done)} из ${fmtMb(total)} МБ (${pct}%)`;
+  ui.modelText.textContent = t('model.download_progress', { done: fmtMb(done), total: fmtMb(total), pct });
 }
 
 function onModelProgress(payload) {
   if (payload.state === 'downloading') {
     ui.modelBar.hidden = false;
     ui.modelAction.hidden = false;
-    ui.modelAction.textContent = 'Отменить';
+    ui.modelAction.textContent = t('model.action_cancel');
     ui.modelAction.dataset.act = 'cancel';
     setModelProgress(payload.bytes, payload.total || state.model.total_bytes);
     showModelLoad(payload.bytes, payload.total || state.model.total_bytes,
-      'Качаем модель распознавания',
-      'Один раз, 220 МБ. Пользоваться программой можно уже сейчас.');
+      t('model.download_title'),
+      t('model.download_hint'));
     // Плашка живёт во вкладке «Транскрипт», а человек в этот момент
     // обычно смотрит на список загруженных файлов и не понимает, почему
     // расшифровки нет. Поэтому о первой загрузке говорим на всё окно.
     if (!state.modelToastShown) {
       state.modelToastShown = true;
-      showToast('Качаем модель распознавания, 220 МБ. Программой можно пользоваться, '
-        + 'расшифровка заработает по окончании', 12000);
+      showToast(t('model.first_download_toast'), 12000);
     }
     return;
   }
   if (payload.state === 'error') {
     hideModelLoad();
-    showToast(payload.message || 'Не удалось скачать модель');
+    showToast(payload.message || t('model.download_failed'));
   }
   if (payload.state === 'ready' && state.modelToastShown) {
     state.modelToastShown = false;
     hideModelLoad();
-    showToast('Модель распознавания готова', 4000);
+    showToast(t('model.download_ready'), 4000);
   }
   if (payload.state === 'ready') hideModelLoad();
   refreshModelStatus();
@@ -1434,7 +1537,7 @@ async function onModelAction() {
   if (ui.modelAction.dataset.act === 'cancel') {
     await api.cancel_model_download();
   } else {
-    ui.modelText.textContent = 'Начинаем скачивание…';
+    ui.modelText.textContent = t('model.starting_download');
     await api.download_model();
   }
   refreshModelStatus();
@@ -1443,7 +1546,10 @@ async function onModelAction() {
 function renderMeta(meeting) {
   const parts = [fmtDate(meeting.created_at)];
   if (meeting.duration > 1) parts.push(fmtDuration(meeting.duration));
-  const labels = { draft: 'Черновик', recording: 'Запись', processing: 'Обработка', ready: 'Готово' };
+  const labels = {
+    draft: t('status.draft'), recording: t('status.recording'),
+    processing: t('status.processing'), ready: t('status.ready'),
+  };
   parts.push(labels[meeting.status] || meeting.status);
   ui.meta.textContent = parts.join(' · ');
 }
@@ -1474,7 +1580,7 @@ async function toggleRecording() {
 function renderRecordingState() {
   const active = state.isRecording;
   ui.record.classList.toggle('is-recording', active);
-  ui.recLabel.textContent = active ? 'Остановить' : 'Начать запись';
+  ui.recLabel.textContent = active ? t('recording.stop') : t('recording.start');
   ui.levels.hidden = !active;
   ui.timer.hidden = !active;
   if (!active) {
@@ -1527,7 +1633,7 @@ function flushNotes() {
 }
 
 function showSaveHint() {
-  ui.saveHint.textContent = 'Сохранено';
+  ui.saveHint.textContent = t('notes.saved');
   ui.saveHint.classList.add('is-visible');
   setTimeout(() => ui.saveHint.classList.remove('is-visible'), 1200);
 }
@@ -1651,6 +1757,22 @@ async function onThemeClick(event) {
   await api.set_theme(btn.dataset.theme);
 }
 
+/** Клик по кнопке языка в разделе «Оформление». */
+async function onLanguageClick(event) {
+  const btn = event.target.closest('button[data-lang]');
+  if (!btn) return;
+  await setLanguage(btn.dataset.lang);
+  syncLanguageSwitch();
+}
+
+function syncLanguageSwitch() {
+  const box = document.getElementById('language-switch');
+  if (!box) return;
+  box.querySelectorAll('button').forEach((b) => {
+    b.classList.toggle('is-active', b.dataset.lang === i18n.lang);
+  });
+}
+
 function showToast(text, ms = 7000) {
   if (!ui.toast) return;
   ui.toastText.textContent = text;
@@ -1670,7 +1792,7 @@ function fillDeviceSelect(select, items, selectedId) {
   const auto = document.createElement('option');
   auto.value = '';
   const def = items.find((d) => d.is_default);
-  auto.textContent = def ? `По умолчанию (${def.name})` : 'По умолчанию';
+  auto.textContent = def ? t('audio.device_default_named', { name: def.name }) : t('audio.device_default');
   select.appendChild(auto);
   items.forEach((d) => {
     const opt = document.createElement('option');
@@ -1685,7 +1807,7 @@ function fillDeviceSelect(select, items, selectedId) {
 async function openAudioSheet() {
   const data = await api.list_audio_devices();
   if (!data) {
-    showToast('Не удалось получить список аудиоустройств');
+    showToast(t('audio.device_list_failed'));
     return;
   }
   const sel = data.selected || {};
@@ -1705,20 +1827,20 @@ async function openAudioSheet() {
 async function showVersion() {
   if (!ui.appVersion || ui.appVersion.textContent) return;
   const version = await api.app_version();
-  if (version) ui.appVersion.textContent = 'Версия ' + version;
+  if (version) ui.appVersion.textContent = t('about.version_prefix') + version;
 }
 
 /* --- Разделы настроек ---------------------------------------------------- */
 
 const PREFS_TITLES = {
-  audio: 'Звук',
-  speech: 'Распознавание',
-  dictation: 'Диктовка',
-  voices: 'Голоса',
-  notes: 'Заметки',
-  look: 'Оформление',
-  data: 'Данные',
-  about: 'О программе',
+  audio: () => t('prefs.tab.audio'),
+  speech: () => t('prefs.tab.speech'),
+  dictation: () => t('prefs.tab.dictation'),
+  voices: () => t('prefs.tab.voices'),
+  notes: () => t('prefs.tab.notes'),
+  look: () => t('prefs.tab.look'),
+  data: () => t('prefs.tab.data'),
+  about: () => t('prefs.tab.about'),
 };
 
 /** Показать один раздел настроек и подсветить его в списке слева. */
@@ -1733,7 +1855,7 @@ function showPrefsTab(tab) {
     // середину нового раздела и думает, что тот пустой.
     if (!page.hidden) page.scrollTop = 0;
   }
-  ui.prefsTitle.textContent = PREFS_TITLES[tab];
+  ui.prefsTitle.textContent = PREFS_TITLES[tab]();
   if (tab === 'about') loadAbout();
   if (tab === 'data') loadUsage();
   if (tab === 'speech') loadAsrSettings();
@@ -1760,9 +1882,11 @@ async function loadDictation() {
 function showDictationProblem(s) {
   let текст = '';
   if (s.enabled && !s.running) {
-    текст = 'Не удалось перехватить эти клавиши: возможно, их уже занимает '
-      + 'другая программа. Попробуйте другое сочетание.';
+    текст = t('dictation.hotkey_taken');
   } else if (s.enabled && s.problem) {
+    // s.problem приходит из питона по-русски: это внутренняя причина
+    // (занята модель, нет прав и т.п.), отдельного словаря на неё пока
+    // нет, показываем как есть.
     текст = s.problem[0].toUpperCase() + s.problem.slice(1) + '.';
   }
   ui.dictProblem.textContent = текст;
@@ -1784,27 +1908,27 @@ async function saveDictation() {
 // Языки, на которых говорит основная модель. Whisper знает больше, но
 // список из сотни строк в выпадашке бесполезен: оставляем те, что
 // реально встречаются на встречах.
-const ASR_LANGS = [
-  ['ru', 'Русский'], ['en', 'Английский'], ['de', 'Немецкий'],
-  ['fr', 'Французский'], ['es', 'Испанский'], ['it', 'Итальянский'],
-  ['pt', 'Португальский'], ['pl', 'Польский'], ['uk', 'Украинский'],
-  ['sr', 'Сербский'], ['tr', 'Турецкий'], ['nl', 'Нидерландский'],
-];
+const ASR_LANG_CODES = ['ru', 'en', 'de', 'fr', 'es', 'it', 'pt', 'pl', 'uk', 'sr', 'tr', 'nl'];
 
-const SIZE_NAMES = {
-  base: 'Быстрая',
-  small: 'Точная',
-};
+function asrLangName(code) {
+  return t(`lang.${code}`);
+}
+
+function sizeName(code) {
+  return code === 'base' ? t('speech.size.fast')
+    : code === 'small' ? t('speech.size.accurate')
+    : code;
+}
 
 async function loadAsrSettings() {
   const s = await api.asr_settings();
   if (!s) return;
 
   if (!ui.asrLanguage.options.length) {
-    for (const [code, name] of ASR_LANGS) {
+    for (const code of ASR_LANG_CODES) {
       const o = document.createElement('option');
       o.value = code;
-      o.textContent = name;
+      o.textContent = asrLangName(code);
       ui.asrLanguage.appendChild(o);
     }
   }
@@ -1816,9 +1940,9 @@ async function loadAsrSettings() {
     o.value = size.code;
     // Честно пишем, что модели нет на диске: иначе человек выберет её,
     // а распознавание молча продолжит работать на прежней.
-    o.textContent = (SIZE_NAMES[size.code] || size.code)
+    o.textContent = sizeName(size.code)
       + ' (' + fmtBytes(size.bytes) + ')'
-      + (size.downloaded ? '' : ' — не скачана');
+      + (size.downloaded ? '' : t('speech.size.not_downloaded'));
     ui.asrSize.appendChild(o);
   }
   ui.asrSize.value = s.whisper_size || 'small';
@@ -1828,8 +1952,8 @@ async function loadAsrSettings() {
   // этом хуже, чем показать причину.
   ui.asrDetect.disabled = s.langid_ready === false;
   ui.asrDetectHint.textContent = s.langid_ready === false
-    ? 'Нужна модель определения языка, она ещё не скачана.'
-    : 'Без этого иностранная речь записывается кириллицей: «холло дис из зе фест сентинс».';
+    ? t('speech.langid_missing')
+    : t('speech.detect_hint');
   updateAsrForeign();
 }
 
@@ -1850,7 +1974,7 @@ async function saveAsrSettings() {
   if (s && s.active_size) {
     const выбран = (s.sizes || []).find((x) => x.code === s.whisper_size);
     ui.asrSizeHint.textContent = выбран && !выбран.downloaded
-      ? 'Эта модель ещё не скачана, пока распознаём прежней.'
+      ? t('speech.size_queued')
       : '';
   }
 }
@@ -1870,12 +1994,12 @@ async function loadUsage() {
   if (!u) return;
 
   const rows = [
-    ['Записи встреч', fmtBytes(u.audio_bytes)],
-    ['База встреч и расшифровок', fmtBytes(u.db_bytes)],
-    ['Модели распознавания и заметок', fmtBytes(u.models_bytes)],
+    [t('data.audio_size_label'), fmtBytes(u.audio_bytes)],
+    [t('data.db_size_label'), fmtBytes(u.db_bytes)],
+    [t('data.models_size_label'), fmtBytes(u.models_bytes)],
   ];
   if (u.orphan_folders) {
-    rows.push(['Записи без встречи', fmtBytes(u.orphan_bytes) + ' — можно убрать']);
+    rows.push([t('data.orphan_label'), fmtBytes(u.orphan_bytes) + t('data.orphan_suffix')]);
   }
 
   ui.usageList.innerHTML = '';
@@ -1892,16 +2016,16 @@ async function loadUsage() {
 
 /** Убрать записи без встреч и сжать базу. */
 async function runCleanup() {
-  ui.cleanupResult.textContent = 'Убираем…';
+  ui.cleanupResult.textContent = t('data.cleanup_running');
   const res = await api.cleanup_storage();
   if (!res) {
-    ui.cleanupResult.textContent = 'Не получилось';
+    ui.cleanupResult.textContent = t('data.cleanup_failed');
     return;
   }
   const freed = (res.bytes || 0) + (res.db_bytes || 0);
   ui.cleanupResult.textContent = freed
-    ? `Освободилось ${fmtBytes(freed)}`
-    : 'Лишнего не нашлось';
+    ? t('data.cleanup_freed', { size: fmtBytes(freed) })
+    : t('data.cleanup_nothing');
   loadUsage();
 }
 
@@ -1918,7 +2042,7 @@ async function loadAbout() {
   }
   if (ui.aboutNotice && !ui.aboutNotice.dataset.loaded) {
     const text = await api.notice_text();
-    ui.aboutNotice.textContent = text || 'Файл NOTICE не найден рядом с программой';
+    ui.aboutNotice.textContent = text || t('about.notice_not_found');
     ui.aboutNotice.dataset.loaded = '1';
   }
   const state = await api.get_update_settings();
@@ -1930,21 +2054,21 @@ async function loadAbout() {
 
 /** Проверка новой версии по кнопке, с ответом на месте. */
 async function checkUpdatesNow() {
-  ui.updateResult.textContent = 'Смотрим…';
+  ui.updateResult.textContent = t('about.checking');
   const res = await api.check_updates_now();
   if (!res || !res.ok) {
-    ui.updateResult.textContent = (res && res.error) || 'Не получилось проверить';
+    ui.updateResult.textContent = (res && res.error) || t('about.check_failed');
     return;
   }
   if (res.has_update) {
     // Мало сказать «вышла версия»: человек нажал кнопку и вправе знать,
     // что произойдёт дальше и надо ли ему что-то делать.
     ui.updateResult.textContent = ui.updateSilent.checked
-      ? 'Вышла версия ' + res.latest + ', скачиваем'
-      : 'Вышла версия ' + res.latest + '. Включите загрузку выше или скачайте вручную';
+      ? t('about.found_silent', { version: res.latest })
+      : t('about.found_manual', { version: res.latest });
     showUpdateNote(res);
   } else {
-    ui.updateResult.textContent = 'Установлена свежая версия';
+    ui.updateResult.textContent = t('about.up_to_date');
   }
 }
 
@@ -1957,13 +2081,13 @@ async function checkUpdatesNow() {
  */
 function showUpdateNote(payload) {
   if (!payload || !payload.latest || !ui.updateNote) return;
-  ui.updateNoteText.textContent = 'Вышла версия ' + payload.latest;
+  ui.updateNoteText.textContent = t('update.new_version', { version: payload.latest });
   // Если человек запретил ставить обновления самим, обещать «установится
   // сама» нельзя: он останется на старой версии и будет ждать напрасно.
   const silent = !ui.updateSilent || ui.updateSilent.checked;
   const hint = silent
-    ? (payload.notes || 'Скачаем и поставим сами.')
-    : 'Загрузка обновлений выключена: скачайте новую версию сами.';
+    ? (payload.notes || t('update.silent_hint'))
+    : t('update.manual_hint');
   ui.updateNoteNotes.textContent = hint;
   ui.updateNoteNotes.hidden = false;
   ui.updateNote.hidden = false;
@@ -1980,19 +2104,19 @@ function onUpdateState(payload) {
   if (!ui.updateNote || !payload) return;
   if (payload.state === 'downloading') {
     ui.updateNote.hidden = false;
-    ui.updateNoteText.textContent = 'Качаем версию ' + (payload.version || '');
+    ui.updateNoteText.textContent = t('update.downloading', { version: payload.version || '' });
     ui.updateNoteBar.hidden = false;
     ui.updateNoteFill.style.width = (payload.percent || 0) + '%';
-    ui.updateNoteNotes.textContent = 'Скачается фоном, встанет в простое.';
+    ui.updateNoteNotes.textContent = t('update.background_hint');
     ui.updateNoteNotes.hidden = false;
     ui.updateNoteInstall.hidden = true;
   } else if (payload.state === 'ready') {
     ui.updateNote.hidden = false;
-    ui.updateNoteText.textContent = 'Версия ' + (payload.version || '') + ' готова';
+    ui.updateNoteText.textContent = t('update.ready', { version: payload.version || '' });
     ui.updateNoteBar.hidden = true;
     // Не «при выходе»: крестик прячет окно в трей, и выхода может не
     // случиться неделями. Ставим, когда программа свёрнута и свободна.
-    ui.updateNoteNotes.textContent = 'Установится сама, когда свернёте программу.';
+    ui.updateNoteNotes.textContent = t('update.window_hint');
     ui.updateNoteNotes.hidden = false;
     ui.updateNoteInstall.hidden = false;
   } else {
@@ -2018,9 +2142,9 @@ async function refreshEnrollment() {
   if (st.recording) {
     const left = Math.max(0, st.target - st.seconds);
     ui.enrollState.textContent = st.enough
-      ? `Записано ${st.seconds.toFixed(0)} с, уже достаточно`
-      : `Записано ${st.seconds.toFixed(0)} с, осталось около ${left.toFixed(0)} с`;
-    ui.enrollStart.textContent = st.enough ? 'Сохранить голос' : 'Остановить';
+      ? t('voices.progress_enough', { sec: st.seconds.toFixed(0) })
+      : t('voices.progress_left', { sec: st.seconds.toFixed(0), left: left.toFixed(0) });
+    ui.enrollStart.textContent = st.enough ? t('voices.save_button') : t('voices.stop_button');
     ui.enrollForget.hidden = true;
     // Фразы показываем только во время записи: в остальное время они
     // просто занимают место в настройках.
@@ -2028,9 +2152,9 @@ async function refreshEnrollment() {
     ui.enrollPrompt.textContent = (st.prompts || []).join(' ');
   } else {
     ui.enrollState.textContent = st.has_owner
-      ? `Голос записан: ${st.owner_name}`
-      : 'Голос не записан';
-    ui.enrollStart.textContent = st.has_owner ? 'Перезаписать голос' : 'Записать голос';
+      ? t('voices.has_owner', { name: st.owner_name })
+      : t('voices.not_recorded');
+    ui.enrollStart.textContent = st.has_owner ? t('voices.overwrite') : t('voices.record');
     ui.enrollForget.hidden = !st.has_owner;
     ui.enrollPrompt.hidden = true;
   }
@@ -2042,7 +2166,7 @@ async function onEnrollClick() {
     try {
       await api.start_enrollment();
     } catch (err) {
-      showToast('Не удалось начать запись голоса');
+      showToast(t('voices.start_failed'));
       console.error(err);
       return;
     }
@@ -2057,15 +2181,15 @@ async function onEnrollClick() {
   state.enrollTimer = null;
   if (!st.enough) {
     await api.cancel_enrollment();
-    showToast('Запись голоса отменена: речи было слишком мало');
+    showToast(t('voices.cancelled'));
     await refreshEnrollment();
     return;
   }
   try {
     await api.finish_enrollment('');
-    showToast('Голос запомнен');
+    showToast(t('voices.saved'));
   } catch (err) {
-    showToast('Не удалось сохранить голос');
+    showToast(t('voices.save_failed'));
     console.error(err);
   }
   await refreshEnrollment();
@@ -2090,12 +2214,12 @@ async function refreshPeople() {
     li.className = 'people__item';
 
     const name = document.createElement('span');
-    name.textContent = person.kind === 'owner' ? `${person.name} (это вы)` : person.name;
+    name.textContent = person.kind === 'owner' ? person.name + t('voices.you_suffix') : person.name;
 
     const forget = document.createElement('button');
     forget.className = 'btn-ghost';
     forget.type = 'button';
-    forget.textContent = 'Забыть';
+    forget.textContent = t('voices.forget');
     forget.addEventListener('click', async () => {
       await api.forget_person(person.id);
       await refreshPeople();
@@ -2110,7 +2234,7 @@ async function refreshPeople() {
 
 async function saveAudioSheet() {
   if (!ui.micEnabled.checked && !ui.systemEnabled.checked) {
-    showToast('Нужна хотя бы одна дорожка: микрофон или системный звук');
+    showToast(t('audio.save_at_least_one'));
     return;
   }
   await api.save_audio_settings({
@@ -2164,7 +2288,7 @@ function setupDropzone() {
     const count = e.dataTransfer && e.dataTransfer.files
       ? e.dataTransfer.files.length : 0;
     if (count > 0) {
-      setImportsTitle(`Читаем ${count} ${plural(count, 'файл', 'файла', 'файлов')}…`);
+      setImportsTitle(t('imports.reading_files', { count, files: plural(count, t('imports.file_word.one'), t('imports.file_word.few'), t('imports.file_word.many')) }));
     }
   });
 }
@@ -2191,7 +2315,7 @@ function setImportsTitle(text) {
 
 /** Выбор файлов через системный диалог: запасной путь к тому же импорту. */
 async function pickFiles() {
-  setImportsTitle('Выбор файлов…');
+  setImportsTitle(t('imports.picking_files'));
   await api.pick_and_import();
   await refreshImports();
 }
@@ -2212,10 +2336,10 @@ function renderImports(tasks) {
 
   ui.imports.hidden = false;
   const left = state.imports.filter(
-    (t) => t.status === 'running' || t.status === 'waiting').length;
+    (task) => task.status === 'running' || task.status === 'waiting').length;
   el('imports-title').textContent = left > 0
-    ? `Разбор записей: осталось ${left}`
-    : 'Разбор записей';
+    ? t('imports.remaining', { left })
+    : t('imports.title');
   // Кнопка очистки нужна, только когда есть что убирать.
   el('imports-clear').hidden = !state.imports.some(
     (t) => t.status === 'done' || t.status === 'failed' || t.status === 'cancelled');
@@ -2247,7 +2371,7 @@ function importRow(task) {
     const cancel = document.createElement('button');
     cancel.className = 'import-item__cancel';
     cancel.textContent = '×';
-    cancel.title = 'Отменить';
+    cancel.title = t('imports.cancel_tooltip');
     cancel.addEventListener('click', async (e) => {
       e.stopPropagation();
       const status = await api.cancel_import(task.id);
@@ -2278,7 +2402,7 @@ function importRow(task) {
   // Готовую встречу открываем кликом: человек только что её ждал.
   if (task.meeting_id) {
     node.style.cursor = 'pointer';
-    node.title = 'Открыть встречу';
+    node.title = t('imports.open_tooltip');
     node.addEventListener('click', () => selectMeeting(task.meeting_id));
   }
 
@@ -2288,17 +2412,17 @@ function importRow(task) {
 function importStateText(task) {
   switch (task.status) {
     case 'waiting':
-      return 'в очереди';
+      return t('imports.state.waiting');
     case 'running': {
       const pct = Math.round((task.progress || 0) * 100);
-      return `${pct}%${task.stereo_split ? ', 2 канала' : ''}`;
+      return `${pct}%${task.stereo_split ? ', ' + t('imports.state.stereo') : ''}`;
     }
     case 'done':
-      return 'готово';
+      return t('imports.state.done');
     case 'failed':
-      return 'не аудио';
+      return t('imports.state.failed');
     case 'cancelled':
-      return 'отменён';
+      return t('imports.state.cancelled');
     default:
       return task.status;
   }
@@ -2444,7 +2568,7 @@ function bindUi() {
     const ok = await api.install_update();
     if (!ok) {
       ui.updateNoteInstall.disabled = false;
-      showToast('Сейчас идёт запись, обновление встанет после неё');
+      showToast(t('update.recording_blocked'));
     }
   });
   ui.updateNoteHide.addEventListener('click', () => {
@@ -2461,6 +2585,7 @@ function bindUi() {
     btn.addEventListener('click', () => showPrefsTab(btn.dataset.tab));
   }
   el('theme-switch').addEventListener('click', onThemeClick);
+  el('language-switch').addEventListener('click', onLanguageClick);
   el('audio-save').addEventListener('click', saveAudioSheet);
   el('enroll-start').addEventListener('click', onEnrollClick);
   el('enroll-forget').addEventListener('click', onForgetOwner);
@@ -2522,7 +2647,7 @@ function bindUi() {
   // Вкладки: заметки / саммари / транскрипт.
   document.querySelectorAll('.tab').forEach((tab) => {
     tab.addEventListener('click', () => {
-      document.querySelectorAll('.tab').forEach((t) => t.classList.remove('is-active'));
+      document.querySelectorAll('.tab').forEach((tabEl) => tabEl.classList.remove('is-active'));
       document.querySelectorAll('.pane').forEach((p) => p.classList.remove('is-active'));
       tab.classList.add('is-active');
       const pane = document.querySelector(`.pane[data-pane="${tab.dataset.tab}"]`);
@@ -2625,10 +2750,19 @@ async function init() {
     state.pinned = Boolean(settings.always_on_top);
     ui.pin.setAttribute('aria-pressed', String(state.pinned));
     applyTheme(settings.theme || 'system');
+    // Язык подставляем до первой отрисовки списков, иначе часть
+    // текста мелькнёт на русском и тут же переключится.
+    await setLanguage(settings.language || 'ru', { persist: false });
     if (settings.window && settings.window.sidebar_width) {
       setSidebarWidth(settings.window.sidebar_width);
     }
+  } else {
+    await setLanguage('ru', { persist: false });
   }
+  // Словарь перевода приезжает через мост и может ещё не долететь,
+  // если что-то дёрнет t() совсем рано (клик по настройкам до полной
+  // загрузки окна). Флаг — способ дождаться этого явно, а не гадать.
+  window.__konspekt_i18n_ready = true;
 
   await loadMeetings();
   // Разбор файлов мог продолжаться, пока окно было скрыто в трее.

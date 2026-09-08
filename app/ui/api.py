@@ -158,9 +158,8 @@ class Api:
                 webview.OPEN_DIALOG,
                 allow_multiple=True,
                 file_types=(
-                    "Аудио и видео (*.mp3;*.wav;*.m4a;*.ogg;*.opus;*.flac;*.aac;"
-                    "*.wma;*.mp4;*.mkv;*.mov;*.webm;*.avi)",
-                    "Все файлы (*.*)",
+                    self._service._msg("python.file_dialog.audio_filter"),
+                    self._service._msg("python.file_dialog.all_files"),
                 ),
             )
         except Exception:
@@ -359,6 +358,14 @@ class Api:
         """Запомнить выбранную тему. Применяет её сам фронт."""
         return self._service.set_theme(theme)
 
+    def set_language(self, language: str) -> str:
+        """Запомнить выбранный язык интерфейса. Применяет его сам фронт."""
+        return self._service.set_language(language)
+
+    def get_i18n_dict(self, language: str) -> dict[str, Any]:
+        """Отдать словарь переводов интерфейса для выбранного языка."""
+        return self._service.get_i18n_dict(language)
+
     def set_sidebar_width(self, width: int) -> int:
         """Запомнить ширину боковой колонки после перетаскивания."""
         return self._service.set_sidebar_width(width)
@@ -426,7 +433,7 @@ class Api:
             release = version_check.fetch_latest()
         except Exception as e:
             log.debug("Не удалось проверить версию: %s", e)
-            return {"ok": False, "error": "Не удалось связаться с сервером обновлений"}
+            return {"ok": False, "error": self._service._msg("python.version_check.error")}
 
         self._service.mark_version_checked()
         newer = version_check.is_newer(release.version, __version__)

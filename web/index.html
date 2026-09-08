@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="ru" id="html-root">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -35,16 +35,16 @@
       <span class="brand-name">Konspekt</span>
     </div>
     <div class="titlebar__actions no-drag">
-      <button class="icon-btn" id="btn-audio" title="Настройки">
+      <button class="icon-btn" id="btn-audio" data-i18n-title="titlebar.settings" title="Настройки">
         <svg viewBox="0 0 16 16" width="14" height="14"><path d="M8 10.2a2.2 2.2 0 1 0 0-4.4 2.2 2.2 0 0 0 0 4.4z" stroke="currentColor" stroke-width="1.3" fill="none"/><path d="M13 8c0-.36-.04-.7-.1-1.04l1.32-1-1.3-2.25-1.57.62a4.9 4.9 0 0 0-1.8-1.05L9.3 1.5H6.7l-.25 1.78c-.66.23-1.27.6-1.8 1.05l-1.57-.62-1.3 2.25 1.32 1a5.6 5.6 0 0 0 0 2.08l-1.32 1 1.3 2.25 1.57-.62c.53.46 1.14.82 1.8 1.05l.25 1.78h2.6l.25-1.78c.66-.23 1.27-.6 1.8-1.05l1.57.62 1.3-2.25-1.32-1c.06-.34.1-.68.1-1.04z" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linejoin="round"/></svg>
       </button>
-      <button class="icon-btn" id="btn-pin" title="Поверх всех окон" aria-pressed="true">
+      <button class="icon-btn" id="btn-pin" data-i18n-title="titlebar.pin" title="Поверх всех окон" aria-pressed="true">
         <svg viewBox="0 0 16 16" width="14" height="14"><path d="M9.5 1.5 14.5 6.5 12 7l-1 4-3-3-4 4.5L4.5 12l4-4L5.5 5 9.5 4.5z" fill="currentColor"/></svg>
       </button>
-      <button class="icon-btn" id="btn-minimize" title="Свернуть">
+      <button class="icon-btn" id="btn-minimize" data-i18n-title="titlebar.minimize" title="Свернуть">
         <svg viewBox="0 0 16 16" width="14" height="14"><rect x="3" y="7.5" width="10" height="1.4" fill="currentColor"/></svg>
       </button>
-      <button class="icon-btn icon-btn--close" id="btn-hide" title="Скрыть в трей">
+      <button class="icon-btn icon-btn--close" id="btn-hide" data-i18n-title="titlebar.hide" title="Скрыть в трей">
         <svg viewBox="0 0 16 16" width="14" height="14"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.4" fill="none"/></svg>
       </button>
     </div>
@@ -56,9 +56,9 @@
       <div class="sidebar__head">
         <button class="btn-new" id="btn-new">
           <svg viewBox="0 0 16 16" width="13" height="13"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>
-          Новая встреча
+          <span data-i18n="sidebar.new_meeting">Новая встреча</span>
         </button>
-        <button class="icon-btn" id="btn-import" title="Загрузить записи">
+        <button class="icon-btn" id="btn-import" data-i18n-title="sidebar.import" title="Загрузить записи">
           <svg viewBox="0 0 16 16" width="14" height="14"><path d="M8 10.5V2.5M5 5.5 8 2.5l3 3M3 10v2.5h10V10" stroke="currentColor" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
       </div>
@@ -70,11 +70,11 @@
            выглядит просто не работающей. -->
       <div class="model-load" id="model-load" hidden>
         <div class="model-load__row">
-          <span id="model-load-text">Качаем модель распознавания</span>
+          <span id="model-load-text" data-i18n="model_load.downloading">Качаем модель распознавания</span>
           <span class="model-load__pct" id="model-load-pct"></span>
         </div>
         <div class="model-load__bar"><div class="model-load__fill" id="model-load-fill"></div></div>
-        <p class="model-load__hint" id="model-load-hint">Один раз, 220 МБ. Пользоваться программой можно уже сейчас.</p>
+        <p class="model-load__hint" id="model-load-hint" data-i18n="model_load.hint">Один раз, 220 МБ. Пользоваться программой можно уже сейчас.</p>
       </div>
 
       <!-- Новая версия. Программа качает её сама и ставит, когда свёрнута,
@@ -82,25 +82,25 @@
            не дожидаясь закрытия. -->
       <div class="update-note" id="update-note" hidden>
         <div class="update-note__row">
-          <span id="update-note-text">Вышла новая версия</span>
-          <button class="btn-link" id="update-note-hide" title="Скрыть">×</button>
+          <span id="update-note-text" data-i18n="update_note.new_version">Вышла новая версия</span>
+          <button class="btn-link" id="update-note-hide" data-i18n-title="update_note.hide" title="Скрыть">×</button>
         </div>
         <div class="model-load__bar" id="update-note-bar" hidden>
           <div class="model-load__fill" id="update-note-fill"></div>
         </div>
         <p class="update-note__hint" id="update-note-notes"></p>
-        <button class="btn-secondary" type="button" id="update-note-install" hidden>Установить и перезапустить</button>
+        <button class="btn-secondary" type="button" id="update-note-install" data-i18n="update_note.install" hidden>Установить и перезапустить</button>
       </div>
 
       <div class="imports" id="imports" hidden>
         <div class="imports__head">
-          <span id="imports-title">Разбор записей</span>
-          <button class="btn-link" id="imports-clear" hidden>Очистить</button>
+          <span id="imports-title" data-i18n="imports.title">Разбор записей</span>
+          <button class="btn-link" id="imports-clear" data-i18n="imports.clear" hidden>Очистить</button>
         </div>
         <div class="imports__list" id="imports-list"></div>
       </div>
       <div class="sidebar__search">
-        <input type="search" id="search" placeholder="Поиск по встречам" autocomplete="off">
+        <input type="search" id="search" data-i18n-placeholder="search.placeholder" placeholder="Поиск по встречам" autocomplete="off">
       </div>
       <div class="meeting-list" id="meeting-list"></div>
     </aside>
@@ -114,17 +114,17 @@
     <section class="content" id="content">
       <div class="empty" id="empty-state">
         <div class="empty__icon"></div>
-        <h2>Пока пусто</h2>
-        <p>Создайте встречу и пишите тезисы. Konspekt превратит их в готовые заметки.</p>
-        <button class="btn-primary" id="btn-empty-new">Начать встречу</button>
-        <p class="empty__hint">Или перетащите сюда готовые записи — на каждую
-        заведётся своя встреча с транскриптом.
-        <button class="btn-link" id="btn-empty-import">Выбрать файлы</button></p>
+        <h2 data-i18n="empty.title">Пока пусто</h2>
+        <p data-i18n="empty.text">Создайте встречу и пишите тезисы. Konspekt превратит их в готовые заметки.</p>
+        <button class="btn-primary" id="btn-empty-new" data-i18n="empty.start">Начать встречу</button>
+        <p class="empty__hint"><span data-i18n="empty.hint">Или перетащите сюда готовые записи — на каждую
+        заведётся своя встреча с транскриптом.</span>
+        <button class="btn-link" id="btn-empty-import" data-i18n="empty.import">Выбрать файлы</button></p>
       </div>
 
       <div class="editor" id="editor" hidden>
         <div class="editor__head">
-          <input class="meeting-title" id="meeting-title" placeholder="Название встречи" spellcheck="false">
+          <input class="meeting-title" id="meeting-title" data-i18n-placeholder="meeting.title_placeholder" placeholder="Название встречи" spellcheck="false">
           <div class="meeting-meta" id="meeting-meta"></div>
         </div>
 
@@ -132,15 +132,15 @@
         <div class="record-bar" id="record-bar">
           <button class="btn-record" id="btn-record">
             <span class="rec-dot"></span>
-            <span class="rec-label" id="rec-label">Начать запись</span>
+            <span class="rec-label" id="rec-label" data-i18n="recording.start">Начать запись</span>
           </button>
           <div class="levels" id="levels" hidden>
             <div class="level">
-              <span class="level__name">Я</span>
+              <span class="level__name" data-i18n="transcript.speaker_me">Я</span>
               <div class="level__track"><div class="level__fill" id="level-me"></div></div>
             </div>
             <div class="level">
-              <span class="level__name">Они</span>
+              <span class="level__name" data-i18n="level.them">Они</span>
               <div class="level__track"><div class="level__fill level__fill--them" id="level-them"></div></div>
             </div>
           </div>
@@ -149,14 +149,15 @@
 
         <!-- Вкладки -->
         <div class="tabs">
-          <button class="tab is-active" data-tab="notes">Мои заметки</button>
-          <button class="tab" data-tab="summary">Саммари</button>
-          <button class="tab" data-tab="transcript">Транскрипт</button>
+          <button class="tab is-active" data-tab="notes" data-i18n="tab.notes">Мои заметки</button>
+          <button class="tab" data-tab="summary" data-i18n="tab.summary">Саммари</button>
+          <button class="tab" data-tab="transcript" data-i18n="tab.transcript">Транскрипт</button>
         </div>
 
         <div class="panes">
           <div class="pane is-active" data-pane="notes">
             <textarea class="notes" id="notes"
+              data-i18n-placeholder="notes.placeholder"
               placeholder="Пишите короткие тезисы прямо во время встречи.&#10;&#10;Konspekt запомнит момент каждой строки и после встречи развернёт их в полноценные заметки."
               spellcheck="false"></textarea>
             <div class="save-hint" id="save-hint"></div>
@@ -171,32 +172,32 @@
                      держим не второе такое же слово, а ход разбора. -->
                 <span class="summary__title" id="summary-title"></span>
                 <div class="summary__actions">
-                  <button class="btn-small" id="summary-run">Сделать заметки</button>
-                  <button class="btn-small" id="summary-stop" hidden>Остановить</button>
+                  <button class="btn-small" id="summary-run" data-i18n="summary.run">Сделать заметки</button>
+                  <button class="btn-small" id="summary-stop" data-i18n="summary.stop" hidden>Остановить</button>
                 </div>
               </div>
               <div class="summary__body" id="summary-body"></div>
               <div class="placeholder placeholder--tight" id="summary-empty">
-                <h3>Заметок пока нет</h3>
-                <p>Нажмите «Сделать заметки», и Konspekt соберёт из записи
+                <h3 data-i18n="summary.empty_title">Заметок пока нет</h3>
+                <p data-i18n="summary.empty_text">Нажмите «Сделать заметки», и Konspekt соберёт из записи
                 решения, задачи и открытые вопросы.</p>
               </div>
             </div>
 
             <div class="chat" id="chat">
               <div class="chat__head">
-                <span>Вопросы по встрече</span>
-                <button class="btn-link" id="chat-clear" hidden>Очистить</button>
+                <span data-i18n="chat.title">Вопросы по встрече</span>
+                <button class="btn-link" id="chat-clear" data-i18n="chat.clear" hidden>Очистить</button>
               </div>
               <div class="chat__list" id="chat-list"></div>
-              <div class="chat__hint" id="chat-hint">
+              <div class="chat__hint" id="chat-hint" data-i18n="chat.hint">
                 Спросите что угодно об этой встрече: кто что обещал,
                 о чём договорились, что осталось нерешённым.
               </div>
               <div class="chat__input">
-                <textarea id="chat-text" rows="1" placeholder="Спросить о встрече…"
+                <textarea id="chat-text" rows="1" data-i18n-placeholder="chat.placeholder" placeholder="Спросить о встрече…"
                   spellcheck="false"></textarea>
-                <button class="btn-send" id="chat-send" title="Отправить">
+                <button class="btn-send" id="chat-send" data-i18n-title="chat.send" title="Отправить">
                   <svg viewBox="0 0 16 16" width="14" height="14"><path d="M2 8h11M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
               </div>
@@ -214,8 +215,8 @@
             </div>
             <div class="transcript" id="transcript"></div>
             <div class="placeholder" id="transcript-empty">
-              <h3>Транскрипт появится здесь</h3>
-              <p>Начните запись, и распознанная речь будет появляться сразу.
+              <h3 data-i18n="transcript.empty_title">Транскрипт появится здесь</h3>
+              <p data-i18n="transcript.empty_text">Начните запись, и распознанная речь будет появляться сразу.
               Реплики разделены по источнику звука: микрофон — вы, системный звук — собеседник.</p>
             </div>
           </div>
@@ -227,7 +228,7 @@
   <!-- Плашка ошибок: чаще всего недоступные аудиоустройства -->
   <div class="toast" id="toast" hidden>
     <span id="toast-text"></span>
-    <button class="toast__close" id="toast-close" title="Закрыть">×</button>
+    <button class="toast__close" id="toast-close" data-i18n-title="toast.close" title="Закрыть">×</button>
   </div>
 
   <!-- Подсказка при перетаскивании файлов в окно -->
@@ -236,8 +237,8 @@
       <div class="dropzone__icon">
         <svg viewBox="0 0 24 24" width="32" height="32"><path d="M12 16V4M7.5 8.5 12 4l4.5 4.5M4 15v4.5h16V15" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </div>
-      <p class="dropzone__title">Отпустите, чтобы загрузить</p>
-      <p class="dropzone__hint">На каждую запись заведётся своя встреча</p>
+      <p class="dropzone__title" data-i18n="dropzone.title">Отпустите, чтобы загрузить</p>
+      <p class="dropzone__hint" data-i18n="dropzone.hint">На каждую запись заведётся своя встреча</p>
     </div>
   </div>
 
@@ -246,21 +247,21 @@
   <div class="sheet" id="audio-sheet" hidden>
     <div class="sheet__panel prefs">
       <nav class="prefs__nav">
-        <p class="prefs__nav-title">Настройки</p>
-        <button type="button" class="prefs__tab is-active" data-tab="audio">Звук</button>
-        <button type="button" class="prefs__tab" data-tab="voices">Голоса</button>
-        <button type="button" class="prefs__tab" data-tab="speech">Распознавание</button>
-        <button type="button" class="prefs__tab" data-tab="dictation">Диктовка</button>
-        <button type="button" class="prefs__tab" data-tab="notes">Заметки</button>
-        <button type="button" class="prefs__tab" data-tab="look">Оформление</button>
-        <button type="button" class="prefs__tab" data-tab="data">Данные</button>
-        <button type="button" class="prefs__tab" data-tab="about">О программе</button>
+        <p class="prefs__nav-title" data-i18n="prefs.title">Настройки</p>
+        <button type="button" class="prefs__tab is-active" data-tab="audio" data-i18n="prefs.tab.audio">Звук</button>
+        <button type="button" class="prefs__tab" data-tab="voices" data-i18n="prefs.tab.voices">Голоса</button>
+        <button type="button" class="prefs__tab" data-tab="speech" data-i18n="prefs.tab.speech">Распознавание</button>
+        <button type="button" class="prefs__tab" data-tab="dictation" data-i18n="prefs.tab.dictation">Диктовка</button>
+        <button type="button" class="prefs__tab" data-tab="notes" data-i18n="prefs.tab.notes">Заметки</button>
+        <button type="button" class="prefs__tab" data-tab="look" data-i18n="prefs.tab.look">Оформление</button>
+        <button type="button" class="prefs__tab" data-tab="data" data-i18n="prefs.tab.data">Данные</button>
+        <button type="button" class="prefs__tab" data-tab="about" data-i18n="prefs.tab.about">О программе</button>
       </nav>
 
       <div class="prefs__body">
         <div class="prefs__head">
           <h3 id="prefs-title">Звук</h3>
-          <button class="icon-btn" id="audio-close" title="Закрыть">
+          <button class="icon-btn" id="audio-close" data-i18n-title="prefs.close" title="Закрыть">
             <svg viewBox="0 0 16 16" width="14" height="14"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.4" fill="none"/></svg>
           </button>
         </div>
@@ -269,25 +270,25 @@
         <section class="prefs__page" data-page="audio">
           <div class="card">
             <label class="field">
-              <span class="field__label">Микрофон (я)</span>
+              <span class="field__label" data-i18n="audio.mic_label">Микрофон (я)</span>
               <select id="mic-select"></select>
             </label>
             <label class="check">
               <input type="checkbox" id="mic-enabled" checked>
-              <span>Записывать микрофон</span>
+              <span data-i18n="audio.mic_enabled">Записывать микрофон</span>
             </label>
           </div>
 
           <div class="card">
             <label class="field">
-              <span class="field__label">Системный звук (собеседник)</span>
+              <span class="field__label" data-i18n="audio.system_label">Системный звук (собеседник)</span>
               <select id="loopback-select"></select>
             </label>
             <label class="check">
               <input type="checkbox" id="system-enabled" checked>
-              <span>Записывать системный звук</span>
+              <span data-i18n="audio.system_enabled">Записывать системный звук</span>
             </label>
-            <p class="hint">Системный звук берётся с того же устройства, куда идёт
+            <p class="hint" data-i18n="audio.system_hint">Системный звук берётся с того же устройства, куда идёт
             воспроизведение. Если собеседника не слышно, выберите то устройство,
             в котором вы его слушаете.</p>
           </div>
@@ -298,9 +299,9 @@
           <div class="card">
             <label class="check">
               <input type="checkbox" id="dictation-enabled">
-              <span>Диктовать в любое приложение</span>
+              <span data-i18n="dictation.enabled">Диктовать в любое приложение</span>
             </label>
-            <p class="hint">Зажмите сочетание клавиш, наговорите, отпустите —
+            <p class="hint" data-i18n="dictation.enabled_hint">Зажмите сочетание клавиш, наговорите, отпустите —
             текст появится там, где стоит курсор: в письме, в чате, в редакторе.
             Konspekt при этом можно не открывать.</p>
             <p class="hint" id="dictation-problem" hidden></p>
@@ -308,42 +309,42 @@
 
           <div class="card">
             <label class="field">
-              <span class="field__label">Сочетание клавиш</span>
+              <span class="field__label" data-i18n="dictation.hotkey_label">Сочетание клавиш</span>
               <select id="dictation-hotkey">
-                <option value="&lt;ctrl&gt;+&lt;shift&gt;+d">Ctrl + Shift + D</option>
-                <option value="&lt;ctrl&gt;+&lt;shift&gt;+space">Ctrl + Shift + Пробел</option>
-                <option value="&lt;ctrl&gt;+&lt;alt&gt;+d">Ctrl + Alt + D</option>
-                <option value="&lt;alt&gt;+q">Alt + Q</option>
+                <option value="&lt;ctrl&gt;+&lt;shift&gt;+d" data-i18n="dictation.hotkey.ctrl_shift_d">Ctrl + Shift + D</option>
+                <option value="&lt;ctrl&gt;+&lt;shift&gt;+space" data-i18n="dictation.hotkey.ctrl_shift_space">Ctrl + Shift + Пробел</option>
+                <option value="&lt;ctrl&gt;+&lt;alt&gt;+d" data-i18n="dictation.hotkey.ctrl_alt_d">Ctrl + Alt + D</option>
+                <option value="&lt;alt&gt;+q" data-i18n="dictation.hotkey.alt_q">Alt + Q</option>
               </select>
             </label>
             <label class="field">
-              <span class="field__label">Как включать</span>
+              <span class="field__label" data-i18n="dictation.mode_label">Как включать</span>
               <select id="dictation-mode">
-                <option value="hold">Держать клавиши, пока говорю</option>
-                <option value="toggle">Нажал — пошло, нажал ещё раз — хватит</option>
+                <option value="hold" data-i18n="dictation.mode.hold">Держать клавиши, пока говорю</option>
+                <option value="toggle" data-i18n="dictation.mode.toggle">Нажал — пошло, нажал ещё раз — хватит</option>
               </select>
             </label>
-            <p class="hint">Пока держите клавиши, невозможно забыть выключить
+            <p class="hint" data-i18n="dictation.mode_hint">Пока держите клавиши, невозможно забыть выключить
             запись. Второй способ удобнее для длинного текста, но требует
             помнить, что диктовка идёт.</p>
           </div>
 
           <div class="card">
             <label class="field">
-              <span class="field__label">Как вставлять текст</span>
+              <span class="field__label" data-i18n="dictation.paste_label">Как вставлять текст</span>
               <select id="dictation-paste">
-                <option value="auto">Через буфер обмена (быстро)</option>
-                <option value="type">Печатать по буквам (не трогает буфер)</option>
+                <option value="auto" data-i18n="dictation.paste.clipboard">Через буфер обмена (быстро)</option>
+                <option value="type" data-i18n="dictation.paste.type">Печатать по буквам (не трогает буфер)</option>
               </select>
             </label>
-            <p class="hint">Через буфер текст появляется мгновенно, а прежнее
+            <p class="hint" data-i18n="dictation.paste_hint">Через буфер текст появляется мгновенно, а прежнее
             содержимое буфера возвращается на место. Печать по буквам буфер не
             трогает вовсе, но занимает около секунды на строку и в некоторых
             программах теряет символы.</p>
           </div>
 
           <div class="card">
-            <p class="hint">Диктовка не работает во время записи встречи: модель
+            <p class="hint" data-i18n="dictation.recording_conflict">Диктовка не работает во время записи встречи: модель
             одна, и на два дела сразу её не хватит. В окна, запущенные от имени
             администратора, Windows не пропускает ввод ни от одной программы —
             в этом случае текст останется в буфере обмена.</p>
@@ -354,24 +355,24 @@
         <section class="prefs__page" data-page="speech" hidden>
           <div class="card">
             <label class="field">
-              <span class="field__label">Основной язык встреч</span>
+              <span class="field__label" data-i18n="speech.primary_language">Основной язык встреч</span>
               <select id="asr-language"></select>
             </label>
-            <p class="hint">На этом языке говорят чаще всего. Речь на нём
+            <p class="hint" data-i18n="speech.primary_language_hint">На этом языке говорят чаще всего. Речь на нём
             распознаётся точной моделью, остальная уходит в запасную.</p>
           </div>
 
           <div class="card">
             <label class="check">
               <input type="checkbox" id="asr-detect" checked>
-              <span>Понимать речь на других языках</span>
+              <span data-i18n="speech.detect_other">Понимать речь на других языках</span>
             </label>
             <p class="hint" id="asr-detect-hint">Без этого иностранная речь
             записывается кириллицей: «холло дис из зе фест сентинс».</p>
 
             <div id="asr-foreign">
               <label class="field">
-                <span class="field__label">Модель для других языков</span>
+                <span class="field__label" data-i18n="speech.foreign_model_label">Модель для других языков</span>
                 <select id="asr-size"></select>
               </label>
               <p class="hint" id="asr-size-hint"></p>
@@ -382,23 +383,23 @@
         <!-- Голоса -->
         <section class="prefs__page" data-page="voices" hidden>
           <div class="card">
-            <p class="card__title">Мой голос</p>
+            <p class="card__title" data-i18n="voices.my_voice">Мой голос</p>
             <div class="voice-enroll" id="voice-enroll">
               <p class="voice-enroll__state" id="enroll-state">Голос не записан</p>
-              <p class="hint">Прочитайте вслух пару фраз, и Konspekt научится
+              <p class="hint" data-i18n="voices.enroll_hint">Прочитайте вслух пару фраз, и Konspekt научится
               отличать вас от остальных, даже если за компьютером говорят
               несколько человек.</p>
               <p class="voice-enroll__prompt" id="enroll-prompt" hidden></p>
               <div class="voice-enroll__row">
                 <button class="btn-secondary" type="button" id="enroll-start">Записать голос</button>
-                <button class="btn-ghost" type="button" id="enroll-forget" hidden>Забыть</button>
+                <button class="btn-ghost" type="button" id="enroll-forget" data-i18n="voices.forget" hidden>Забыть</button>
               </div>
             </div>
           </div>
 
           <div class="card" id="people-field" hidden>
-            <p class="card__title">Знакомые голоса</p>
-            <p class="hint">Названный один раз человек узнаётся на следующих встречах сам.</p>
+            <p class="card__title" data-i18n="voices.known_voices">Знакомые голоса</p>
+            <p class="hint" data-i18n="voices.known_hint">Названный один раз человек узнаётся на следующих встречах сам.</p>
             <ul class="people" id="people-list"></ul>
           </div>
         </section>
@@ -407,32 +408,32 @@
         <section class="prefs__page" data-page="notes" hidden>
           <div class="card">
             <label class="field">
-              <span class="field__label">Кто пишет заметки и отвечает</span>
+              <span class="field__label" data-i18n="notes_settings.who_writes">Кто пишет заметки и отвечает</span>
               <select id="llm-backend">
-                <option value="local">На этом компьютере</option>
-                <option value="remote">На своём сервере</option>
-                <option value="null">Выключить</option>
+                <option value="local" data-i18n="notes_settings.backend_local">На этом компьютере</option>
+                <option value="remote" data-i18n="notes_settings.backend_remote">На своём сервере</option>
+                <option value="null" data-i18n="notes_settings.backend_off">Выключить</option>
               </select>
             </label>
             <p class="hint" id="llm-hint"></p>
 
             <div class="llm-remote" id="llm-remote" hidden>
               <label class="field">
-                <span class="field__label">Адрес сервера</span>
+                <span class="field__label" data-i18n="notes_settings.server_url">Адрес сервера</span>
                 <input type="text" id="llm-url" placeholder="https://api.example.com/v1" spellcheck="false">
               </label>
               <label class="field">
-                <span class="field__label">Ключ доступа</span>
-                <input type="password" id="llm-key" placeholder="Ключ хранится только на этом компьютере" spellcheck="false">
+                <span class="field__label" data-i18n="notes_settings.api_key">Ключ доступа</span>
+                <input type="password" id="llm-key" data-i18n-placeholder="notes_settings.api_key_placeholder" placeholder="Ключ хранится только на этом компьютере" spellcheck="false">
               </label>
               <label class="field">
-                <span class="field__label">Модель</span>
+                <span class="field__label" data-i18n="notes_settings.model">Модель</span>
                 <input type="text" id="llm-model" placeholder="gpt-4o-mini" spellcheck="false">
               </label>
             </div>
 
             <div class="voice-enroll__row">
-              <button class="btn-secondary" type="button" id="llm-check">Проверить связь</button>
+              <button class="btn-secondary" type="button" id="llm-check" data-i18n="notes_settings.check_connection">Проверить связь</button>
               <span class="hint" id="llm-check-result"></span>
             </div>
           </div>
@@ -440,7 +441,7 @@
           <div class="card">
             <label class="check">
               <input type="checkbox" id="llm-auto" checked>
-              <span>Делать заметки сразу после остановки записи</span>
+              <span data-i18n="notes_settings.auto_summary">Делать заметки сразу после остановки записи</span>
             </label>
           </div>
         </section>
@@ -449,11 +450,23 @@
         <section class="prefs__page" data-page="look" hidden>
           <div class="card">
             <label class="field">
-              <span class="field__label">Тема</span>
+              <span class="field__label" data-i18n="look.theme">Тема</span>
               <div class="theme-switch" id="theme-switch">
-                <button type="button" data-theme="light">Светлая</button>
-                <button type="button" data-theme="dark">Тёмная</button>
-                <button type="button" data-theme="system">Как в системе</button>
+                <button type="button" data-theme="light" data-i18n="look.theme_light">Светлая</button>
+                <button type="button" data-theme="dark" data-i18n="look.theme_dark">Тёмная</button>
+                <button type="button" data-theme="system" data-i18n="look.theme_system">Как в системе</button>
+              </div>
+            </label>
+          </div>
+
+          <div class="card">
+            <label class="field">
+              <span class="field__label" data-i18n="look.language">Язык интерфейса</span>
+              <div class="theme-switch" id="language-switch">
+                <button type="button" data-lang="ru">Русский</button>
+                <button type="button" data-lang="en">English</button>
+                <button type="button" data-lang="es">Español</button>
+                <button type="button" data-lang="sr">Srpski</button>
               </div>
             </label>
           </div>
@@ -462,21 +475,21 @@
         <!-- О программе -->
         <section class="prefs__page" data-page="data" hidden>
           <div class="card">
-            <p class="card__title">Что лежит на диске</p>
+            <p class="card__title" data-i18n="data.disk_usage">Что лежит на диске</p>
             <ul class="usage" id="usage-list">
-              <li class="hint">Считаем…</li>
+              <li class="hint" data-i18n="data.calculating">Считаем…</li>
             </ul>
-            <p class="hint">Записи и расшифровки хранятся только здесь и
+            <p class="hint" data-i18n="data.privacy_note">Записи и расшифровки хранятся только здесь и
             никуда не отправляются.</p>
           </div>
 
           <div class="card">
-            <p class="card__title">Уборка</p>
-            <p class="hint">Убирает записи, у которых больше нет встречи,
+            <p class="card__title" data-i18n="data.cleanup">Уборка</p>
+            <p class="hint" data-i18n="data.cleanup_hint">Убирает записи, у которых больше нет встречи,
             и сжимает базу, чтобы удалённое исчезло из файла окончательно.
             Ваши встречи не трогает.</p>
             <div class="voice-enroll__row">
-              <button class="btn-secondary" type="button" id="cleanup-run">Убрать лишнее</button>
+              <button class="btn-secondary" type="button" id="cleanup-run" data-i18n="data.cleanup_button">Убрать лишнее</button>
               <span class="hint" id="cleanup-result"></span>
             </div>
           </div>
@@ -485,39 +498,39 @@
         <section class="prefs__page" data-page="about" hidden>
           <div class="card">
             <p class="about__name">Konspekt <span id="about-version"></span></p>
-            <p class="hint">Умный блокнот для встреч. Запись, расшифровка и
+            <p class="hint" data-i18n="about.title">Умный блокнот для встреч. Запись, расшифровка и
             заметки происходят на этом компьютере.</p>
           </div>
 
           <div class="card">
-            <p class="card__title">Обновления</p>
+            <p class="card__title" data-i18n="about.updates">Обновления</p>
             <label class="check">
               <input type="checkbox" id="update-auto" checked>
-              <span>Раз в сутки смотреть, не вышла ли новая версия</span>
+              <span data-i18n="about.check_updates">Раз в сутки смотреть, не вышла ли новая версия</span>
             </label>
             <label class="check">
               <input type="checkbox" id="update-silent" checked>
-              <span>Скачивать и ставить обновления самостоятельно</span>
+              <span data-i18n="about.auto_update">Скачивать и ставить обновления самостоятельно</span>
             </label>
-            <p class="hint">Наружу уходит только номер версии и тип системы.
+            <p class="hint" data-i18n="about.update_hint">Наружу уходит только номер версии и тип системы.
             Обновление скачивается фоном, сверяется по контрольной сумме и
             ставится, когда окно свёрнуто и нет записи, поэтому работу не прерывает.
             Встречи, записи и скачанные модели остаются на месте.</p>
             <div class="voice-enroll__row">
-              <button class="btn-secondary" type="button" id="update-check">Проверить сейчас</button>
+              <button class="btn-secondary" type="button" id="update-check" data-i18n="about.check_now">Проверить сейчас</button>
               <span class="hint" id="update-result"></span>
             </div>
           </div>
 
           <div class="card">
-            <p class="card__title">Модели и авторство</p>
+            <p class="card__title" data-i18n="about.models_and_licenses">Модели и авторство</p>
             <pre class="about__notice" id="about-notice">Загружаем…</pre>
           </div>
         </section>
 
         <div class="sheet__foot">
           <button class="version" type="button" id="app-version" title="О программе"></button>
-          <button class="btn-primary" id="audio-save">Готово</button>
+          <button class="btn-primary" id="audio-save" data-i18n="prefs.save">Готово</button>
         </div>
       </div>
     </div>
@@ -528,11 +541,11 @@
        на английском, то есть выдаёт веб-нутро и пугает человека. -->
   <div class="sheet" id="confirm-sheet" hidden>
     <div class="sheet__panel confirm">
-      <h3 class="confirm__title" id="confirm-title">Удалить?</h3>
+      <h3 class="confirm__title" id="confirm-title" data-i18n="confirm.title">Удалить?</h3>
       <p class="confirm__text" id="confirm-text"></p>
       <div class="confirm__row">
-        <button class="btn-ghost" type="button" id="confirm-no">Отмена</button>
-        <button class="btn-danger" type="button" id="confirm-yes">Удалить</button>
+        <button class="btn-ghost" type="button" id="confirm-no" data-i18n="confirm.cancel">Отмена</button>
+        <button class="btn-danger" type="button" id="confirm-yes" data-i18n="confirm.delete">Удалить</button>
       </div>
     </div>
   </div>

@@ -58,6 +58,7 @@ from ..audio import devices as audio_devices
 from ..audio.buffers import WavWriter, float_to_int16
 from ..core import paths
 from ..core import settings as settings_mod
+from ..core.i18n import t as _t
 from ..core.events import (
     CHAT_CHUNK,
     CHAT_ERROR,
@@ -630,14 +631,14 @@ class AppService:
         куда он говорит, а системный звук здесь только помешал бы.
         """
         if self.active_meeting_id is not None:
-            raise RuntimeError("Нельзя записывать голос во время встречи")
+            raise RuntimeError(self._msg("python.enroll.recording_conflict"))
         if self._enrollment is not None:
             return self.enrollment_status()
 
         try:
             self.embedder.load()
         except Exception as exc:
-            raise RuntimeError(f"Модель распознавания голоса недоступна: {exc}") from exc
+            raise RuntimeError(self._msg("python.enroll.model_unavailable", exc=exc)) from exc
 
         self._enrollment = VoiceEnrollment(self.embedder, SAMPLE_RATE)
         self._enroll_capture = WasapiCapture(
@@ -676,12 +677,12 @@ class AppService:
         self._stop_enroll_capture()
         self._enrollment = None
         if enrollment is None:
-            raise RuntimeError("Запись голоса не начиналась")
+            raise RuntimeError(self._msg("python.enroll.not_started"))
 
         vector = enrollment.result()
         if vector is None:
             raise RuntimeError(
-                f"Речи слишком мало: нужно хотя бы {int(MIN_SECONDS)} секунд"
+                self._msg("python.enroll.too_little", min=int(MIN_SECONDS))
             )
 
         # Владелец в базе один: перезапись эталона заменяет старый, а не
@@ -868,8 +869,7 @@ class AppService:
                 log.info("Модель качает другой экземпляр, ждём его")
                 bus.emit(MODEL_DOWNLOAD, {
                     "state": "error",
-                    "message": "Модель уже качает другое окно Konspekt. "
-                               "Закройте лишнее окно и попробуйте снова.",
+                    "message": self._msg("python.model.other_instance"),
                 })
                 return False
             except Exception as exc:
@@ -884,7 +884,7 @@ class AppService:
                 self._asr_download_failed = True
                 bus.emit(MODEL_DOWNLOAD, {
                     "state": "error",
-                    "message": "Модель скачалась не полностью, попробуйте ещё раз",
+                    "message": self._msg("python.model.incomplete"),
                 })
                 return False
 
@@ -933,15 +933,14 @@ class AppService:
             # нельзя, иначе человек так и будет смотреть в пустоту.
             bus.emit(MODEL_DOWNLOAD, {
                 "state": "error",
-                "message": "Модель распознавания повреждена и не чинится "
-                           "перезакачкой. Напишите нам, приложив журнал.",
+                "message": self._msg("python.model.corrupted"),
             })
             return False
 
         self._asr_repaired = True
         bus.emit(MODEL_DOWNLOAD, {
             "state": "error",
-            "message": "Файлы модели оказались повреждены, качаем заново",
+            "message": self._msg("python.model.repairing"),
         })
         getattr(engine, "discard", lambda: None)()
         self._asr_download_failed = False
@@ -1818,10 +1817,10 @@ class AppService:
     def generate_summary(self, meeting_id: str) -> dict[str, Any]:
         """Запустить синтез заметок. Возвращается сразу, текст идёт событиями."""
         if not self.llm.enabled:
-            return {"ok": False, "error": "Синтез выключен в настройках"}
+            return {"ok": False, "error": self._msg("python.summary.disabled")}
         with self._llm_lock:
             if self._llm_busy:
-                return {"ok": False, "error": "Модель уже занята"}
+                return {"ok": False, "error": self._msg("python.summary.busy")}
             self._llm_busy = True
             self._llm_cancel = False
 
@@ -1837,13 +1836,13 @@ class AppService:
             meeting = self.store.get_meeting(meeting_id)
             if meeting is None:
                 bus.emit(SUMMARY_ERROR, {"meeting_id": meeting_id,
-                                         "error": "Встреча не найдена"})
+                                         "error": self._msg("python.summary.meeting_not_found")})
                 return
 
             transcript = self.transcript_text(meeting_id)
             if not transcript.strip() and not meeting.notes.strip():
                 bus.emit(SUMMARY_ERROR, {"meeting_id": meeting_id,
-                                         "error": "Нечего обрабатывать: нет ни расшифровки, ни заметок"})
+                                         "error": self._msg("python.summary.nothing")})
                 return
 
             messages = summary_messages(
@@ -1880,7 +1879,7 @@ class AppService:
         except Exception:
             log.exception("Синтез заметок упал")
             bus.emit(SUMMARY_ERROR, {"meeting_id": meeting_id,
-                                     "error": "Не удалось сделать заметки"})
+                                     "error": self._msg("python.summary.error")})
         finally:
             with self._llm_lock:
                 self._llm_busy = False
@@ -1947,12 +1946,12 @@ class AppService:
         """Вопрос по встрече. Ответ приходит событиями по кускам."""
         question = (question or "").strip()
         if not question:
-            return {"ok": False, "error": "Пустой вопрос"}
+            return {"ok": False, "error": self._msg("python.chat.empty_question")}
         if not self.llm.enabled:
-            return {"ok": False, "error": "Синтез выключен в настройках"}
+            return {"ok": False, "error": self._msg("python.chat.disabled")}
         with self._llm_lock:
             if self._llm_busy:
-                return {"ok": False, "error": "Модель уже занята"}
+                return {"ok": False, "error": self._msg("python.chat.busy")}
             self._llm_busy = True
             self._llm_cancel = False
 
@@ -1979,7 +1978,7 @@ class AppService:
             meeting = self.store.get_meeting(meeting_id)
             if meeting is None:
                 bus.emit(CHAT_ERROR, {"meeting_id": meeting_id,
-                                      "error": "Встреча не найдена"})
+                                      "error": self._msg("python.chat.meeting_not_found")})
                 return
 
             # История без нашей пустой заготовки под ответ: модель не
@@ -2022,7 +2021,7 @@ class AppService:
             self.store.update_chat_message(answer_id, "")
             bus.emit(CHAT_ERROR, {"meeting_id": meeting_id,
                                   "message_id": answer_id,
-                                  "error": "Не удалось получить ответ"})
+                                  "error": self._msg("python.chat.error")})
         finally:
             with self._llm_lock:
                 self._llm_busy = False
@@ -2039,6 +2038,37 @@ class AppService:
         self.settings.theme = theme
         settings_mod.save(self.settings)
         return theme
+
+    def set_language(self, language: str) -> str:
+        """Сохранить язык интерфейса."""
+        if language not in ("ru", "en", "es", "sr"):
+            language = "ru"
+        self.settings.language = language
+        settings_mod.save(self.settings)
+        return language
+
+    def get_i18n_dict(self, language: str) -> dict[str, Any]:
+        """Отдать словарь переводов интерфейса.
+
+        Фронт не может прочитать web/i18n/*.json сам: под pywebview
+        страница открыта с file://, а fetch() к соседнему файлу там
+        режется как кросс-origin запрос и тихо проваливается. Поэтому
+        словарь идёт через мост, как и остальные данные.
+        """
+        import json as _json
+
+        if language not in ("ru", "en", "es", "sr"):
+            language = "ru"
+        path = paths.web_dir() / "i18n" / f"{language}.json"
+        try:
+            return _json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            log.exception("Не удалось прочитать словарь перевода %s", language)
+            return {}
+
+    def _msg(self, key: str, **vars: object) -> str:
+        """Перевести пользовательское сообщение на текущий язык интерфейса."""
+        return _t(key, self.settings.language, **vars)
 
     def set_sidebar_width(self, width: int) -> int:
         """Запомнить ширину боковой колонки.
