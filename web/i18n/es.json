@@ -1,0 +1,367 @@
+{
+  "titlebar": {
+    "settings": "Ajustes",
+    "pin": "Siempre visible",
+    "minimize": "Minimizar",
+    "hide": "Ocultar en la bandeja"
+  },
+  "sidebar": {
+    "new_meeting": "Nueva reunión",
+    "import": "Importar grabaciones"
+  },
+  "model_load": {
+    "downloading": "Descargando el modelo de reconocimiento",
+    "hint": "Una sola vez, 220 MB. Puedes usar la aplicación ahora mismo."
+  },
+  "update_note": {
+    "new_version": "Hay una nueva versión disponible",
+    "hide": "Ocultar",
+    "install": "Instalar y reiniciar"
+  },
+  "imports": {
+    "title": "Procesando grabaciones",
+    "clear": "Limpiar",
+    "remaining": "Procesando grabaciones: quedan {left}",
+    "reading_files": "Leyendo {count} archivo(s)…",
+    "picking_files": "Eligiendo archivos…",
+    "cancel_tooltip": "Cancelar",
+    "open_tooltip": "Abrir reunión",
+    "state": {
+      "waiting": "en cola",
+      "stereo": "2 canales",
+      "done": "listo",
+      "failed": "no es audio",
+      "cancelled": "cancelado"
+    },
+    "file_word": {
+      "one": "archivo",
+      "few": "archivos",
+      "many": "archivos"
+    }
+  },
+  "search": {
+    "placeholder": "Buscar reuniones"
+  },
+  "empty": {
+    "title": "Todavía no hay nada",
+    "text": "Crea una reunión y anota ideas. Konspekt las convertirá en notas completas.",
+    "start": "Empezar una reunión",
+    "hint": "O arrastra aquí grabaciones existentes: cada una se convertirá en su propia reunión con transcripción.",
+    "import": "Elegir archivos"
+  },
+  "meeting": {
+    "title_placeholder": "Título de la reunión",
+    "untitled": "Sin título",
+    "recording_status": "Grabando",
+    "quote_tooltip": "Mostrar este momento en la transcripción",
+    "delete_tooltip": "Eliminar reunión",
+    "delete_confirm_title": "¿Eliminar la reunión «{name}»?",
+    "delete_confirm_text": "La grabación, la transcripción y las notas desaparecerán con ella. No se puede deshacer.",
+    "deleted": "Reunión eliminada",
+    "more_quotes": " {count} más"
+  },
+  "recording": {
+    "start": "Empezar grabación",
+    "stop": "Detener",
+    "silent": "Una de las pistas no tiene sonido",
+    "error": "No se pudo empezar a grabar"
+  },
+  "tab": {
+    "notes": "Mis notas",
+    "summary": "Resumen",
+    "transcript": "Transcripción"
+  },
+  "notes": {
+    "placeholder": "Anota ideas breves durante la reunión.\n\nKonspekt recordará el momento de cada línea y las convertirá en notas completas después de la reunión.",
+    "saved": "Guardado"
+  },
+  "summary": {
+    "run": "Generar notas",
+    "redo": "Regenerar",
+    "stop": "Detener",
+    "empty_title": "Todavía no hay notas",
+    "empty_text": "Pulsa «Generar notas» y Konspekt extraerá decisiones, tareas y preguntas abiertas de la grabación.",
+    "reading": "Leyendo la transcripción…",
+    "generating": "Escribiendo notas…",
+    "download_hint": "Una sola vez, 1,7 GB. Necesario para resúmenes y preguntas sobre la reunión.",
+    "downloading_model": "Descargando el modelo de notas… {percent}%",
+    "model_ready": "Modelo listo, iniciando…",
+    "download_error": "No se pudo descargar el modelo",
+    "error": "No se pudieron generar las notas",
+    "backfill_start": "Recuperando lo pendiente: {total} {piece}",
+    "backfill_progress": "Recuperando lo pendiente: {done} de {total}",
+    "piece_word": {
+      "one": "fragmento",
+      "few": "fragmentos",
+      "many": "fragmentos"
+    }
+  },
+  "chat": {
+    "title": "Preguntas sobre la reunión",
+    "clear": "Limpiar",
+    "hint": "Pregunta lo que quieras sobre esta reunión: quién prometió qué, qué se acordó, qué sigue abierto.",
+    "placeholder": "Preguntar sobre la reunión…",
+    "send": "Enviar",
+    "empty_question": "Pregunta vacía",
+    "no_meeting": "Abre primero una reunión",
+    "send_error": "No se pudo enviar la pregunta",
+    "error": "No se pudo obtener una respuesta"
+  },
+  "transcript": {
+    "empty_title": "La transcripción aparecerá aquí",
+    "empty_text": "Empieza a grabar y el habla reconocida aparecerá de inmediato. Las líneas se separan por fuente de audio: micrófono eres tú, sonido del sistema es la otra persona.",
+    "speaker_me": "Yo",
+    "speaker_them": "Interlocutor",
+    "rename_tooltip": "Haz clic para nombrar al hablante",
+    "voice_aria_label": "Nombre del hablante",
+    "play_tooltip": "Reproducir esta línea",
+    "lang_tooltip": "¿Esta línea se reconoció en el idioma equivocado?",
+    "lang_failed": "No hay grabación de esta línea, no hay nada que rehacer",
+    "lang_retry_failed": "No se pudo rehacer",
+    "audio_clip_not_found": "No hay grabación de esta línea"
+  },
+  "toast": {
+    "close": "Cerrar"
+  },
+  "dropzone": {
+    "title": "Suelta para importar",
+    "hint": "Cada grabación se convierte en su propia reunión"
+  },
+  "confirm": {
+    "title": "¿Eliminar?",
+    "cancel": "Cancelar",
+    "delete": "Eliminar"
+  },
+  "prefs": {
+    "title": "Ajustes",
+    "close": "Cerrar",
+    "save": "Listo",
+    "tab": {
+      "audio": "Audio",
+      "voices": "Voces",
+      "speech": "Reconocimiento",
+      "dictation": "Dictado",
+      "notes": "Notas",
+      "look": "Apariencia",
+      "data": "Datos",
+      "about": "Acerca de"
+    }
+  },
+  "audio": {
+    "mic_label": "Micrófono (yo)",
+    "mic_enabled": "Grabar micrófono",
+    "system_label": "Sonido del sistema (interlocutor)",
+    "system_enabled": "Grabar sonido del sistema",
+    "system_hint": "El sonido del sistema se captura del mismo dispositivo por el que reproduces audio. Si no oyes a la otra persona, elige el dispositivo por el que la estás escuchando.",
+    "save_at_least_one": "Se necesita al menos una pista: micrófono o sonido del sistema",
+    "device_default": "Predeterminado",
+    "device_default_named": "Predeterminado ({name})",
+    "device_list_failed": "No se pudo obtener la lista de dispositivos de audio"
+  },
+  "dictation": {
+    "enabled": "Dictar en cualquier aplicación",
+    "enabled_hint": "Mantén pulsada la combinación de teclas, habla, suelta: el texto aparecerá donde esté el cursor, en un correo, un chat, un editor. No hace falta tener Konspekt abierto.",
+    "hotkey_label": "Combinación de teclas",
+    "hotkey": {
+      "ctrl_shift_d": "Ctrl + Shift + D",
+      "ctrl_shift_space": "Ctrl + Shift + Espacio",
+      "ctrl_alt_d": "Ctrl + Alt + D",
+      "alt_q": "Alt + Q"
+    },
+    "mode_label": "Cómo activarlo",
+    "mode": {
+      "hold": "Mantener las teclas mientras hablo",
+      "toggle": "Pulsar una vez para empezar, otra para terminar"
+    },
+    "mode_hint": "Mantener las teclas pulsadas hace imposible olvidar detener la grabación. El otro modo es más cómodo para textos largos, pero hay que recordar que el dictado está activo.",
+    "paste_label": "Cómo insertar el texto",
+    "paste": {
+      "clipboard": "Mediante el portapapeles (rápido)",
+      "type": "Escribiendo letra por letra (no toca el portapapeles)"
+    },
+    "paste_hint": "Mediante el portapapeles el texto aparece al instante y el contenido anterior del portapapeles se restaura después. Escribir letra por letra no toca el portapapeles en absoluto, pero tarda alrededor de un segundo por línea y en algunas aplicaciones puede perder caracteres.",
+    "recording_conflict": "El dictado no funciona mientras se graba una reunión: solo hay un modelo y no alcanza para ambas cosas a la vez. Windows no deja pasar la entrada de teclado de ninguna aplicación a ventanas ejecutadas como administrador; en ese caso el texto quedará en el portapapeles."
+  },
+  "speech": {
+    "primary_language": "Idioma principal de las reuniones",
+    "primary_language_hint": "El idioma que se habla con más frecuencia. El habla en ese idioma se reconoce con el modelo preciso, el resto va al modelo de respaldo.",
+    "detect_other": "Entender habla en otros idiomas",
+    "detect_hint": "Sin esto, el habla en otro idioma se transcribe fonéticamente, como una imitación en el alfabeto equivocado.",
+    "langid_missing": "Se necesita el modelo de detección de idioma, todavía no se ha descargado.",
+    "foreign_model_label": "Modelo para otros idiomas",
+    "size_queued": "Este modelo todavía no se ha descargado, por ahora se usa el anterior.",
+    "size": {
+      "fast": "Rápido",
+      "accurate": "Preciso",
+      "not_downloaded": " — no descargado"
+    }
+  },
+  "voices": {
+    "my_voice": "Mi voz",
+    "not_recorded": "Voz no grabada",
+    "enroll_hint": "Lee un par de frases en voz alta y Konspekt aprenderá a distinguirte de los demás, incluso si varias personas hablan cerca del ordenador.",
+    "record": "Grabar voz",
+    "overwrite": "Volver a grabar la voz",
+    "forget": "Olvidar",
+    "known_voices": "Voces conocidas",
+    "known_hint": "Una vez nombrada, una persona se reconoce sola en las siguientes reuniones.",
+    "start_failed": "No se pudo empezar a grabar la voz",
+    "cancelled": "Grabación de voz cancelada: había demasiado poco habla",
+    "saved": "Voz guardada",
+    "save_failed": "No se pudo guardar la voz",
+    "progress_enough": "{sec} s grabados, ya es suficiente",
+    "progress_left": "{sec} s grabados, quedan unos {left} s",
+    "save_button": "Guardar voz",
+    "stop_button": "Detener",
+    "has_owner": "Voz grabada: {name}",
+    "you_suffix": " (eres tú)"
+  },
+  "notes_settings": {
+    "who_writes": "Quién escribe las notas y responde",
+    "backend_local": "En este ordenador",
+    "backend_remote": "En tu propio servidor",
+    "backend_off": "Desactivado",
+    "server_url": "Dirección del servidor",
+    "server_url_placeholder": "https://api.example.com/v1",
+    "api_key": "Clave de acceso",
+    "api_key_placeholder": "La clave se guarda solo en este ordenador",
+    "model": "Modelo",
+    "model_placeholder": "gpt-4o-mini",
+    "check_connection": "Probar conexión",
+    "checking": "Comprobando…",
+    "check_ok": "Hay conexión, el modelo responde",
+    "check_error": "No hay conexión",
+    "auto_summary": "Generar notas justo al detener la grabación",
+    "hint_local": "Las notas se generan en este ordenador. Nada sale a la red, pero la primera respuesta espera a que el modelo se cargue.",
+    "hint_remote": "La grabación se envía al servidor indicado. Más rápido y más inteligente, pero deja de ser privado.",
+    "hint_off": "Las notas y respuestas están desactivadas. La grabación, la transcripción y tus propias notas siguen funcionando.",
+    "hint_local_not_ready": " El modelo todavía no se ha descargado: 1,7 GB se descargarán en la primera solicitud."
+  },
+  "look": {
+    "theme": "Tema",
+    "theme_light": "Claro",
+    "theme_dark": "Oscuro",
+    "theme_system": "Como el sistema",
+    "language": "Idioma de la interfaz"
+  },
+  "data": {
+    "disk_usage": "Qué hay en el disco",
+    "calculating": "Calculando…",
+    "privacy_note": "Las grabaciones y transcripciones se guardan solo aquí y nunca se envían a ningún sitio.",
+    "cleanup": "Limpieza",
+    "cleanup_hint": "Elimina grabaciones que ya no pertenecen a ninguna reunión y compacta la base de datos para que lo eliminado desaparezca del archivo de verdad. No toca tus reuniones.",
+    "cleanup_button": "Limpiar",
+    "cleanup_running": "Limpiando…",
+    "cleanup_failed": "No se pudo",
+    "cleanup_freed": "Se liberaron {size}",
+    "cleanup_nothing": "No había nada que limpiar",
+    "audio_size_label": "Grabaciones de reuniones",
+    "db_size_label": "Base de datos de reuniones y transcripciones",
+    "models_size_label": "Modelos de reconocimiento y notas",
+    "orphan_label": "Grabaciones sin reunión",
+    "orphan_suffix": " — se pueden eliminar"
+  },
+  "about": {
+    "title": "Un cuaderno inteligente para reuniones. La grabación, la transcripción y las notas ocurren en este ordenador.",
+    "updates": "Actualizaciones",
+    "check_updates": "Buscar una nueva versión una vez al día",
+    "auto_update": "Descargar e instalar actualizaciones automáticamente",
+    "update_hint": "Solo el número de versión y el tipo de sistema salen del ordenador. La actualización se descarga en segundo plano, se verifica con una suma de control y se instala cuando la ventana está minimizada y no hay ninguna grabación en curso, así que nunca interrumpe tu trabajo. Las reuniones, grabaciones y modelos descargados permanecen intactos.",
+    "check_now": "Comprobar ahora",
+    "checking": "Comprobando…",
+    "check_failed": "No se pudo comprobar",
+    "found_silent": "Salió la versión {version}, descargando",
+    "found_manual": "Salió la versión {version}. Activa la descarga automática arriba o descárgala manualmente",
+    "up_to_date": "Tienes la versión más reciente",
+    "models_and_licenses": "Modelos y créditos",
+    "notice_not_found": "No se encontró el archivo NOTICE junto a la aplicación",
+    "version_prefix": "Versión "
+  },
+  "update": {
+    "new_version": "Salió la versión {version}",
+    "silent_hint": "La descargaremos e instalaremos por ti.",
+    "manual_hint": "Las actualizaciones automáticas están desactivadas: descarga la nueva versión tú mismo.",
+    "downloading": "Descargando la versión {version}",
+    "background_hint": "Se descarga en segundo plano, se instala cuando el equipo esté inactivo.",
+    "ready": "La versión {version} está lista",
+    "window_hint": "Se instalará sola en cuanto minimices la aplicación.",
+    "recording_blocked": "Hay una grabación en curso, la actualización se instalará después"
+  },
+  "model": {
+    "status_ready": "Reconocimiento listo (GigaAM v3)",
+    "status_loaded": "El modelo está listo, se cargará en la próxima grabación",
+    "status_partial": "Modelo descargado parcialmente ({done} de {total} MB)",
+    "status_need_download": "El reconocimiento necesita un modelo, {total} MB",
+    "download_title": "Descargando el modelo de reconocimiento",
+    "download_hint": "Una sola vez, 220 MB. Puedes usar la aplicación ahora mismo.",
+    "download_progress": "Descargando modelo: {done} de {total} MB ({pct}%)",
+    "download_failed": "No se pudo descargar el modelo",
+    "download_ready": "Modelo de reconocimiento listo",
+    "first_download_toast": "Descargando el modelo de reconocimiento, 220 MB. Ya puedes usar la aplicación, la transcripción funcionará cuando termine",
+    "starting_download": "Iniciando la descarga…",
+    "action_cancel": "Cancelar",
+    "action_resume": "Reanudar",
+    "action_download": "Descargar"
+  },
+  "status": {
+    "draft": "Borrador",
+    "recording": "Grabando",
+    "processing": "Procesando",
+    "ready": "Listo"
+  },
+  "date": {
+    "today": "Hoy, {time}",
+    "yesterday": "Ayer, {time}"
+  },
+  "lang": {
+    "ru": "Ruso",
+    "en": "Inglés",
+    "de": "Alemán",
+    "fr": "Francés",
+    "es": "Español",
+    "it": "Italiano",
+    "pt": "Portugués",
+    "pl": "Polaco",
+    "uk": "Ucraniano",
+    "sr": "Serbio",
+    "tr": "Turco",
+    "nl": "Neerlandés"
+  },
+  "api": {
+    "call_error": "Error de llamada"
+  },
+  "python": {
+    "model": {
+      "other_instance": "Otra ventana de Konspekt ya está descargando el modelo. Cierra la ventana sobrante e inténtalo de nuevo.",
+      "incomplete": "El modelo no se descargó por completo, inténtalo de nuevo",
+      "corrupted": "El modelo de reconocimiento está dañado y volver a descargarlo no lo arregla. Escríbenos y adjunta el registro.",
+      "repairing": "Los archivos del modelo estaban dañados, descargando de nuevo"
+    },
+    "summary": {
+      "disabled": "La generación de notas está desactivada en los ajustes",
+      "busy": "El modelo ya está ocupado",
+      "meeting_not_found": "Reunión no encontrada",
+      "nothing": "No hay nada que procesar: no hay transcripción ni notas",
+      "error": "No se pudieron generar las notas"
+    },
+    "chat": {
+      "empty_question": "Pregunta vacía",
+      "disabled": "La generación de notas está desactivada en los ajustes",
+      "busy": "El modelo ya está ocupado",
+      "meeting_not_found": "Reunión no encontrada",
+      "error": "No se pudo obtener una respuesta"
+    },
+    "version_check": {
+      "error": "No se pudo contactar con el servidor de actualizaciones"
+    },
+    "enroll": {
+      "recording_conflict": "No se puede grabar una voz mientras se graba una reunión",
+      "model_unavailable": "El modelo de reconocimiento de voz no está disponible: {exc}",
+      "too_little": "Hay muy poco habla: se necesitan al menos {min} segundos"
+    },
+    "file_dialog": {
+      "audio_filter": "Audio y vídeo (*.mp3;*.wav;*.m4a;*.ogg;*.opus;*.flac;*.aac;*.wma;*.mp4;*.mkv;*.mov;*.webm;*.avi)",
+      "all_files": "Todos los archivos (*.*)"
+    }
+  }
+}

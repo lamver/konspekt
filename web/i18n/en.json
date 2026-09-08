@@ -1,0 +1,367 @@
+{
+  "titlebar": {
+    "settings": "Settings",
+    "pin": "Always on top",
+    "minimize": "Minimize",
+    "hide": "Hide to tray"
+  },
+  "sidebar": {
+    "new_meeting": "New meeting",
+    "import": "Import recordings"
+  },
+  "model_load": {
+    "downloading": "Downloading the speech model",
+    "hint": "One-time, 220 MB. You can use the app right away."
+  },
+  "update_note": {
+    "new_version": "A new version is out",
+    "hide": "Hide",
+    "install": "Install and restart"
+  },
+  "imports": {
+    "title": "Processing recordings",
+    "clear": "Clear",
+    "remaining": "Processing recordings: {left} left",
+    "reading_files": "Reading {count} file(s)…",
+    "picking_files": "Choosing files…",
+    "cancel_tooltip": "Cancel",
+    "open_tooltip": "Open meeting",
+    "state": {
+      "waiting": "queued",
+      "stereo": "2 channels",
+      "done": "done",
+      "failed": "not audio",
+      "cancelled": "cancelled"
+    },
+    "file_word": {
+      "one": "file",
+      "few": "files",
+      "many": "files"
+    }
+  },
+  "search": {
+    "placeholder": "Search meetings"
+  },
+  "empty": {
+    "title": "Nothing here yet",
+    "text": "Start a meeting and jot down notes. Konspekt will turn them into finished notes.",
+    "start": "Start a meeting",
+    "hint": "Or drop existing recordings here — each one becomes its own meeting with a transcript.",
+    "import": "Choose files"
+  },
+  "meeting": {
+    "title_placeholder": "Meeting title",
+    "untitled": "Untitled",
+    "recording_status": "Recording",
+    "quote_tooltip": "Show this spot in the transcript",
+    "delete_tooltip": "Delete meeting",
+    "delete_confirm_title": "Delete meeting \"{name}\"?",
+    "delete_confirm_text": "The recording, transcript and notes will be gone with it. This can't be undone.",
+    "deleted": "Meeting deleted",
+    "more_quotes": " {count} more"
+  },
+  "recording": {
+    "start": "Start recording",
+    "stop": "Stop",
+    "silent": "One of the tracks has no sound",
+    "error": "Couldn't start recording"
+  },
+  "tab": {
+    "notes": "My notes",
+    "summary": "Summary",
+    "transcript": "Transcript"
+  },
+  "notes": {
+    "placeholder": "Jot down short notes during the meeting.\n\nKonspekt will remember the moment of each line and turn them into full notes afterwards.",
+    "saved": "Saved"
+  },
+  "summary": {
+    "run": "Generate notes",
+    "redo": "Regenerate",
+    "stop": "Stop",
+    "empty_title": "No notes yet",
+    "empty_text": "Click \"Generate notes\" and Konspekt will pull decisions, tasks and open questions out of the recording.",
+    "reading": "Reading the transcript…",
+    "generating": "Writing notes…",
+    "download_hint": "One-time, 1.7 GB. Needed for summaries and questions about the meeting.",
+    "downloading_model": "Downloading the notes model… {percent}%",
+    "model_ready": "Model ready, starting…",
+    "download_error": "Couldn't download the model",
+    "error": "Couldn't generate notes",
+    "backfill_start": "Catching up on missed parts: {total} {piece}",
+    "backfill_progress": "Catching up on missed parts: {done} of {total}",
+    "piece_word": {
+      "one": "piece",
+      "few": "pieces",
+      "many": "pieces"
+    }
+  },
+  "chat": {
+    "title": "Ask about the meeting",
+    "clear": "Clear",
+    "hint": "Ask anything about this meeting: who promised what, what was agreed, what's still open.",
+    "placeholder": "Ask about the meeting…",
+    "send": "Send",
+    "empty_question": "Empty question",
+    "no_meeting": "Open a meeting first",
+    "send_error": "Couldn't send the question",
+    "error": "Couldn't get an answer"
+  },
+  "transcript": {
+    "empty_title": "The transcript will appear here",
+    "empty_text": "Start recording and recognized speech will show up right away. Lines are split by audio source: microphone is you, system sound is the other person.",
+    "speaker_me": "Me",
+    "speaker_them": "Them",
+    "rename_tooltip": "Click to name the speaker",
+    "voice_aria_label": "Speaker name",
+    "play_tooltip": "Replay this line",
+    "lang_tooltip": "Was this line recognized in the wrong language?",
+    "lang_failed": "No recording of this line, nothing to redo",
+    "lang_retry_failed": "Couldn't redo it",
+    "audio_clip_not_found": "No recording of this line"
+  },
+  "toast": {
+    "close": "Close"
+  },
+  "dropzone": {
+    "title": "Drop to import",
+    "hint": "Each recording becomes its own meeting"
+  },
+  "confirm": {
+    "title": "Delete?",
+    "cancel": "Cancel",
+    "delete": "Delete"
+  },
+  "prefs": {
+    "title": "Settings",
+    "close": "Close",
+    "save": "Done",
+    "tab": {
+      "audio": "Audio",
+      "voices": "Voices",
+      "speech": "Recognition",
+      "dictation": "Dictation",
+      "notes": "Notes",
+      "look": "Appearance",
+      "data": "Data",
+      "about": "About"
+    }
+  },
+  "audio": {
+    "mic_label": "Microphone (me)",
+    "mic_enabled": "Record microphone",
+    "system_label": "System sound (other person)",
+    "system_enabled": "Record system sound",
+    "system_hint": "System sound is captured from the same device you're playing audio through. If you can't hear the other person, pick the device you're listening on.",
+    "save_at_least_one": "You need at least one track: microphone or system sound",
+    "device_default": "Default",
+    "device_default_named": "Default ({name})",
+    "device_list_failed": "Couldn't get the list of audio devices"
+  },
+  "dictation": {
+    "enabled": "Dictate into any app",
+    "enabled_hint": "Hold a hotkey, speak, release — the text appears wherever your cursor is: an email, a chat, an editor. Konspekt doesn't need to be open for this.",
+    "hotkey_label": "Hotkey",
+    "hotkey": {
+      "ctrl_shift_d": "Ctrl + Shift + D",
+      "ctrl_shift_space": "Ctrl + Shift + Space",
+      "ctrl_alt_d": "Ctrl + Alt + D",
+      "alt_q": "Alt + Q"
+    },
+    "mode_label": "How to activate",
+    "mode": {
+      "hold": "Hold the keys while speaking",
+      "toggle": "Press once to start, press again to stop"
+    },
+    "mode_hint": "Holding the keys makes it impossible to forget to stop recording. The other mode is more convenient for long text but requires remembering that dictation is running.",
+    "paste_label": "How to insert text",
+    "paste": {
+      "clipboard": "Via clipboard (fast)",
+      "type": "Type character by character (leaves clipboard untouched)"
+    },
+    "paste_hint": "Via clipboard the text appears instantly, and the clipboard's previous contents are restored afterward. Typing character by character never touches the clipboard, but takes about a second per line and can drop characters in some apps.",
+    "recording_conflict": "Dictation doesn't work while recording a meeting: there's only one model, and it can't do two things at once. Windows won't pass keyboard input from any app into windows running as administrator — in that case the text stays in the clipboard."
+  },
+  "speech": {
+    "primary_language": "Main meeting language",
+    "primary_language_hint": "The language spoken most often. Speech in it is recognized with the accurate model, the rest falls back to the secondary one.",
+    "detect_other": "Understand speech in other languages",
+    "detect_hint": "Without this, foreign speech gets transcribed phonetically in Cyrillic-like gibberish.",
+    "langid_missing": "The language detection model is needed but hasn't been downloaded yet.",
+    "foreign_model_label": "Model for other languages",
+    "size_queued": "This model hasn't been downloaded yet, using the previous one for now.",
+    "size": {
+      "fast": "Fast",
+      "accurate": "Accurate",
+      "not_downloaded": " — not downloaded"
+    }
+  },
+  "voices": {
+    "my_voice": "My voice",
+    "not_recorded": "Voice not recorded",
+    "enroll_hint": "Read a couple of sentences aloud and Konspekt will learn to tell you apart from others, even when several people are speaking near the computer.",
+    "record": "Record voice",
+    "overwrite": "Re-record voice",
+    "forget": "Forget",
+    "known_voices": "Known voices",
+    "known_hint": "Once you name someone, they're recognized automatically in future meetings.",
+    "start_failed": "Couldn't start recording the voice",
+    "cancelled": "Voice recording cancelled: too little speech",
+    "saved": "Voice remembered",
+    "save_failed": "Couldn't save the voice",
+    "progress_enough": "{sec}s recorded, that's enough",
+    "progress_left": "{sec}s recorded, about {left}s left",
+    "save_button": "Save voice",
+    "stop_button": "Stop",
+    "has_owner": "Voice recorded: {name}",
+    "you_suffix": " (that's you)"
+  },
+  "notes_settings": {
+    "who_writes": "Who writes the notes and answers",
+    "backend_local": "On this computer",
+    "backend_remote": "On your own server",
+    "backend_off": "Off",
+    "server_url": "Server address",
+    "server_url_placeholder": "https://api.example.com/v1",
+    "api_key": "API key",
+    "api_key_placeholder": "The key is stored only on this computer",
+    "model": "Model",
+    "model_placeholder": "gpt-4o-mini",
+    "check_connection": "Test connection",
+    "checking": "Checking…",
+    "check_ok": "Connected, the model responds",
+    "check_error": "No connection",
+    "auto_summary": "Generate notes right after stopping the recording",
+    "hint_local": "Notes are generated on this computer. Nothing goes over the network, but the first response waits for the model to load.",
+    "hint_remote": "The recording is sent to the server you specified. Faster and smarter, but no longer private.",
+    "hint_off": "Notes and answers are off. The recording, transcript, and your own notes still work.",
+    "hint_local_not_ready": " The model hasn't been downloaded yet: 1.7 GB will download on the first request."
+  },
+  "look": {
+    "theme": "Theme",
+    "theme_light": "Light",
+    "theme_dark": "Dark",
+    "theme_system": "Match system",
+    "language": "Interface language"
+  },
+  "data": {
+    "disk_usage": "What's stored on disk",
+    "calculating": "Calculating…",
+    "privacy_note": "Recordings and transcripts are stored only here and never sent anywhere.",
+    "cleanup": "Cleanup",
+    "cleanup_hint": "Removes recordings that no longer belong to any meeting and compacts the database so deleted data actually disappears from the file. Your meetings are untouched.",
+    "cleanup_button": "Clean up",
+    "cleanup_running": "Cleaning up…",
+    "cleanup_failed": "Failed",
+    "cleanup_freed": "Freed {size}",
+    "cleanup_nothing": "Nothing to clean up",
+    "audio_size_label": "Meeting recordings",
+    "db_size_label": "Meetings and transcripts database",
+    "models_size_label": "Recognition and notes models",
+    "orphan_label": "Recordings without a meeting",
+    "orphan_suffix": " — can be removed"
+  },
+  "about": {
+    "title": "A smart notebook for meetings. Recording, transcription and note-taking happen on this computer.",
+    "updates": "Updates",
+    "check_updates": "Check for a new version once a day",
+    "auto_update": "Download and install updates automatically",
+    "update_hint": "Only the version number and OS type leave your computer. The update downloads in the background, is checked against a checksum, and installs when the window is minimized and nothing is being recorded, so it never interrupts your work. Meetings, recordings and downloaded models stay in place.",
+    "check_now": "Check now",
+    "checking": "Checking…",
+    "check_failed": "Couldn't check",
+    "found_silent": "Version {version} is out, downloading",
+    "found_manual": "Version {version} is out. Turn on auto-download above or download it manually",
+    "up_to_date": "You're on the latest version",
+    "models_and_licenses": "Models and credits",
+    "notice_not_found": "The NOTICE file wasn't found next to the app",
+    "version_prefix": "Version "
+  },
+  "update": {
+    "new_version": "Version {version} is out",
+    "silent_hint": "We'll download and install it for you.",
+    "manual_hint": "Auto-updates are off: download the new version yourself.",
+    "downloading": "Downloading version {version}",
+    "background_hint": "Downloads in the background, installs when idle.",
+    "ready": "Version {version} is ready",
+    "window_hint": "It'll install itself once you minimize the app.",
+    "recording_blocked": "A recording is in progress, the update will install after it"
+  },
+  "model": {
+    "status_ready": "Recognition ready (GigaAM v3)",
+    "status_loaded": "Model is in place, will load on first recording",
+    "status_partial": "Model partially downloaded ({done} of {total} MB)",
+    "status_need_download": "Recognition needs a model, {total} MB",
+    "download_title": "Downloading the speech model",
+    "download_hint": "One-time, 220 MB. You can use the app right away.",
+    "download_progress": "Downloading model: {done} of {total} MB ({pct}%)",
+    "download_failed": "Couldn't download the model",
+    "download_ready": "Speech model ready",
+    "first_download_toast": "Downloading the speech model, 220 MB. You can use the app already, transcription will work once it's done",
+    "starting_download": "Starting the download…",
+    "action_cancel": "Cancel",
+    "action_resume": "Resume",
+    "action_download": "Download"
+  },
+  "status": {
+    "draft": "Draft",
+    "recording": "Recording",
+    "processing": "Processing",
+    "ready": "Ready"
+  },
+  "date": {
+    "today": "Today, {time}",
+    "yesterday": "Yesterday, {time}"
+  },
+  "lang": {
+    "ru": "Russian",
+    "en": "English",
+    "de": "German",
+    "fr": "French",
+    "es": "Spanish",
+    "it": "Italian",
+    "pt": "Portuguese",
+    "pl": "Polish",
+    "uk": "Ukrainian",
+    "sr": "Serbian",
+    "tr": "Turkish",
+    "nl": "Dutch"
+  },
+  "api": {
+    "call_error": "Call error"
+  },
+  "python": {
+    "model": {
+      "other_instance": "Another Konspekt window is already downloading the model. Close the extra window and try again.",
+      "incomplete": "The model didn't download completely, please try again",
+      "corrupted": "The speech model is corrupted and re-downloading won't fix it. Please contact us and attach the log.",
+      "repairing": "The model files turned out to be corrupted, downloading again"
+    },
+    "summary": {
+      "disabled": "Note generation is turned off in settings",
+      "busy": "The model is already busy",
+      "meeting_not_found": "Meeting not found",
+      "nothing": "Nothing to process: no transcript and no notes",
+      "error": "Couldn't generate notes"
+    },
+    "chat": {
+      "empty_question": "Empty question",
+      "disabled": "Note generation is turned off in settings",
+      "busy": "The model is already busy",
+      "meeting_not_found": "Meeting not found",
+      "error": "Couldn't get an answer"
+    },
+    "version_check": {
+      "error": "Couldn't reach the update server"
+    },
+    "enroll": {
+      "recording_conflict": "Can't record a voice while a meeting is recording",
+      "model_unavailable": "The voice recognition model is unavailable: {exc}",
+      "too_little": "Too little speech: at least {min} seconds is needed"
+    },
+    "file_dialog": {
+      "audio_filter": "Audio and video (*.mp3;*.wav;*.m4a;*.ogg;*.opus;*.flac;*.aac;*.wma;*.mp4;*.mkv;*.mov;*.webm;*.avi)",
+      "all_files": "All files (*.*)"
+    }
+  }
+}

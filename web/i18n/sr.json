@@ -1,0 +1,367 @@
+{
+  "titlebar": {
+    "settings": "Podešavanja",
+    "pin": "Uvek na vrhu",
+    "minimize": "Umanji",
+    "hide": "Sakrij u traku"
+  },
+  "sidebar": {
+    "new_meeting": "Novi sastanak",
+    "import": "Uvezi snimke"
+  },
+  "model_load": {
+    "downloading": "Preuzimamo model za prepoznavanje",
+    "hint": "Jednom, 220 MB. Aplikaciju možete koristiti odmah."
+  },
+  "update_note": {
+    "new_version": "Izašla je nova verzija",
+    "hide": "Sakrij",
+    "install": "Instaliraj i ponovo pokreni"
+  },
+  "imports": {
+    "title": "Obrada snimaka",
+    "clear": "Obriši",
+    "remaining": "Obrada snimaka: preostalo {left}",
+    "reading_files": "Čitamo {count} fajl(ova)…",
+    "picking_files": "Biramo fajlove…",
+    "cancel_tooltip": "Otkaži",
+    "open_tooltip": "Otvori sastanak",
+    "state": {
+      "waiting": "u redu čekanja",
+      "stereo": "2 kanala",
+      "done": "gotovo",
+      "failed": "nije audio",
+      "cancelled": "otkazano"
+    },
+    "file_word": {
+      "one": "fajl",
+      "few": "fajla",
+      "many": "fajlova"
+    }
+  },
+  "search": {
+    "placeholder": "Pretraga sastanaka"
+  },
+  "empty": {
+    "title": "Ovde je još uvek prazno",
+    "text": "Napravite sastanak i beležite ideje. Konspekt će ih pretvoriti u gotove beleške.",
+    "start": "Počni sastanak",
+    "hint": "Ili prevucite ovde postojeće snimke — svaki će dobiti svoj sastanak sa transkriptom.",
+    "import": "Izaberi fajlove"
+  },
+  "meeting": {
+    "title_placeholder": "Naziv sastanka",
+    "untitled": "Bez naziva",
+    "recording_status": "Snimanje u toku",
+    "quote_tooltip": "Prikaži ovo mesto u transkriptu",
+    "delete_tooltip": "Obriši sastanak",
+    "delete_confirm_title": "Obrisati sastanak „{name}”?",
+    "delete_confirm_text": "Snimak, transkript i beleške će nestati zajedno s njim. Ovo se ne može poništiti.",
+    "deleted": "Sastanak obrisan",
+    "more_quotes": " još {count}"
+  },
+  "recording": {
+    "start": "Počni snimanje",
+    "stop": "Zaustavi",
+    "silent": "Na jednoj od traka nema zvuka",
+    "error": "Snimanje nije moglo da počne"
+  },
+  "tab": {
+    "notes": "Moje beleške",
+    "summary": "Sažetak",
+    "transcript": "Transkript"
+  },
+  "notes": {
+    "placeholder": "Zapisujte kratke ideje tokom sastanka.\n\nKonspekt će zapamtiti trenutak svake linije i posle sastanka ih pretvoriti u pune beleške.",
+    "saved": "Sačuvano"
+  },
+  "summary": {
+    "run": "Napravi beleške",
+    "redo": "Ponovi",
+    "stop": "Zaustavi",
+    "empty_title": "Beleški još nema",
+    "empty_text": "Kliknite na „Napravi beleške” i Konspekt će iz snimka izvući odluke, zadatke i otvorena pitanja.",
+    "reading": "Čitamo transkript…",
+    "generating": "Pišemo beleške…",
+    "download_hint": "Jednom, 1,7 GB. Potrebno za sažetke i pitanja o sastanku.",
+    "downloading_model": "Preuzimamo model za beleške… {percent}%",
+    "model_ready": "Model spreman, pokrećemo…",
+    "download_error": "Model nije mogao da se preuzme",
+    "error": "Beleške nisu mogle da se naprave",
+    "backfill_start": "Nadoknađujemo propušteno: {total} {piece}",
+    "backfill_progress": "Nadoknađujemo propušteno: {done} od {total}",
+    "piece_word": {
+      "one": "deo",
+      "few": "dela",
+      "many": "delova"
+    }
+  },
+  "chat": {
+    "title": "Pitanja o sastanku",
+    "clear": "Obriši",
+    "hint": "Pitajte bilo šta o ovom sastanku: ko je šta obećao, oko čega se dogovorilo, šta je ostalo otvoreno.",
+    "placeholder": "Pitaj o sastanku…",
+    "send": "Pošalji",
+    "empty_question": "Prazno pitanje",
+    "no_meeting": "Prvo otvorite sastanak",
+    "send_error": "Pitanje nije moglo da se pošalje",
+    "error": "Odgovor nije mogao da se dobije"
+  },
+  "transcript": {
+    "empty_title": "Transkript će se pojaviti ovde",
+    "empty_text": "Počnite snimanje i prepoznat govor će se odmah pojaviti. Linije su razdvojene po izvoru zvuka: mikrofon ste vi, sistemski zvuk je sagovornik.",
+    "speaker_me": "Ja",
+    "speaker_them": "Sagovornik",
+    "rename_tooltip": "Kliknite da imenujete govornika",
+    "voice_aria_label": "Ime govornika",
+    "play_tooltip": "Ponovo pusti ovu liniju",
+    "lang_tooltip": "Da li je ova linija prepoznata na pogrešnom jeziku?",
+    "lang_failed": "Nema snimka ove linije, nema šta da se preračuna",
+    "lang_retry_failed": "Nije uspelo ponovno preračunavanje",
+    "audio_clip_not_found": "Nema snimka ove linije"
+  },
+  "toast": {
+    "close": "Zatvori"
+  },
+  "dropzone": {
+    "title": "Otpustite da biste uvezli",
+    "hint": "Svaki snimak dobija svoj sastanak"
+  },
+  "confirm": {
+    "title": "Obrisati?",
+    "cancel": "Otkaži",
+    "delete": "Obriši"
+  },
+  "prefs": {
+    "title": "Podešavanja",
+    "close": "Zatvori",
+    "save": "Gotovo",
+    "tab": {
+      "audio": "Zvuk",
+      "voices": "Glasovi",
+      "speech": "Prepoznavanje",
+      "dictation": "Diktiranje",
+      "notes": "Beleške",
+      "look": "Izgled",
+      "data": "Podaci",
+      "about": "O aplikaciji"
+    }
+  },
+  "audio": {
+    "mic_label": "Mikrofon (ja)",
+    "mic_enabled": "Snimaj mikrofon",
+    "system_label": "Sistemski zvuk (sagovornik)",
+    "system_enabled": "Snimaj sistemski zvuk",
+    "system_hint": "Sistemski zvuk se snima sa istog uređaja preko kojeg se pušta zvuk. Ako ne čujete sagovornika, izaberite uređaj preko kojeg ga slušate.",
+    "save_at_least_one": "Potrebna je bar jedna traka: mikrofon ili sistemski zvuk",
+    "device_default": "Podrazumevano",
+    "device_default_named": "Podrazumevano ({name})",
+    "device_list_failed": "Lista audio uređaja nije mogla da se učita"
+  },
+  "dictation": {
+    "enabled": "Diktiraj u bilo koju aplikaciju",
+    "enabled_hint": "Držite kombinaciju tastera, izgovorite, otpustite — tekst će se pojaviti tamo gde je kursor: u imejlu, ćaskanju, editoru. Konspekt pritom ne mora biti otvoren.",
+    "hotkey_label": "Kombinacija tastera",
+    "hotkey": {
+      "ctrl_shift_d": "Ctrl + Shift + D",
+      "ctrl_shift_space": "Ctrl + Shift + Razmak",
+      "ctrl_alt_d": "Ctrl + Alt + D",
+      "alt_q": "Alt + Q"
+    },
+    "mode_label": "Kako se aktivira",
+    "mode": {
+      "hold": "Držati tastere dok govorim",
+      "toggle": "Pritisni jednom za početak, ponovo za kraj"
+    },
+    "mode_hint": "Dok držite tastere, nemoguće je zaboraviti da isključite snimanje. Drugi način je zgodniji za duži tekst, ali zahteva da zapamtite da je diktiranje aktivno.",
+    "paste_label": "Kako se ubacuje tekst",
+    "paste": {
+      "clipboard": "Preko klipborda (brzo)",
+      "type": "Kucanje slovo po slovo (ne dira klipbord)"
+    },
+    "paste_hint": "Preko klipborda tekst se pojavi trenutno, a prethodni sadržaj klipborda se vraća nazad. Kucanje slovo po slovo uopšte ne dira klipbord, ali traje oko sekundu po liniji i u nekim programima gubi znakove.",
+    "recording_conflict": "Diktiranje ne radi tokom snimanja sastanka: model je jedan i ne stiže za oba zadatka odjednom. Windows ne propušta unos s tastature nijednom programu u prozore pokrenute kao administrator — u tom slučaju tekst ostaje u klipbordu."
+  },
+  "speech": {
+    "primary_language": "Osnovni jezik sastanaka",
+    "primary_language_hint": "Jezik koji se najčešće govori. Govor na njemu se prepoznaje preciznim modelom, ostalo ide u rezervni.",
+    "detect_other": "Razumeti govor na drugim jezicima",
+    "detect_hint": "Bez ovoga se strani govor beleži fonetski, kao pogrešna transkripcija stranih reči.",
+    "langid_missing": "Potreban je model za prepoznavanje jezika, on još nije preuzet.",
+    "foreign_model_label": "Model za druge jezike",
+    "size_queued": "Ovaj model još nije preuzet, za sada koristimo prethodni.",
+    "size": {
+      "fast": "Brz",
+      "accurate": "Precizan",
+      "not_downloaded": " — nije preuzet"
+    }
+  },
+  "voices": {
+    "my_voice": "Moj glas",
+    "not_recorded": "Glas nije snimljen",
+    "enroll_hint": "Pročitajte naglas par rečenica i Konspekt će naučiti da vas razlikuje od ostalih, čak i kada više ljudi govori pored računara.",
+    "record": "Snimi glas",
+    "overwrite": "Ponovo snimi glas",
+    "forget": "Zaboravi",
+    "known_voices": "Poznati glasovi",
+    "known_hint": "Jednom imenovana osoba se sama prepoznaje na sledećim sastancima.",
+    "start_failed": "Snimanje glasa nije moglo da počne",
+    "cancelled": "Snimanje glasa otkazano: govora je bilo premalo",
+    "saved": "Glas zapamćen",
+    "save_failed": "Glas nije mogao da se sačuva",
+    "progress_enough": "Snimljeno {sec} s, već je dovoljno",
+    "progress_left": "Snimljeno {sec} s, preostaje oko {left} s",
+    "save_button": "Sačuvaj glas",
+    "stop_button": "Zaustavi",
+    "has_owner": "Glas snimljen: {name}",
+    "you_suffix": " (to ste vi)"
+  },
+  "notes_settings": {
+    "who_writes": "Ko piše beleške i odgovara",
+    "backend_local": "Na ovom računaru",
+    "backend_remote": "Na vašem serveru",
+    "backend_off": "Isključeno",
+    "server_url": "Adresa servera",
+    "server_url_placeholder": "https://api.example.com/v1",
+    "api_key": "Pristupni ključ",
+    "api_key_placeholder": "Ključ se čuva samo na ovom računaru",
+    "model": "Model",
+    "model_placeholder": "gpt-4o-mini",
+    "check_connection": "Proveri vezu",
+    "checking": "Proveravamo…",
+    "check_ok": "Veza postoji, model odgovara",
+    "check_error": "Nema veze",
+    "auto_summary": "Napravi beleške odmah po zaustavljanju snimanja",
+    "hint_local": "Beleške se izrađuju na ovom računaru. Ništa ne ide na mrežu, ali prvi odgovor čeka da se model učita.",
+    "hint_remote": "Snimak se šalje na navedeni server. Brže i pametnije, ali više nije privatno.",
+    "hint_off": "Beleške i odgovori su isključeni. Snimak, transkript i vaše beleške i dalje rade.",
+    "hint_local_not_ready": " Model još nije preuzet: 1,7 GB će stići pri prvom zahtevu."
+  },
+  "look": {
+    "theme": "Tema",
+    "theme_light": "Svetla",
+    "theme_dark": "Tamna",
+    "theme_system": "Kao u sistemu",
+    "language": "Jezik interfejsa"
+  },
+  "data": {
+    "disk_usage": "Šta se čuva na disku",
+    "calculating": "Računamo…",
+    "privacy_note": "Snimci i transkripti se čuvaju samo ovde i nikuda se ne šalju.",
+    "cleanup": "Čišćenje",
+    "cleanup_hint": "Uklanja snimke koji više ne pripadaju nijednom sastanku i sažima bazu da obrisano zaista nestane iz fajla. Vaše sastanke ne dira.",
+    "cleanup_button": "Ukloni suvišno",
+    "cleanup_running": "Čistimo…",
+    "cleanup_failed": "Nije uspelo",
+    "cleanup_freed": "Oslobođeno {size}",
+    "cleanup_nothing": "Nema ničeg suvišnog",
+    "audio_size_label": "Snimci sastanaka",
+    "db_size_label": "Baza sastanaka i transkripata",
+    "models_size_label": "Modeli za prepoznavanje i beleške",
+    "orphan_label": "Snimci bez sastanka",
+    "orphan_suffix": " — mogu se ukloniti"
+  },
+  "about": {
+    "title": "Pametna beležnica za sastanke. Snimanje, transkripcija i beleške se odvijaju na ovom računaru.",
+    "updates": "Ažuriranja",
+    "check_updates": "Jednom dnevno proveriti da li je izašla nova verzija",
+    "auto_update": "Preuzimaj i instaliraj ažuriranja automatski",
+    "update_hint": "Napolje odlazi samo broj verzije i tip sistema. Ažuriranje se preuzima u pozadini, proverava se kontrolnom sumom i instalira kada je prozor umanjen i nema snimanja, tako da ne prekida rad. Sastanci, snimci i preuzeti modeli ostaju na mestu.",
+    "check_now": "Proveri sada",
+    "checking": "Proveravamo…",
+    "check_failed": "Provera nije uspela",
+    "found_silent": "Izašla je verzija {version}, preuzimamo",
+    "found_manual": "Izašla je verzija {version}. Uključite preuzimanje iznad ili je preuzmite ručno",
+    "up_to_date": "Instalirana je najnovija verzija",
+    "models_and_licenses": "Modeli i autorstvo",
+    "notice_not_found": "Fajl NOTICE nije pronađen pored aplikacije",
+    "version_prefix": "Verzija "
+  },
+  "update": {
+    "new_version": "Izašla je verzija {version}",
+    "silent_hint": "Preuzećemo i instalirati sami.",
+    "manual_hint": "Preuzimanje ažuriranja je isključeno: preuzmite novu verziju sami.",
+    "downloading": "Preuzimamo verziju {version}",
+    "background_hint": "Preuzeće se u pozadini, instaliraće se kad računar bude neaktivan.",
+    "ready": "Verzija {version} je spremna",
+    "window_hint": "Instaliraće se sama kad umanjite aplikaciju.",
+    "recording_blocked": "Trenutno je u toku snimanje, ažuriranje će se instalirati posle njega"
+  },
+  "model": {
+    "status_ready": "Prepoznavanje spremno (GigaAM v3)",
+    "status_loaded": "Model je na mestu, učitaće se pri prvom snimanju",
+    "status_partial": "Model delimično preuzet ({done} od {total} MB)",
+    "status_need_download": "Za prepoznavanje je potreban model, {total} MB",
+    "download_title": "Preuzimamo model za prepoznavanje",
+    "download_hint": "Jednom, 220 MB. Aplikaciju možete koristiti odmah.",
+    "download_progress": "Preuzimamo model: {done} od {total} MB ({pct}%)",
+    "download_failed": "Model nije mogao da se preuzme",
+    "download_ready": "Model za prepoznavanje spreman",
+    "first_download_toast": "Preuzimamo model za prepoznavanje, 220 MB. Aplikacija se već može koristiti, transkripcija će proraditi kad se završi",
+    "starting_download": "Počinjemo preuzimanje…",
+    "action_cancel": "Otkaži",
+    "action_resume": "Nastavi",
+    "action_download": "Preuzmi"
+  },
+  "status": {
+    "draft": "Nacrt",
+    "recording": "Snimanje",
+    "processing": "Obrada",
+    "ready": "Gotovo"
+  },
+  "date": {
+    "today": "Danas, {time}",
+    "yesterday": "Juče, {time}"
+  },
+  "lang": {
+    "ru": "Ruski",
+    "en": "Engleski",
+    "de": "Nemački",
+    "fr": "Francuski",
+    "es": "Španski",
+    "it": "Italijanski",
+    "pt": "Portugalski",
+    "pl": "Poljski",
+    "uk": "Ukrajinski",
+    "sr": "Srpski",
+    "tr": "Turski",
+    "nl": "Holandski"
+  },
+  "api": {
+    "call_error": "Greška poziva"
+  },
+  "python": {
+    "model": {
+      "other_instance": "Model već preuzima drugi prozor Konspekta. Zatvorite suvišni prozor i pokušajte ponovo.",
+      "incomplete": "Model nije preuzet do kraja, pokušajte ponovo",
+      "corrupted": "Model za prepoznavanje je oštećen i ponovno preuzimanje to ne popravlja. Pišite nam i priložite zapisnik.",
+      "repairing": "Fajlovi modela su oštećeni, preuzimamo ponovo"
+    },
+    "summary": {
+      "disabled": "Izrada beleški je isključena u podešavanjima",
+      "busy": "Model je već zauzet",
+      "meeting_not_found": "Sastanak nije pronađen",
+      "nothing": "Nema šta da se obradi: nema ni transkripta ni beleški",
+      "error": "Beleške nisu mogle da se naprave"
+    },
+    "chat": {
+      "empty_question": "Prazno pitanje",
+      "disabled": "Izrada beleški je isključena u podešavanjima",
+      "busy": "Model je već zauzet",
+      "meeting_not_found": "Sastanak nije pronađen",
+      "error": "Odgovor nije mogao da se dobije"
+    },
+    "version_check": {
+      "error": "Server za ažuriranja nije mogao da se kontaktira"
+    },
+    "enroll": {
+      "recording_conflict": "Glas ne može da se snima tokom snimanja sastanka",
+      "model_unavailable": "Model za prepoznavanje glasa nije dostupan: {exc}",
+      "too_little": "Govora je premalo: potrebno je bar {min} sekundi"
+    },
+    "file_dialog": {
+      "audio_filter": "Audio i video (*.mp3;*.wav;*.m4a;*.ogg;*.opus;*.flac;*.aac;*.wma;*.mp4;*.mkv;*.mov;*.webm;*.avi)",
+      "all_files": "Svi fajlovi (*.*)"
+    }
+  }
+}
