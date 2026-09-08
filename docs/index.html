@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Konspekt</title>
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+    color: #1f2328;
+  }
+  h1 { border-bottom: 1px solid #d0d7de; padding-bottom: 8px; }
+  h2 { border-bottom: 1px solid #d0d7de; padding-bottom: 6px; margin-top: 24px; }
+  code { background: #f3f4f6; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
+  pre { background: #f3f4f6; padding: 16px; border-radius: 6px; overflow-x: auto; }
+  pre code { background: none; padding: 0; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { border: 1px solid #d0d7de; padding: 8px 12px; text-align: left; }
+  th { background: #f3f4f6; }
+  a { color: #0969da; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<h1>Konspekt</h1>
+<p>A smart notepad for meetings — a local, privacy-first alternative to Granola.
+Everything runs on your computer; nothing leaves your machine.
+Always-on-top window, lives in the system tray.</p>
+
+<h2>What it does</h2>
+<ul>
+<li>Captures audio from your microphone and system output (so you hear the other side in a call)</li>
+<li>Transcribes speech locally: Russian goes through GigaAM, everything else through Whisper</li>
+<li>Identifies speakers and remembers voices across meetings — name someone once, and they get labeled automatically from then on</li>
+<li>Imports pre-recorded files: drag and drop into the window, and each file becomes a meeting with its own transcript</li>
+</ul>
+
+<h2>Getting started</h2>
+<pre><code>uv sync
+uv run python -m app</code></pre>
+<p>Or double-click <code>konspekt.bat</code>.</p>
+<p>This runs the development version straight from source with the latest changes.
+It does not interfere with an installed copy: it uses its own data profile at
+<code>%APPDATA%\Konspekt (razrabotka)</code>, with separate meetings, recordings, settings,
+and model weights. Both copies can be open at the same time; the installed
+version's meetings stay untouched.</p>
+<p>Profile names are set via the <code>KONSPEKT_PROFILE</code> environment variable.</p>
+
+<h2>Keyboard shortcuts</h2>
+<table>
+<thead><tr><th>Shortcut</th><th>Action</th></tr></thead>
+<tbody>
+<tr><td><code>Ctrl+Shift+K</code></td><td>Show / hide window (global)</td></tr>
+<tr><td><code>Ctrl+N</code></td><td>New meeting</td></tr>
+<tr><td><code>Ctrl+R</code></td><td>Start / stop recording</td></tr>
+<tr><td><code>Ctrl+S</code></td><td>Save notes</td></tr>
+</tbody>
+</table>
+
+<h2>License</h2>
+<p>Konspekt is distributed under <a href="https://github.com/lamver/konspekt/blob/master/LICENSE.md">FSL-1.1-MIT</a>.</p>
+
+<p><a href="https://github.com/lamver/konspekt">View on GitHub</a></p>
+</body>
+</html>
