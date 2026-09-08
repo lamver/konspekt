@@ -1,120 +1,118 @@
 # Konspekt
 
-Умный блокнот для встреч: локальный аналог Granola с упором на русский
-язык и приватность. Всё считается на вашем компьютере, ничего не уходит
-в сеть. Окно поверх остальных, живёт в трее.
+A smart notepad for meetings — a local, privacy-first alternative to Granola.
+Everything runs on your computer; nothing leaves your machine.
+Always-on-top window, lives in the system tray.
 
-## Что умеет
+## What it does
 
-- Пишет звук с микрофона и из системы (собеседника в звонке слышно)
-- Распознаёт речь локально: русская идёт в GigaAM, остальная в Whisper
-- Различает говорящих и запоминает голоса между встречами: назвал
-  человека один раз, и дальше он подписывается сам
-- Загружает готовые записи: перетащите файлы в окно, и на каждый
-  заведётся своя встреча с транскриптом
+- Captures audio from your microphone and system output (so you hear the other side in a call)
+- Transcribes speech locally: Russian goes through GigaAM, everything else through Whisper
+- Identifies speakers and remembers voices across meetings — name someone once, and they get labeled automatically from then on
+- Imports pre-recorded files: drag and drop into the window, and each file becomes a meeting with its own transcript
 
-## Запуск
+## Getting started
 
 ```bash
 uv sync
 uv run python -m app
 ```
 
-Или двойным щелчком по `konspekt.bat`.
+Or double-click `konspekt.bat`.
 
-Так запускается версия из исходников, со всеми свежими правками. Она не
-мешает установленной из инсталлятора: у неё свой профиль данных
-`%APPDATA%\Konspekt (razrabotka)`, отдельные встречи, записи, настройки и
-веса моделей. Обе копии можно держать открытыми одновременно, встречи из
-установленной при этом никуда не денутся.
+This runs the development version straight from source with the latest changes.
+It does not interfere with an installed copy: it uses its own data profile at
+`%APPDATA%\Konspekt (razrabotka)`, with separate meetings, recordings, settings,
+and model weights. Both copies can be open at the same time; the installed
+version's meetings stay untouched.
 
-Отличить окна можно по разделу «О программе»: у версии из исходников
-номер тот, что сейчас в `pyproject.toml`. Горячая клавиша достанется той
-копии, что запустилась первой.
+You can tell them apart in the About dialog: the source version shows the
+version number from `pyproject.toml`. The global hotkey goes to whichever copy
+started first.
 
-Имя профиля задаёт переменная `KONSPEKT_PROFILE`, так что копий можно
-завести сколько угодно:
+The profile name is set via the `KONSPEKT_PROFILE` environment variable, so you
+can spin up as many copies as you like:
 
 ```bash
-set KONSPEKT_PROFILE=eksperiment
+set KONSPEKT_PROFILE=experiment
 uv run python -m app
 ```
 
-Имя профиля пишется латиницей: оно попадает в имя папки и в имя замка,
-а `.bat` читается консолью в другой кодировке, и кириллица там ломается.
+Profile names must be in Latin script — they become folder and mutex names, and
+the `.bat` file is read in a different code page where Cyrillic breaks.
 
-Без этой переменной программа работает с обычными данными пользователя,
-как установленная. Отдельная `KONSPEKT_DATA_DIR` указывает каталог
-напрямую и сильнее профиля, она нужна тестам.
+Without the variable, the program uses the default user data directory, same as
+the installed version. `KONSPEKT_DATA_DIR` overrides the path directly and takes
+precedence over the profile; it exists for tests.
 
-`uv run python -m app` показывает журнал в консоли, а `konspekt.bat`
-прячет её: при разборе поломки удобнее первый вариант.
+`uv run python -m app` shows logs in the console; `konspekt.bat` hides them.
+Use the former when troubleshooting.
 
-## Загрузка готовых записей
+## Importing recordings
 
-Перетащите файлы в окно пачкой или нажмите кнопку со стрелкой рядом с
-«Новой встречей». Заголовок встречи берётся из имени файла.
+Drag files into the window in bulk, or click the arrow button next to "New
+Meeting". The meeting title is taken from the file name.
 
-Формат определяется по содержимому, а не по расширению: запись с именем
-`.txt` разберётся, если внутри неё mp3, а текстовый файл с именем `.mp3`
-будет честно отклонён. Читается всё, что понимает ffmpeg: mp3, wav, m4a,
-ogg, opus, flac, а также звуковая дорожка из видео.
+Format detection is content-based, not extension-based: a file named `.txt`
+will be parsed correctly if it contains mp3 audio, and a text file named `.mp3`
+will be politely rejected. Anything ffmpeg understands works: mp3, wav, m4a,
+ogg, opus, flac, and the audio track from video files.
 
-Если в записи два канала с разными голосами (обычное дело для записей
-звонков), они разбираются как две отдельные дорожки. Обычное стерео и
-музыка сводятся в моно.
+If the recording has two channels with different voices (common in call
+recordings), they are split into separate tracks. Ordinary stereo and music are
+mixed down to mono.
 
-## Горячие клавиши
+## Keyboard shortcuts
 
-| Комбинация | Действие |
-|---|---|
-| `Ctrl+Shift+K` | Показать / скрыть окно (глобально) |
-| `Ctrl+N` | Новая встреча |
-| `Ctrl+R` | Начать / остановить запись |
-| `Ctrl+S` | Сохранить заметки |
+| Shortcut       | Action                     |
+|----------------|----------------------------|
+| `Ctrl+Shift+K` | Show / hide window (global)|
+| `Ctrl+N`       | New meeting                |
+| `Ctrl+R`       | Start / stop recording     |
+| `Ctrl+S`       | Save notes                 |
 
-Закрытие окна прячет его в трей, а не завершает приложение.
-Выход — через меню трея.
+Closing the window hides it to the tray rather than quitting the app.
+Exit through the tray menu.
 
-## Где лежат данные
+## Where data lives
 
 ```
 %APPDATA%\Konspekt\
-  konspekt.db       встречи, заметки, транскрипты
-  settings.json     настройки и геометрия окна
-  konspekt.log      лог
-  audio/            записи встреч
-models/             веса моделей (рядом с программой)
+  konspekt.db       meetings, notes, transcripts
+  settings.json     settings and window geometry
+  konspekt.log      log
+  audio/            meeting recordings
+models/             model weights (next to the program)
 ```
 
-Модели скачиваются один раз при первом распознавании, всего около 560 МБ:
-GigaAM для русского (214), Whisper small для остальных языков (239),
-определитель языка (81) и отпечатки голосов (25).
+Models are downloaded once on first use, about 560 MB total:
+GigaAM for Russian (214), Whisper small for other languages (239),
+language identifier (81), and voice fingerprints (25).
 
-## Статус
+## Status
 
-Готовы этапы 1–3.6: окно и хранилище, запись звука, распознавание речи,
-определение говорящих и языка, загрузка готовых записей. Впереди синтез
-заметок. Подробности и план — в [ROADMAP.md](ROADMAP.md).
+Stages 1 through 3.6 are complete: window and storage, audio capture, speech
+recognition, speaker diarization and language detection, and loading
+pre-recorded files. Note synthesis is next. Details and the full plan are in
+[ROADMAP.md](ROADMAP.md).
 
-## Проверка
+## Tests
 
 ```bash
-uv run python smoke_test.py       # основное
-uv run python audiofile_test.py   # чтение аудиофайлов
-uv run python import_test.py      # импорт целиком, нужны примеры записей
+uv run python smoke_test.py       # core functionality
+uv run python audiofile_test.py   # audio file reading
+uv run python import_test.py      # full import pipeline (requires sample files)
 ```
 
-Проверки, которым нужны живые записи, ищут их в папке `audio_examples`.
-Её нет в репозитории (12 МБ звука), без неё такие проверки пропускаются.
+Tests that need live recordings look for them in the `audio_examples` folder.
+It is not in the repository (12 MB of audio); without it those tests are skipped.
 
-## Лицензия
+## License
 
-Konspekt распространяется под [FSL-1.1-MIT](LICENSE.md): исходный код
-открыт, пользоваться и править можно свободно, нельзя одно — собирать из
-него конкурирующий продукт на продажу. Каждая версия через два года
-после выпуска становится обычной MIT.
+Konspekt is distributed under [FSL-1.1-MIT](LICENSE.md): the source code is
+open, you may freely use and modify it, with one restriction — you may not
+package it into a competing commercial product. Each version becomes plain MIT
+two years after release.
 
-Чужие библиотеки внутри программы и что это значит на практике —
-в [ЛИЦЕНЗИИ.md](ЛИЦЕНЗИИ.md).
-
+Third-party libraries included in the program and what this means in practice
+are covered in [LICENSE.md](LICENSE.md).
