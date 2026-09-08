@@ -37,7 +37,9 @@ def _сцена(w, service, итог: dict) -> None:
     # значит получить пустоту и решить, что раздела нет.
     for _ in range(60):
         try:
-            if w.evaluate_js("typeof loadDictation === 'function'"):
+            if w.evaluate_js(
+                "typeof loadDictation === 'function' && window.__konspekt_i18n_ready === true"
+            ):
                 break
         except Exception:
             pass

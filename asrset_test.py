@@ -151,9 +151,29 @@ global.api = {
   save_asr_settings: async (f) => { СОХРАНЕНО.push(f); return { ...СОСТОЯНИЕ, ...f }; },
 };
 global.fmtBytes = (b) => Math.round(b / 1024 / 1024) + ' МБ';
+// Вырезанный блок зовёт t() (i18n) для названий языков, размеров модели
+// и подсказок: сама функция объявлена вне среза, подставляем заглушку
+// с теми же текстами, что раньше лежали прямо в коде.
+const РУССКИЕ_ЯЗЫКИ = {
+  ru: 'Русский', en: 'Английский', de: 'Немецкий', fr: 'Французский',
+  es: 'Испанский', it: 'Итальянский', pt: 'Португальский', pl: 'Польский',
+  uk: 'Украинский', sr: 'Сербский', tr: 'Турецкий', nl: 'Нидерландский',
+};
+global.t = (key) => {
+  const m = /^lang\.(\w+)$/.exec(key);
+  if (m) return РУССКИЕ_ЯЗЫКИ[m[1]] || key;
+  return ({
+    'speech.size.fast': 'Быстрая',
+    'speech.size.accurate': 'Точная',
+    'speech.size.not_downloaded': ' — не скачана',
+    'speech.langid_missing': 'Нужна модель определения языка, она ещё не скачана.',
+    'speech.detect_hint': 'Без этого иностранная речь записывается кириллицей: «холло дис из зе фест сентинс».',
+    'speech.size_queued': 'Эта модель ещё не скачана, пока распознаём прежней.',
+  })[key] || key;
+};
 
 const src = fs.readFileSync(path.join(process.argv[2], 'web', 'app.js'), 'utf8');
-const от = src.indexOf('const ASR_LANGS = [');
+const от = src.indexOf('const ASR_LANG_CODES = [');
 const до = src.indexOf('/** Человеческий размер');
 if (от < 0 || до < 0) throw new Error('не нашёл блок настроек распознавания');
 eval(src.slice(от, до));

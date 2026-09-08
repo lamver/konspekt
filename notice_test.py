@@ -77,7 +77,7 @@ def main() -> int:
     pages = set(re.findall(r'class="prefs__page" data-page="(\w+)"', html))
     assert tabs, "не нашлось ни одного раздела настроек"
     assert tabs == pages, f"разделы и страницы настроек разошлись: {tabs ^ pages}"
-    titles = set(re.findall(r"^\s+(\w+): '", js, re.M))
+    titles = set(re.findall(r"^\s+(\w+): \(\) => t\('prefs\.tab\.\w+'\)", js, re.M))
     assert tabs <= titles, f"у разделов нет заголовков: {sorted(tabs - titles)}"
     print(f"[ok] разделов настроек: {len(tabs)}, у всех есть страница и заголовок")
 

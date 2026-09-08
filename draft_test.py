@@ -265,6 +265,12 @@ transcript.parentElement = pane;
 global.ui = { transcript };
 global.updateTranscriptEmpty = () => {};
 global.state = { currentId: 'встреча' };
+// showDraft зовёт t() (i18n) для подписей «Я»/«Собеседник»: сама функция
+// объявлена вне вырезанного среза app.js, подставляем заглушку.
+global.t = (key) => ({
+  'transcript.speaker_me': 'Я',
+  'transcript.speaker_them': 'Собеседник',
+}[key] || key);
 
 const src = fs.readFileSync(path.join(process.argv[2], 'web', 'app.js'), 'utf8');
 const от = src.indexOf('const drafts = new Map();');

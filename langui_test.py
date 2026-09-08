@@ -102,6 +102,23 @@ global.api = {
   },
 };
 global.state = { currentId: 'встреча', hasAudio: true };
+// Тест вырезает изолированный кусок app.js: сама функция t() (i18n)
+// остаётся снаружи среза. LANG_NAMES теперь строится через t('lang.xx'),
+// поэтому подсовываем упрощённую заглушку с теми же названиями, что
+// раньше лежали прямо в LANG_NAMES.
+const РУССКИЕ_ИМЕНА = {
+  ru: 'Русский', en: 'Английский', de: 'Немецкий', fr: 'Французский',
+  es: 'Испанский', it: 'Итальянский', pt: 'Португальский', pl: 'Польский',
+  uk: 'Украинский', sr: 'Сербский', tr: 'Турецкий', nl: 'Нидерландский',
+};
+global.t = (key) => {
+  const m = /^lang\.(\w+)$/.exec(key);
+  if (m) return РУССКИЕ_ИМЕНА[m[1]] || key;
+  if (key === 'transcript.lang_tooltip') return 'Фраза распознана не на том языке?';
+  if (key === 'transcript.lang_failed') return 'Нет записи этой фразы, пересчитать нечего';
+  if (key === 'transcript.lang_retry_failed') return 'Пересчитать не удалось';
+  return key;
+};
 
 // Берём из app.js только нужные функции: остальное тянет за собой окно.
 const src = fs.readFileSync(path.join(process.argv[2], 'web', 'app.js'), 'utf8');

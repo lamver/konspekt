@@ -93,6 +93,17 @@ global.pickLanguage = () => {};
 global.renameVoice = () => {};
 global.ICON_PLAY = '';
 global.TURN_GAP = 0.6;
+// Вырезанный кусок app.js зовёт t() (i18n) для подписей «Я»/«Собеседник»
+// и подсказок кнопок: сама функция t() объявлена вне среза, подставляем
+// простую заглушку с теми же текстами.
+global.t = (key) => ({
+  'transcript.speaker_me': 'Я',
+  'transcript.speaker_them': 'Собеседник',
+  'transcript.rename_tooltip': 'Нажмите, чтобы назвать говорящего',
+  'transcript.play_tooltip': 'Переслушать фразу',
+  'transcript.lang_tooltip': 'Фраза распознана не на том языке?',
+  'transcript.lang_placeholder': 'ЯЗ',
+}[key] || key);
 
 const src = fs.readFileSync(path.join(process.argv[2], 'web', 'app.js'), 'utf8');
 const строки = src.split('\n');
