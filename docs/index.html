@@ -23,6 +23,19 @@
   th { background: #f3f4f6; }
   a { color: #0969da; text-decoration: none; }
   a:hover { text-decoration: underline; }
+  /* Кнопка скачивания: за ней сюда и приходят, поэтому она заметна
+     и стоит выше всего остального текста. */
+  .download {
+    display: inline-block;
+    background: #1f883d;
+    color: #fff;
+    padding: 12px 24px;
+    border-radius: 6px;
+    font-weight: 600;
+    margin: 8px 0;
+  }
+  .download:hover { background: #1a7f37; text-decoration: none; }
+  .download-note { color: #59636e; font-size: 0.9em; margin-top: 4px; }
 </style>
 </head>
 <body>
@@ -30,6 +43,12 @@
 <p>A smart notepad for meetings — a local, privacy-first alternative to Granola.
 Everything runs on your computer; nothing leaves your machine.
 Always-on-top window, lives in the system tray.</p>
+
+<p>
+  <a class="download" href="https://github.com/lamver/konspekt-releases/releases/latest">Download for Windows</a>
+</p>
+<p class="download-note">Free. Installs in a minute, works offline afterwards.
+Speech models are downloaded on first use.</p>
 
 <h2>What it does</h2>
 <ul>
@@ -39,7 +58,7 @@ Always-on-top window, lives in the system tray.</p>
 <li>Imports pre-recorded files: drag and drop into the window, and each file becomes a meeting with its own transcript</li>
 </ul>
 
-<h2>Getting started</h2>
+<h2>Running from source</h2>
 <pre><code>uv sync
 uv run python -m app</code></pre>
 <p>Or double-click <code>konspekt.bat</code>.</p>
