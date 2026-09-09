@@ -6,6 +6,43 @@
 <title>Konspekt — meeting notes that never leave your computer</title>
 <meta name="description" content="A smart notepad for meetings. Records, transcribes and summarises entirely on your own computer. Free, open source, works offline.">
 
+<!-- Три адреса, одна страница.
+
+     Она отдаётся с lamver.github.io, konspekt.aisearch.tech (английский)
+     и konspekt.aisearch.ru (русский). Для поиска это три дубля, и без
+     подсказки он сам выберет главный, обычно не тот.
+
+     robots.txt тут не помощник: он запрещает обход, а нам нужно, чтобы
+     все копии обходились и склеивались в одну. Для этого есть canonical
+     (какой адрес главный) и hreflang (какая копия для какого языка).
+     Вдобавок robots.txt на github.io лежит в корне домена, который
+     принадлежит не этому репозиторию, так что мы туда и не дотянемся.
+
+     Главным объявлен konspekt.aisearch.tech: свой домен, а не адрес на
+     чужой площадке, который завтра может смениться. Русская копия
+     каноническая сама для себя: у неё другой язык и другой читатель,
+     схлопывать её в английскую нельзя. -->
+<link rel="canonical" href="https://konspekt.aisearch.tech/" id="canonical">
+<link rel="alternate" hreflang="en" href="https://konspekt.aisearch.tech/">
+<link rel="alternate" hreflang="ru" href="https://konspekt.aisearch.ru/">
+<link rel="alternate" hreflang="x-default" href="https://konspekt.aisearch.tech/">
+
+<!-- Русская копия должна быть канонической сама для себя, иначе поиск
+     склеит её с английской и по-русски нас не найдут. Файл один на все
+     адреса, поэтому подставляем canonical по домену прямо здесь, до
+     отрисовки. Скрипт без defer намеренно: значение должно стоять в
+     разметке к моменту, когда её читает робот. -->
+<script>
+  (function () {
+    var свои = {
+      'konspekt.aisearch.ru': 'https://konspekt.aisearch.ru/',
+      'konspekt.aisearch.tech': 'https://konspekt.aisearch.tech/'
+    };
+    var адрес = свои[location.hostname.toLowerCase()];
+    if (адрес) document.getElementById('canonical').href = адрес;
+  })();
+</script>
+
 <meta property="og:title" content="Konspekt — meeting notes that never leave your computer">
 <meta property="og:description" content="Records the conversation, transcribes it and turns it into notes, entirely on your own machine.">
 <meta property="og:type" content="website">
@@ -256,16 +293,39 @@
 <script>
 /* Язык страницы.
  *
- * Порядок выбора: сохранённый выбор человека, потом язык браузера,
- * потом английский. Английский последним и как запасной: страницу
- * читают со всего мира, и показать незнакомый язык хуже, чем показать
- * язык, который понимают почти все.
+ * Порядок выбора: явный ?lang в адресе, сохранённый выбор человека,
+ * язык домена, язык браузера, английский. Английский последним и как
+ * запасной: страницу читают со всего мира, и показать незнакомый язык
+ * хуже, чем показать язык, который понимают почти все.
+ *
+ * Домен идёт раньше браузера намеренно. Одна и та же страница отдаётся
+ * с трёх адресов, и konspekt.aisearch.ru заведён именно как русский:
+ * человек, пришедший туда по русской ссылке, должен увидеть русский,
+ * даже если у него в браузере стоит английский. Но выбор человека и
+ * ссылка с ?lang сильнее домена, иначе переключатель языков на .ru
+ * работал бы вхолостую.
  *
  * Выбор кладётся в адрес (?lang=es), чтобы ссылкой на испанскую версию
  * можно было поделиться, и запоминается в localStorage.
  */
 
 const LANGS = ['en', 'es', 'sr', 'ru'];
+
+// Язык, закреплённый за доменом. Ключ сравнивается с концом имени узла,
+// поэтому годятся и поддомены. Адреса без записи здесь (github.io,
+// localhost) ведут себя по-старому: язык берётся из браузера.
+const DOMAIN_LANGS = [
+  ['konspekt.aisearch.ru', 'ru'],
+  ['konspekt.aisearch.tech', 'en'],
+];
+
+function langFromDomain() {
+  const host = location.hostname.toLowerCase();
+  for (const [suffix, lang] of DOMAIN_LANGS) {
+    if (host === suffix || host.endsWith('.' + suffix)) return lang;
+  }
+  return null;
+}
 
 function pickLang() {
   const fromUrl = new URLSearchParams(location.search).get('lang');
@@ -275,6 +335,9 @@ function pickLang() {
     const saved = localStorage.getItem('konspekt-lang');
     if (LANGS.includes(saved)) return saved;
   } catch (e) { /* приватный режим: не беда, пойдём дальше */ }
+
+  const byDomain = langFromDomain();
+  if (byDomain) return byDomain;
 
   for (const nav of navigator.languages || [navigator.language || '']) {
     const short = String(nav).slice(0, 2).toLowerCase();
