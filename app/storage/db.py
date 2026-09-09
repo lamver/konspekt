@@ -30,7 +30,7 @@ from ..core.models import (
 
 log = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS meetings (
@@ -43,7 +43,11 @@ CREATE TABLE IF NOT EXISTS meetings (
     template    TEXT NOT NULL DEFAULT 'general',
     notes       TEXT NOT NULL DEFAULT '',
     summary     TEXT NOT NULL DEFAULT '',
-    audio_path  TEXT
+    audio_path  TEXT,
+    -- Пробовали ли досчитать встречу, оставшуюся без расшифровки.
+    -- Без отметки тишину и речь на чужом языке пересчитывали бы при
+    -- каждом запуске: на архиве в сотню встреч это минуты впустую.
+    rescued     INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS note_lines (
@@ -219,6 +223,13 @@ class Store:
                         "voice_label": "TEXT NOT NULL DEFAULT ''",
                     },
                 )
+            if was < 9:
+                # База человека старше пометок о досчёте. Ставим ноль:
+                # его старые пустые встречи как раз и надо попробовать
+                # спасти, по одному разу каждую.
+                self._add_columns(
+                    "meetings", {"rescued": "INTEGER NOT NULL DEFAULT 0"}
+                )
             self._conn.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
             self._conn.commit()
             if was < SCHEMA_VERSION:
@@ -380,7 +391,7 @@ class Store:
     def update_meeting(self, meeting_id: str, **fields: Any) -> None:
         allowed = {
             "title", "started_at", "ended_at", "status",
-            "template", "notes", "summary", "audio_path",
+            "template", "notes", "summary", "audio_path", "rescued",
         }
         updates = {k: v for k, v in fields.items() if k in allowed}
         if not updates:
@@ -667,6 +678,29 @@ class Store:
                 (meeting_id,),
             ).fetchall()
         return [dict(r) for r in rows]
+
+    def find_unrescued(self) -> list[str]:
+        """Встречи со звуком, но без единой реплики, ещё не пробованные.
+
+        Такие остались от версий, которые молча пропускали
+        распознавание: звук сохранён, текста нет, и в missed_spans про
+        них никто не написал. Отметка rescued нужна, чтобы попытка была
+        одна: у встречи может не быть реплик и по честной причине -
+        тишина или речь на языке, которого модель не знает.
+        """
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT DISTINCT m.id FROM meetings m"
+                " JOIN audio_chunks a ON a.meeting_id = m.id"
+                " WHERE m.rescued = 0"
+                " AND NOT EXISTS ("
+                "   SELECT 1 FROM transcript_segments t WHERE t.meeting_id = m.id"
+                " )"
+                " AND NOT EXISTS ("
+                "   SELECT 1 FROM missed_spans s WHERE s.meeting_id = m.id"
+                " )"
+            ).fetchall()
+        return [r["id"] for r in rows]
 
     # --- недосчитанные куски речи -------------------------------------
 

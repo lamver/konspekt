@@ -77,6 +77,7 @@ FAST = [
     # Файл, оставшийся без расшифровки, раньше не переобрабатывался
     # никогда: жалоба konspekt-releases#3.
     "повторный_разбор_test.py",
+    "спасение_пустых_test.py",
     "update_test.py",
     "migration_test.py",
     "profile_test.py",
