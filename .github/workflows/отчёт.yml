@@ -32,6 +32,28 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Проверить, что токен пускает в репозиторий релизов
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+        # Чтение публичного репозитория удаётся и вовсе без токена,
+        # поэтому удачный отчёт ничего не говорит о праве записи.
+        # Отозванный или протухший RELEASES_TOKEN всплыл бы только в
+        # момент выпуска, когда описание релиза уже надо править, —
+        # и виноватым выглядел бы релиз, а не токен. Спрашиваем
+        # права прямо и падаем сразу, с внятным объяснением.
+        run: |
+          can_push=$(gh api repos/lamver/konspekt-releases \
+            --jq '.permissions.push' 2>&1) || {
+              echo "::error::RELEASES_TOKEN не работает: $can_push"
+              echo 'Заведите токен с правом записи в lamver/konspekt-releases и положите его в секрет RELEASES_TOKEN.' >> "$GITHUB_STEP_SUMMARY"
+              exit 1
+            }
+          if [ "$can_push" != true ]; then
+            echo '::error::RELEASES_TOKEN читает репозиторий, но писать не может: описание релиза не обновится.'
+            exit 1
+          fi
+          echo 'RELEASES_TOKEN на месте, запись разрешена.' >> "$GITHUB_STEP_SUMMARY"
+
       - name: Запросить отчёт и дописать в релиз
         env:
           VT_API_KEY: ${{ secrets.VT_API_KEY }}
