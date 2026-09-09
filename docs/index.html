@@ -160,6 +160,26 @@
     text-align: center;
   }
 </style>
+
+<!-- Счётчик посещений (OpenPanel, свой сервер op.ingdg.com).
+
+     Считает только страницу проекта. В самой программе ничего подобного
+     нет и не появится: обещание «ничего не уходит с компьютера»
+     относится к встречам, а не к сайту, и нарушать его нельзя.
+
+     Скрипт помечен defer, поэтому не задерживает показ страницы, а если
+     сервер счётчика недоступен, страница просто работает без него. -->
+<script>
+  window.op=window.op||function(){var n=[];return new Proxy(function(){arguments.length&&n.push([].slice.call(arguments))},{get:function(t,r){return"q"===r?n:function(){n.push([r].concat([].slice.call(arguments)))}} ,has:function(t,r){return"q"===r}}) }();
+  window.op('init', {
+    apiUrl: 'https://op.ingdg.com',
+    clientId: '5c5c0aa1-4a0f-4f84-a792-9e1cd12b3fd8',
+    trackScreenViews: true,
+    trackOutgoingLinks: true,
+    trackAttributes: true,
+  });
+</script>
+<script src="https://openpanel.dev/op1.js" defer async></script>
 </head>
 <body>
 
