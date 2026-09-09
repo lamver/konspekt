@@ -1,4 +1,4 @@
-"""Хранилище на SQLite.
+﻿"""Хранилище на SQLite.
 
 Схема нарочно плоская и версионируется простым `user_version`: миграции
 понадобятся уже на этапе 3, когда поедут сегменты транскрипта.
@@ -33,6 +33,19 @@ log = logging.getLogger(__name__)
 SCHEMA_VERSION = 9
 
 SCHEMA = """
+-- Комментарии внутри CREATE TABLE не писать: SQLite до 3.44 хранит
+-- определение вместе с ними и потом спотыкается на ALTER TABLE DROP
+-- COLUMN («incomplete input»). Сервер сборки как раз с такой версией.
+--
+-- meetings.rescued — пробовали ли досчитать встречу, оставшуюся без
+-- расшифровки. Без отметки тишину и речь на чужом языке пересчитывали
+-- бы при каждом запуске: на архиве в сотню встреч это минуты впустую.
+--
+-- Значения полей, которые раньше стояли комментариями в строках:
+-- people.kind — owner или other; chat_messages.role — user или
+-- assistant; audio_chunks.track и transcript_segments.speaker — me или
+-- them; audio_chunks.start_s — начало файла во встрече, а
+-- transcript_segments.offset_s — место реплики во времени встречи.
 CREATE TABLE IF NOT EXISTS meetings (
     id          TEXT PRIMARY KEY,
     title       TEXT NOT NULL DEFAULT '',
@@ -44,9 +57,6 @@ CREATE TABLE IF NOT EXISTS meetings (
     notes       TEXT NOT NULL DEFAULT '',
     summary     TEXT NOT NULL DEFAULT '',
     audio_path  TEXT,
-    -- Пробовали ли досчитать встречу, оставшуюся без расшифровки.
-    -- Без отметки тишину и речь на чужом языке пересчитывали бы при
-    -- каждом запуске: на архиве в сотню встреч это минуты впустую.
     rescued     INTEGER NOT NULL DEFAULT 0
 );
 
@@ -76,7 +86,7 @@ CREATE TABLE IF NOT EXISTS transcript_segments (
 CREATE TABLE IF NOT EXISTS people (
     id          TEXT PRIMARY KEY,
     name        TEXT NOT NULL DEFAULT '',
-    kind        TEXT NOT NULL DEFAULT 'other',  -- owner | other
+    kind        TEXT NOT NULL DEFAULT 'other',
     embedding   BLOB NOT NULL,
     samples     INTEGER NOT NULL DEFAULT 1,
     created_at  REAL NOT NULL,
@@ -104,7 +114,7 @@ CREATE TABLE IF NOT EXISTS meeting_voices (
 CREATE TABLE IF NOT EXISTS chat_messages (
     id          TEXT PRIMARY KEY,
     meeting_id  TEXT NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,
-    role        TEXT NOT NULL DEFAULT 'user',  -- user | assistant
+    role        TEXT NOT NULL DEFAULT 'user',
     text        TEXT NOT NULL DEFAULT '',
     created_at  REAL NOT NULL
 );
@@ -119,9 +129,9 @@ CREATE INDEX IF NOT EXISTS idx_chat_meeting ON chat_messages(meeting_id, created
 CREATE TABLE IF NOT EXISTS audio_chunks (
     id          TEXT PRIMARY KEY,
     meeting_id  TEXT NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,
-    track       TEXT NOT NULL DEFAULT 'me',   -- me | them
+    track       TEXT NOT NULL DEFAULT 'me',
     path        TEXT NOT NULL,
-    start_s     REAL NOT NULL DEFAULT 0,      -- позиция начала файла во встрече
+    start_s     REAL NOT NULL DEFAULT 0,
     duration_s  REAL NOT NULL DEFAULT 0
 );
 
@@ -135,8 +145,8 @@ CREATE TABLE IF NOT EXISTS audio_chunks (
 CREATE TABLE IF NOT EXISTS missed_spans (
     id          TEXT PRIMARY KEY,
     meeting_id  TEXT NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,
-    speaker     TEXT NOT NULL DEFAULT 'me',   -- me | them
-    offset_s    REAL NOT NULL DEFAULT 0,      -- место во времени встречи
+    speaker     TEXT NOT NULL DEFAULT 'me',
+    offset_s    REAL NOT NULL DEFAULT 0,
     duration_s  REAL NOT NULL DEFAULT 0
 );
 

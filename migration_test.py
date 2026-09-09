@@ -273,4 +273,39 @@ assert len(store2.list_segments(mid)) if mid else True
 store2.close()
 print("[ok] повторная миграция идемпотентна")
 
+# Комментарии внутри CREATE TABLE ломают ALTER TABLE DROP COLUMN на
+# SQLite до 3.44: он хранит определение таблицы вместе с ними и потом не
+# может его разобрать («incomplete input»). Библиотека у всех своя, и
+# упасть это может уже у человека, а не на моей машине с новой версией.
+import re as _re  # noqa: E402
+
+import app.storage.db as _db_модуль  # noqa: E402
+
+_текст = Path(_db_модуль.__file__).read_text(encoding="utf-8")
+_начало = _текст.index("SCHEMA = ")
+_конец = _текст.index('"""', _начало + 12)
+_внутри = 0
+_плохие = []
+for _н, _строка in enumerate(_текст[_начало + 12 : _конец].splitlines(), 1):
+    if _re.match(r"\s*CREATE TABLE", _строка):
+        _внутри = 1
+    elif _внутри and _строка.strip().startswith(")"):
+        _внутри = 0
+    elif _внутри and "--" in _строка:
+        _плохие.append(f"{_н}: {_строка.strip()}")
+assert not _плохие, (
+    "комментарии внутри CREATE TABLE ломают DROP COLUMN на старом "
+    "SQLite, вынеси их над таблицей:\n  " + "\n  ".join(_плохие)
+)
+print("[ok] в определениях таблиц нет комментариев, DROP COLUMN не сломается")
+
+# И то же самое делом: колонку из живой базы удаётся снять.
+_проба = Path(tempfile.mkdtemp()) / "проба.db"
+_с = Store(str(_проба))
+_с.close()
+_кон = sqlite3.connect(_проба)
+_кон.execute("ALTER TABLE meetings DROP COLUMN rescued")
+_кон.close()
+print("[ok] DROP COLUMN на свежесозданной базе работает")
+
 print("\nМиграция прошла без потерь.")
