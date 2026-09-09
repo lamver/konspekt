@@ -52,6 +52,37 @@ WAKE_INTERVAL = float(os.environ.get("KONSPEKT_VERSION_WAKE", 3600))
 TIMEOUT = 8.0
 
 
+# На какой язык переходим, если новость на языке человека не написана.
+# Английский первым: его хоть как-то читают почти все, кто дошёл до
+# программы с англоязычной страницей релизов. Русский следом, потому что
+# на нём новость есть всегда.
+ЗАПАСНЫЕ_ЯЗЫКИ = ("en", "ru")
+
+
+def выбрать_новость(notes: Any, language: str) -> str:
+    """Достать новость об обновлении на языке человека.
+
+    Строку отдаём как есть: так `latest.json` выглядел до 0.8.0, и
+    установленные копии программы ждут именно строку. Пока их много,
+    словарь в файл класть нельзя, иначе они покажут человеку `{'ru':
+    ...}` целиком.
+
+    Из словаря берём язык интерфейса, а если новость на нём не написана —
+    запасной. Пустую строку считаем отсутствующей: перевод, до которого
+    не дошли руки, не должен выглядеть как обновление без описания.
+    """
+    if isinstance(notes, str):
+        return notes
+    if not isinstance(notes, dict):
+        # Число, список, null — не новость. Молчим, а не показываем мусор.
+        return ""
+    for ключ in (language, *ЗАПАСНЫЕ_ЯЗЫКИ):
+        значение = notes.get(ключ)
+        if isinstance(значение, str) and значение.strip():
+            return значение
+    return ""
+
+
 @dataclass
 class Release:
     version: str
@@ -59,20 +90,24 @@ class Release:
     notes: str = ""
 
     @classmethod
-    def from_json(cls, data: dict[str, Any]) -> "Release":
+    def from_json(cls, data: dict[str, Any], language: str = "ru") -> "Release":
         return cls(
             version=str(data["version"]).lstrip("v"),
             url=str(data.get("url", "")),
-            notes=str(data.get("notes", "")),
+            notes=выбрать_новость(data.get("notes", ""), language),
         )
 
 
-def fetch_latest() -> Release:
+def fetch_latest(language: str = "ru") -> Release:
     """Забрать `latest.json`. Бросает исключение, если не вышло.
 
     Отдельно от `_check`, потому что кнопка «Проверить сейчас» в
     настройках должна отдать результат в ответ на нажатие, а не через
     событие: человек стоит и ждёт.
+
+    Язык передаётся явно, а не читается из настроек: новость об
+    обновлении — сообщение интерфейса, и выбирать его язык должен тот,
+    кто знает, в каком окне оно покажется.
     """
     response = httpx.get(
         URL,
@@ -81,7 +116,7 @@ def fetch_latest() -> Release:
         timeout=TIMEOUT,
     )
     response.raise_for_status()
-    return Release.from_json(response.json())
+    return Release.from_json(response.json(), language)
 
 
 class VersionChecker:
@@ -133,7 +168,7 @@ class VersionChecker:
 
         try:
             log.debug("Проверяю новую версию")
-            release = fetch_latest()
+            release = fetch_latest(settings.language)
 
             if is_newer(release.version, __version__):
                 log.info("Доступна версия %s", release.version)

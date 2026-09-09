@@ -430,7 +430,7 @@ class Api:
         from app.core import version_check
 
         try:
-            release = version_check.fetch_latest()
+            release = version_check.fetch_latest(self._service.settings.language)
         except Exception as e:
             log.debug("Не удалось проверить версию: %s", e)
             return {"ok": False, "error": self._service._msg("python.version_check.error")}
