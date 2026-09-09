@@ -114,5 +114,7 @@ open, you may freely use and modify it, with one restriction — you may not
 package it into a competing commercial product. Each version becomes plain MIT
 two years after release.
 
-Third-party libraries included in the program and what this means in practice
-are covered in [LICENSE.md](LICENSE.md).
+Third-party libraries bundled with the program, and what their licenses mean in
+practice, are covered in [ЛИЦЕНЗИИ.md](ЛИЦЕНЗИИ.md) (in Russian). The short
+version: the Russian speech model is MIT, ffmpeg inside PyAV is LGPL, and
+nothing in the dependency tree is copyleft-infectious.
