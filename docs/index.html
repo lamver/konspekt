@@ -231,7 +231,8 @@
     <p class="tagline" id="t-tagline"></p>
     <p class="lead" id="t-lead"></p>
     <p>
-      <a class="download" id="t-download" href="https://github.com/lamver/konspekt-releases/releases/latest"></a>
+      <a class="download" id="t-download" data-track="download_click" data-lang="en"
+         href="https://github.com/lamver/konspekt-releases/releases/latest"></a>
     </p>
     <p class="download-note" id="t-download-note"></p>
     <p class="source-link"><a id="t-source-link" href="https://github.com/lamver/konspekt"></a></p>
@@ -364,6 +365,10 @@ function render(lang) {
   setText('t-tagline', d.tagline);
   setText('t-lead', d.lead);
   setText('t-download', d.download);
+  // Язык уезжает вместе с событием скачивания: без него видно только
+  // «скачали 40 раз», а надо знать, кому переводить дальше.
+  const dl = document.getElementById('t-download');
+  if (dl) dl.setAttribute('data-lang', lang);
   setText('t-download-note', d.downloadNote);
   setText('t-source-link', d.sourceLink);
 
