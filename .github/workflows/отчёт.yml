@@ -13,7 +13,7 @@ name: Отчёт VirusTotal
 on:
   workflow_dispatch:
     inputs:
-      тег:
+      tag:
         description: Тег релиза, например v0.8.0
         required: true
         default: v0.8.0
@@ -34,4 +34,7 @@ jobs:
           # Описание релиза правится в соседнем репозитории, встроенному
           # токену туда нельзя.
           GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
-        run: python tools/отчёт_вирустотал.py "${{ inputs.тег }}"
+        # Имя поля латиницей не по забывчивости: в выражениях
+        # ${{ inputs.… }} кириллица не разбирается, запуск падает с
+        # «Unexpected symbol» ещё до первого шага.
+        run: python tools/отчёт_вирустотал.py "${{ inputs.tag }}"
