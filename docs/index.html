@@ -3,86 +3,363 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Konspekt</title>
+<title>Konspekt — meeting notes that never leave your computer</title>
+<meta name="description" content="A smart notepad for meetings. Records, transcribes and summarises entirely on your own computer. Free, open source, works offline.">
+
+<meta property="og:title" content="Konspekt — meeting notes that never leave your computer">
+<meta property="og:description" content="Records the conversation, transcribes it and turns it into notes, entirely on your own machine.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://lamver.github.io/konspekt/">
+<meta property="og:image" content="https://lamver.github.io/konspekt/screenshots/en/summary.png">
+
 <style>
+  /* Цвета взяты из самой программы: страница и приложение должны
+     выглядеть одним продуктом, а не двумя разными. */
+  :root {
+    --bg: #14110f;
+    --panel: #1c1917;
+    --line: #2e2926;
+    --text: #f5f0ea;
+    --muted: #a49a90;
+    --accent: #e8734a;
+    --accent-soft: rgba(232, 115, 74, 0.12);
+  }
+
+  * { box-sizing: border-box; }
+
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-    line-height: 1.6;
-    max-width: 800px;
-    margin: 0 auto;
-    padding: 20px;
-    color: #1f2328;
+    line-height: 1.65;
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
   }
-  h1 { border-bottom: 1px solid #d0d7de; padding-bottom: 8px; }
-  h2 { border-bottom: 1px solid #d0d7de; padding-bottom: 6px; margin-top: 24px; }
-  code { background: #f3f4f6; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
-  pre { background: #f3f4f6; padding: 16px; border-radius: 6px; overflow-x: auto; }
-  pre code { background: none; padding: 0; }
-  table { border-collapse: collapse; width: 100%; }
-  th, td { border: 1px solid #d0d7de; padding: 8px 12px; text-align: left; }
-  th { background: #f3f4f6; }
-  a { color: #0969da; text-decoration: none; }
+
+  .wrap { max-width: 960px; margin: 0 auto; padding: 0 24px; }
+
+  a { color: var(--accent); text-decoration: none; }
   a:hover { text-decoration: underline; }
-  /* Кнопка скачивания: за ней сюда и приходят, поэтому она заметна
-     и стоит выше всего остального текста. */
+
+  /* --- Переключатель языка --- */
+  .langbar {
+    display: flex;
+    justify-content: flex-end;
+    gap: 4px;
+    padding: 16px 0 0;
+  }
+  .langbar button {
+    background: none;
+    border: 1px solid transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: 0.85rem;
+    padding: 4px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .langbar button:hover { color: var(--text); }
+  .langbar button[aria-pressed="true"] {
+    color: var(--accent);
+    border-color: var(--line);
+    background: var(--accent-soft);
+  }
+
+  /* --- Шапка --- */
+  header { padding: 48px 0 56px; text-align: center; }
+  .logo {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    margin-bottom: 28px;
+  }
+  .logo span.mark {
+    width: 22px; height: 22px;
+    border-radius: 5px;
+    background: var(--accent);
+    display: inline-block;
+  }
+  h1 {
+    font-size: clamp(1.9rem, 4.5vw, 2.9rem);
+    line-height: 1.2;
+    margin: 0 0 20px;
+    letter-spacing: -0.02em;
+  }
+  .tagline {
+    font-size: clamp(1rem, 2vw, 1.15rem);
+    color: var(--muted);
+    max-width: 640px;
+    margin: 0 auto 12px;
+  }
+  .lead {
+    color: var(--muted);
+    max-width: 640px;
+    margin: 0 auto 32px;
+  }
+
   .download {
     display: inline-block;
-    background: #1f883d;
-    color: #fff;
-    padding: 12px 24px;
-    border-radius: 6px;
+    background: var(--accent);
+    color: #1a0f0a;
+    padding: 14px 32px;
+    border-radius: 8px;
     font-weight: 600;
-    margin: 8px 0;
+    font-size: 1.02rem;
   }
-  .download:hover { background: #1a7f37; text-decoration: none; }
-  .download-note { color: #59636e; font-size: 0.9em; margin-top: 4px; }
+  .download:hover { background: #f0855f; text-decoration: none; }
+  .download-note { color: var(--muted); font-size: 0.88rem; margin: 12px 0 0; }
+  .source-link { font-size: 0.9rem; margin-top: 6px; }
+
+  /* --- Секции --- */
+  section { padding: 56px 0; border-top: 1px solid var(--line); }
+  h2 {
+    font-size: clamp(1.3rem, 2.6vw, 1.7rem);
+    margin: 0 0 28px;
+    letter-spacing: -0.01em;
+  }
+
+  .features {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 20px;
+  }
+  .feature {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 20px 22px;
+  }
+  .feature h3 { margin: 0 0 8px; font-size: 1rem; }
+  .feature p { margin: 0; color: var(--muted); font-size: 0.94rem; }
+
+  /* --- Снимки --- */
+  .shot { margin-bottom: 44px; }
+  .shot:last-child { margin-bottom: 0; }
+  .shot img {
+    width: 100%;
+    height: auto;
+    display: block;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--panel);
+  }
+  .shot h3 { margin: 18px 0 6px; font-size: 1.05rem; }
+  .shot p { margin: 0; color: var(--muted); font-size: 0.94rem; }
+
+  .prose { color: var(--muted); max-width: 700px; margin: 0; }
+  .prose + p { margin-top: 14px; }
+
+  footer {
+    border-top: 1px solid var(--line);
+    padding: 32px 0 56px;
+    color: var(--muted);
+    font-size: 0.88rem;
+    text-align: center;
+  }
 </style>
 </head>
 <body>
-<h1>Konspekt</h1>
-<p>A smart notepad for meetings — a local, privacy-first alternative to Granola.
-Everything runs on your computer; nothing leaves your machine.
-Always-on-top window, lives in the system tray.</p>
 
-<p>
-  <a class="download" href="https://github.com/lamver/konspekt-releases/releases/latest">Download for Windows</a>
-</p>
-<p class="download-note">Free. Installs in a minute, works offline afterwards.
-Speech models are downloaded on first use.</p>
+<div class="wrap">
+  <nav class="langbar" id="langbar" aria-label="Language"></nav>
+</div>
 
-<h2>What it does</h2>
-<ul>
-<li>Captures audio from your microphone and system output (so you hear the other side in a call)</li>
-<li>Transcribes speech locally: Russian goes through GigaAM, everything else through Whisper</li>
-<li>Identifies speakers and remembers voices across meetings — name someone once, and they get labeled automatically from then on</li>
-<li>Imports pre-recorded files: drag and drop into the window, and each file becomes a meeting with its own transcript</li>
-</ul>
+<header>
+  <div class="wrap">
+    <div class="logo"><span class="mark"></span>Konspekt</div>
+    <h1 id="t-title"></h1>
+    <p class="tagline" id="t-tagline"></p>
+    <p class="lead" id="t-lead"></p>
+    <p>
+      <a class="download" id="t-download" href="https://github.com/lamver/konspekt-releases/releases/latest"></a>
+    </p>
+    <p class="download-note" id="t-download-note"></p>
+    <p class="source-link"><a id="t-source-link" href="https://github.com/lamver/konspekt"></a></p>
+  </div>
+</header>
 
-<h2>Running from source</h2>
-<pre><code>uv sync
-uv run python -m app</code></pre>
-<p>Or double-click <code>konspekt.bat</code>.</p>
-<p>This runs the development version straight from source with the latest changes.
-It does not interfere with an installed copy: it uses its own data profile at
-<code>%APPDATA%\Konspekt (razrabotka)</code>, with separate meetings, recordings, settings,
-and model weights. Both copies can be open at the same time; the installed
-version's meetings stay untouched.</p>
-<p>Profile names are set via the <code>KONSPEKT_PROFILE</code> environment variable.</p>
+<section>
+  <div class="wrap">
+    <h2 id="t-features-title"></h2>
+    <div class="features" id="features"></div>
+  </div>
+</section>
 
-<h2>Keyboard shortcuts</h2>
-<table>
-<thead><tr><th>Shortcut</th><th>Action</th></tr></thead>
-<tbody>
-<tr><td><code>Ctrl+Shift+K</code></td><td>Show / hide window (global)</td></tr>
-<tr><td><code>Ctrl+N</code></td><td>New meeting</td></tr>
-<tr><td><code>Ctrl+R</code></td><td>Start / stop recording</td></tr>
-<tr><td><code>Ctrl+S</code></td><td>Save notes</td></tr>
-</tbody>
-</table>
+<section>
+  <div class="wrap">
+    <h2 id="t-shots-title"></h2>
+    <div id="shots"></div>
+  </div>
+</section>
 
-<h2>License</h2>
-<p>Konspekt is distributed under <a href="https://github.com/lamver/konspekt/blob/master/LICENSE.md">FSL-1.1-MIT</a>.</p>
+<section>
+  <div class="wrap">
+    <h2 id="t-privacy-title"></h2>
+    <p class="prose" id="t-privacy-text"></p>
+  </div>
+</section>
 
-<p><a href="https://github.com/lamver/konspekt">View on GitHub</a></p>
+<section>
+  <div class="wrap">
+    <h2 id="t-langs-title"></h2>
+    <p class="prose" id="t-langs-text"></p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2 id="t-verify-title"></h2>
+    <p class="prose" id="t-verify-text"></p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2 id="t-license-title"></h2>
+    <p class="prose" id="t-license-text"></p>
+    <p><a id="t-license-link" href="https://github.com/lamver/konspekt/blob/master/LICENSE.md"></a></p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <a href="https://github.com/lamver/konspekt">GitHub</a> ·
+    <a href="https://github.com/lamver/konspekt-releases/releases">Releases</a> ·
+    <a href="https://github.com/lamver/konspekt/blob/master/LICENSE.md">FSL-1.1-MIT</a>
+  </div>
+</footer>
+
+<script src="i18n.js"></script>
+<script>
+/* Язык страницы.
+ *
+ * Порядок выбора: сохранённый выбор человека, потом язык браузера,
+ * потом английский. Английский последним и как запасной: страницу
+ * читают со всего мира, и показать незнакомый язык хуже, чем показать
+ * язык, который понимают почти все.
+ *
+ * Выбор кладётся в адрес (?lang=es), чтобы ссылкой на испанскую версию
+ * можно было поделиться, и запоминается в localStorage.
+ */
+
+const LANGS = ['en', 'es', 'sr', 'ru'];
+
+function pickLang() {
+  const fromUrl = new URLSearchParams(location.search).get('lang');
+  if (LANGS.includes(fromUrl)) return fromUrl;
+
+  try {
+    const saved = localStorage.getItem('konspekt-lang');
+    if (LANGS.includes(saved)) return saved;
+  } catch (e) { /* приватный режим: не беда, пойдём дальше */ }
+
+  for (const nav of navigator.languages || [navigator.language || '']) {
+    const short = String(nav).slice(0, 2).toLowerCase();
+    // Сербский приходит и как sr, и как sh, и с латиницей в хвосте.
+    if (short === 'sh') return 'sr';
+    if (LANGS.includes(short)) return short;
+  }
+  return 'en';
+}
+
+function setText(id, value) {
+  const node = document.getElementById(id);
+  if (node) node.textContent = value;
+}
+
+function render(lang) {
+  const d = I18N[lang];
+  if (!d) return;
+
+  document.documentElement.lang = d.htmlLang;
+  document.title = d.title;
+
+  setText('t-title', d.title.replace(/^Konspekt\s*[—-]\s*/, ''));
+  setText('t-tagline', d.tagline);
+  setText('t-lead', d.lead);
+  setText('t-download', d.download);
+  setText('t-download-note', d.downloadNote);
+  setText('t-source-link', d.sourceLink);
+
+  setText('t-features-title', d.featuresTitle);
+  const features = document.getElementById('features');
+  features.innerHTML = '';
+  for (const [head, body] of d.features) {
+    const card = document.createElement('div');
+    card.className = 'feature';
+    const h = document.createElement('h3');
+    h.textContent = head;
+    const p = document.createElement('p');
+    p.textContent = body;
+    card.append(h, p);
+    features.append(card);
+  }
+
+  setText('t-shots-title', d.shotsTitle);
+  const shots = document.getElementById('shots');
+  shots.innerHTML = '';
+  for (const [file, head, body] of d.shots) {
+    const box = document.createElement('div');
+    box.className = 'shot';
+    const img = document.createElement('img');
+    img.src = `screenshots/${lang}/${file}.png`;
+    img.alt = head;
+    // Первый снимок нужен сразу, остальные подождут прокрутки:
+    // четыре картинки на входе — это лишние секунды на медленной сети.
+    img.loading = file === 'summary' ? 'eager' : 'lazy';
+    img.width = 1044;
+    img.height = 721;
+    const h = document.createElement('h3');
+    h.textContent = head;
+    const p = document.createElement('p');
+    p.textContent = body;
+    box.append(img, h, p);
+    shots.append(box);
+  }
+
+  setText('t-privacy-title', d.privacyTitle);
+  setText('t-privacy-text', d.privacyText);
+  setText('t-langs-title', d.langsTitle);
+  setText('t-langs-text', d.langsText);
+  setText('t-verify-title', d.verifyTitle);
+  setText('t-verify-text', d.verifyText);
+  setText('t-license-title', d.licenseTitle);
+  setText('t-license-text', d.licenseText);
+  setText('t-license-link', d.licenseLink);
+
+  for (const btn of document.querySelectorAll('#langbar button')) {
+    btn.setAttribute('aria-pressed', String(btn.dataset.lang === lang));
+  }
+}
+
+function switchTo(lang) {
+  try { localStorage.setItem('konspekt-lang', lang); } catch (e) { /* ничего */ }
+  const url = new URL(location.href);
+  url.searchParams.set('lang', lang);
+  history.replaceState(null, '', url);
+  render(lang);
+}
+
+function buildLangBar(current) {
+  const bar = document.getElementById('langbar');
+  for (const lang of LANGS) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.dataset.lang = lang;
+    btn.textContent = I18N[lang].label;
+    btn.setAttribute('aria-pressed', String(lang === current));
+    btn.addEventListener('click', () => switchTo(lang));
+    bar.append(btn);
+  }
+}
+
+const initial = pickLang();
+buildLangBar(initial);
+render(initial);
+</script>
+
 </body>
 </html>
