@@ -61,13 +61,35 @@ jobs:
         with:
           subject-path: dist/konspekt-*-setup.exe
 
-      - name: VirusTotal скан
-        # Без ключа шаг молча пропускается: отсутствие сканера не повод
-        # ронять весь релиз. Ключ бесплатный, заводится на virustotal.com
-        # и кладётся в секреты как VT_API_KEY.
-        if: startsWith(github.ref, 'refs/tags/v') && env.VT_API_KEY != ''
+      # Есть ли ключ VirusTotal, решаем отдельным шагом. Соблазнительно
+      # написать в условии самого шага `env.VT_API_KEY != ''`, но env,
+      # объявленный в том же шаге, в его собственном `if` не виден:
+      # условие всегда ложно, и скан молча не запускается даже с ключом.
+      # Такую поломку не видно вовсе — шаг просто числится пропущенным.
+      - name: Проверить, есть ли ключ VirusTotal
+        id: vt_key
+        shell: bash
         env:
           VT_API_KEY: ${{ secrets.VT_API_KEY }}
+        run: |
+          if [ -n "$VT_API_KEY" ]; then
+            echo "has_key=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_key=no" >> "$GITHUB_OUTPUT"
+            echo "::notice::VT_API_KEY не задан, скан VirusTotal пропущен."
+            echo "::notice::Ключ бесплатный (virustotal.com), кладётся в секреты как VT_API_KEY."
+          fi
+
+      - name: VirusTotal скан
+        # Без ключа шаг пропускается: отсутствие сканера не повод ронять
+        # весь релиз. Но пропуск теперь не молчаливый — предыдущий шаг
+        # пишет об этом в сводку сборки.
+        #
+        # Отчёт VirusTotal нужен не для галочки: Konspekt пишет микрофон
+        # и перехватывает клавиши, антивирусы принимают его за шпионскую
+        # программу (issue #4 в konspekt-releases), и ссылка на отчёт —
+        # единственный ответ, который что-то стоит.
+        if: startsWith(github.ref, 'refs/tags/v') && steps.vt_key.outputs.has_key == 'yes'
         uses: crazy-max/ghaction-virustotal@v4
         with:
           vt_api_key: ${{ secrets.VT_API_KEY }}

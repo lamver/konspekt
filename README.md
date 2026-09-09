@@ -146,6 +146,28 @@ module", which looks like broken code but is the wrong interpreter.
 Tests that need live recordings look for them in the `audio_examples` folder.
 It is not in the repository (12 MB of audio); without it those tests are skipped.
 
+## If your antivirus blocks the installer
+
+It happens, and it is a false positive. Konspekt records the microphone,
+listens to system audio and grabs global hotkeys — from the outside that is
+exactly what spyware does. On top of that, PyInstaller builds trigger heuristics
+on their own, and a brand-new executable has no reputation to speak of.
+
+Rather than asking you to take our word for it, every release ships with proof
+you can check yourself:
+
+```bash
+# the file is the one we published
+sha256sum -c SHA256SUMS
+
+# and it was built by CI from this repository, not by someone on the internet
+gh attestation verify konspekt-0.8.0-setup.exe -R lamver/konspekt
+```
+
+If both check out, the file is ours. Allow it in Windows Security → Virus &
+threat protection → Protection history, or report it to your antivirus vendor
+as a false positive — that helps everyone, not just you.
+
 ## License
 
 Konspekt is distributed under [FSL-1.1-MIT](LICENSE.md): the source code is
