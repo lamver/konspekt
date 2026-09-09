@@ -13,6 +13,7 @@
 import testenv  # noqa: F401  русский вывод в консоли Windows
 
 import subprocess
+import json
 import os
 import re
 import sys
@@ -74,6 +75,32 @@ def main() -> int:
     # вместо метаданных данные.
     check((internal / "py3langid" / "data" / "model.plzma").exists(),
           "модель py3langid на месте (без неё сверка языка падает)")
+
+    # Локализация: словари лежат в web/i18n и грузятся через мост. Если
+    # сборщик их не подхватит, программа поднимется как ни в чём не
+    # бывало и покажет ключи вместо текста — беда, которую по составу
+    # exe не видно, а человек увидит сразу.
+    i18n = internal / "web" / "i18n"
+    check(i18n.is_dir(), "папка словарей web/i18n попала в сборку")
+    if i18n.is_dir():
+        for язык in ("ru", "en", "es", "sr"):
+            словарь = i18n / f"{язык}.json"
+            есть = словарь.exists()
+            check(есть, f"словарь {язык}.json попал в сборку")
+            if есть:
+                # Пустой или обрезанный файл — это интерфейс из голых
+                # ключей. Проверяем не факт наличия, а содержимое.
+                try:
+                    данные = json.loads(словарь.read_text(encoding="utf-8"))
+                except Exception as e:  # noqa: BLE001
+                    check(False, f"словарь {язык}.json читается ({e})")
+                    continue
+                check(
+                    isinstance(данные, dict)
+                    and "prefs" in данные
+                    and "recording" in данные,
+                    f"в словаре {язык}.json есть разделы интерфейса",
+                )
 
     # Наличие файла ещё не значит, что библиотека его найдёт: путь к
     # модели строится от __file__, а PyInstaller его подменяет. И
