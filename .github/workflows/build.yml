@@ -89,12 +89,17 @@ jobs:
         # и перехватывает клавиши, антивирусы принимают его за шпионскую
         # программу (issue #4 в konspekt-releases), и ссылка на отчёт —
         # единственный ответ, который что-то стоит.
-        if: startsWith(github.ref, 'refs/tags/v') && steps.vt_key.outputs.has_key == 'yes'
+        #
+        # Скан идёт и по кнопке, не только на тег: иначе убедиться, что он
+        # вообще работает, можно лишь настоящим выпуском, а узнавать о
+        # поломке в момент релиза поздно. Ровно так и вскрылась прошлая.
+        if: steps.vt_key.outputs.has_key == 'yes'
         uses: crazy-max/ghaction-virustotal@v4
         with:
           vt_api_key: ${{ secrets.VT_API_KEY }}
           files: dist/konspekt-*-setup.exe
-          update_release_body: true
+          # Дописывать отчёт некуда, пока релиза нет: только на теге.
+          update_release_body: ${{ startsWith(github.ref, 'refs/tags/v') }}
 
       # Релиз уезжает в публичный lamver/konspekt-releases, а не сюда:
       # Releases приватного репозитория отдаются только по токену, а
