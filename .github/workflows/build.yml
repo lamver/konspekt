@@ -26,6 +26,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Проверка отката поднимает рабочее дерево на прошлом
+          # теге, а при обрезанной истории тега здесь нет.
+          fetch-depth: 0
 
       - name: Настроить Python
         uses: actions/setup-python@v5
