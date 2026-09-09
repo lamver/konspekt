@@ -86,8 +86,25 @@ function applyI18n(root = document) {
 /** Сменить язык интерфейса: подгружаем словарь и перерисовываем DOM. */
 async function setLanguage(lang, { persist = true } = {}) {
   if (!SUPPORTED_LANGS.includes(lang)) lang = 'ru';
-  const dict = await loadDict(lang);
-  if (!dict) return;
+  let dict = await loadDict(lang);
+  if (!dict) {
+    // Словарь не доехал: мост подвис или окно ещё не догрузилось. Уйти
+    // молча нельзя - t() тогда возвращает сами ключи, и человек видит
+    // экран из 'prefs.tab.dictation' вместо слов. Русский лежит прямо в
+    // сборке, и откатиться на него честнее, чем показывать латиницу.
+    if (lang === 'ru') return;
+    dict = await loadDict('ru');
+    if (!dict) return;
+    // Язык в настройках не трогаем: сбой словаря дело временное, а
+    // запись переставила бы человеку язык навсегда, и после
+    // перезапуска он получил бы русский вместо своего.
+    i18n = { lang: 'ru', dict };
+    document.documentElement.setAttribute('lang', 'ru');
+    applyI18n();
+    refreshDynamicTexts();
+    syncLanguageSwitch();
+    return;
+  }
   i18n = { lang, dict };
   document.documentElement.setAttribute('lang', lang === 'sr' ? 'sr-Latn' : lang);
   applyI18n();
