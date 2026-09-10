@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import io
 import logging
+import os
 import sys
 
 import webview
@@ -58,11 +59,25 @@ def _setup_logging() -> None:
         handlers.insert(0, logging.StreamHandler(console))
 
     logging.basicConfig(
-        level=logging.INFO,
+        # Обычно INFO: подробности только мешают читать журнал по жалобе.
+        # KONSPEKT_LOG=debug включает разбор решений — например, почему
+        # программа промолчала о чужой речи в системном звуке. Без этого
+        # молчание неотличимо от поломки, и разбираться приходится
+        # вслепую.
+        level=logging.DEBUG if os.environ.get("KONSPEKT_LOG", "").lower() == "debug"
+        else logging.INFO,
         format="%(asctime)s %(levelname)-7s %(name)s: %(message)s",
         datefmt="%H:%M:%S",
         handlers=handlers,
     )
+
+    # Чужие библиотеки в подробном режиме заливают журнал своим: PIL
+    # перечисляет полсотни форматов картинок, httpx пишет каждый запрос.
+    # Из-за этого разбор собственной беды приходится выискивать глазами,
+    # а ради него всё и включалось.
+    for чужой in ("PIL", "httpx", "httpcore", "urllib3", "comtypes",
+                  "matplotlib", "asyncio"):
+        logging.getLogger(чужой).setLevel(logging.INFO)
 
 
 def main() -> int:
