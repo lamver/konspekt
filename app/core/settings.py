@@ -113,12 +113,36 @@ class DictationSettings:
 
 
 @dataclass
+class ВниманиеSettings:
+    """Когда Konspekt подаёт голос сам.
+
+    Две разные вещи, и путать их нельзя.
+
+    `сторож` — слушать системный звук, пока запись не идёт. Открыл Zoom,
+    а кнопку нажать забыл: программа заметит разговор и предложит
+    записать. Ничего не пишется на диск, пока человек не согласится.
+    Включено по умолчанию: забытая запись — самая частая и самая
+    обидная потеря, а цена ошибки здесь всего лишь одно уведомление.
+
+    `уведомления` — показывать вопрос системным тостом поверх всех окон,
+    а не только плашкой внутри программы. Во время встречи окно свёрнуто
+    в трей, и плашку в нём человек увидит через час, когда уже поздно.
+    Но тост посреди чужой работы раздражает, поэтому его можно выключить
+    и остаться с плашкой.
+    """
+
+    сторож: bool = True
+    уведомления: bool = True
+
+
+@dataclass
 class Settings:
     window: WindowGeometry = field(default_factory=WindowGeometry)
     audio: AudioSettings = field(default_factory=AudioSettings)
     asr: AsrSettings = field(default_factory=AsrSettings)
     llm: LlmSettings = field(default_factory=LlmSettings)
     dictation: DictationSettings = field(default_factory=DictationSettings)
+    внимание: ВниманиеSettings = field(default_factory=ВниманиеSettings)
     always_on_top: bool = True
     theme: str = "system"          # system | light | dark
     hotkey: str = "<ctrl>+<shift>+k"
@@ -158,10 +182,11 @@ def load() -> Settings:
         asr = _section(AsrSettings, raw.pop("asr", {}))
         llm = _section(LlmSettings, raw.pop("llm", {}))
         dictation = _section(DictationSettings, raw.pop("dictation", {}))
+        внимание = _section(ВниманиеSettings, raw.pop("внимание", {}))
         known = {k: v for k, v in raw.items() if k in Settings.__dataclass_fields__}
         return Settings(
             window=window, audio=audio, asr=asr, llm=llm,
-            dictation=dictation, **known,
+            dictation=dictation, внимание=внимание, **known,
         )
     except Exception:
         # Битый конфиг не повод не запуститься.

@@ -61,6 +61,11 @@ RECORDING_SILENT = "recording.silent"
 # что в расшифровку уезжает ролик из соседней вкладки. Спрашиваем один
 # раз за запись, решает человек.
 RECORDING_FOREIGN_SPEECH = "recording.foreign_speech"
+# На компьютере идёт разговор, а запись не включена вовсе. Программа
+# висит в трее, человек открыл Zoom и забыл нажать кнопку: это самая
+# обидная потеря встречи, потому что вспоминают о ней в конце. Ничего
+# не пишем, просто предлагаем начать.
+SYSTEM_SPEECH_NOTICED = "system.speech_noticed"
 TRANSCRIPT_SEGMENT = "transcript.segment"
 # Черновик речи, которая ещё идёт: показать и заменить настоящей.
 TRANSCRIPT_DRAFT = "transcript.draft"
