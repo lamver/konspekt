@@ -26,6 +26,7 @@ FAST = [
     "чужая_речь_test.py",
     "чужая_речь_поток_test.py",
     "чужая_речь_ui_test.py",
+    "чужая_речь_приёмка_test.py",
     "словарь_ui_test.py",
     "smoke_test.py",
     "web_test.py",

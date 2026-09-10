@@ -1631,7 +1631,7 @@ class AppService:
 
         self.settings.audio.capture_system = False
         try:
-            self.settings.save()
+            settings_mod.save(self.settings)
         except Exception:
             log.exception("Не удалось сохранить настройки после выключения звука")
         return ответ

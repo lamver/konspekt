@@ -121,7 +121,12 @@ global.t = (key) => {
 };
 
 // Берём из app.js только нужные функции: остальное тянет за собой окно.
-const src = fs.readFileSync(path.join(process.argv[2], 'web', 'app.js'), 'utf8');
+// Переводы строк приводим к одному виду. На Windows git отдаёт файлы с
+// CRLF (core.autocrlf=true), и поиск по куску с '\n' не находил ничего:
+// проверка падала на совершенно здоровом коде, а выглядело это как
+// поломка кнопки языка.
+const src = fs.readFileSync(path.join(process.argv[2], 'web', 'app.js'), 'utf8')
+  .replace(/\r\n/g, '\n');
 const нужное = ['pickLanguage', 'applyLanguage', 'showFailure', 'LANG_NAMES', 'LANGS'];
 const куски = [];
 for (const имя of ['let LANGS = null;', 'const LANG_NAMES']) {

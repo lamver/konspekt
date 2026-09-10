@@ -17,7 +17,11 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const код = fs.readFileSync(path.join(__dirname, 'web', 'app.js'), 'utf8');
+// Переводы строк приводим к одному виду: на Windows git отдаёт файлы с
+// CRLF, и проверки, которые ищут в коде куски с '\n', падают на здоровом
+// коде. Ровно на этом однажды упала соседняя проверка кнопки языка.
+const код = fs.readFileSync(path.join(__dirname, 'web', 'app.js'), 'utf8')
+  .replace(/\r\n/g, '\n');
 
 function узел() {
   const себя = {
