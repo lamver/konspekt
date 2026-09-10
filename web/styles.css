@@ -599,7 +599,7 @@ body { display: flex; flex-direction: column; }
    выключение звука подтвердится сообщением. */
 .toast--ask {
   bottom: 60px;
-  align-items: flex-start;
+  align-items: center;
   max-width: 520px;
 }
 
@@ -626,8 +626,14 @@ body { display: flex; flex-direction: column; }
 .toast__action--ghost {
   background: transparent;
   color: var(--paper);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .35);
+  /* Рамку берём от цвета текста, а не белую: плашка в тёмной теме
+     светлая, и белая рамка на ней исчезала — кнопка выглядела просто
+     надписью, и человек не понимал, что по ней можно нажать. */
+  box-shadow: inset 0 0 0 1px currentColor;
+  opacity: .75;
 }
+
+.toast__action--ghost:hover { opacity: 1; }
 
 /* --- Панель настроек ---------------------------------------------------- */
 
