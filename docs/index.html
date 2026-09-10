@@ -205,7 +205,17 @@
      относится к встречам, а не к сайту, и нарушать его нельзя.
 
      Скрипт помечен defer, поэтому не задерживает показ страницы, а если
-     сервер счётчика недоступен, страница просто работает без него. -->
+     сервер счётчика недоступен, страница просто работает без него.
+
+     Файл лежит рядом со страницей и называется schet.js не для красоты.
+     Раньше он грузился с openpanel.dev, а этот адрес прямо запрещён
+     правилом ||openpanel.dev/op1.js в EasyPrivacy, uBlock privacy и
+     AdGuard Tracking. У каждого посетителя с блокировщиком счётчик не
+     загружался вовсе, и его визит не считался. Со своего домена и с
+     нейтральным именем совпадений в 390 тысячах правил нет.
+
+     При обновлении OpenPanel файл обновить копией с
+     https://analytics.ingdg.com/op1.js -->
 <script>
   window.op=window.op||function(){var n=[];return new Proxy(function(){arguments.length&&n.push([].slice.call(arguments))},{get:function(t,r){return"q"===r?n:function(){n.push([r].concat([].slice.call(arguments)))}} ,has:function(t,r){return"q"===r}}) }();
   window.op('init', {
@@ -216,7 +226,7 @@
     trackAttributes: true,
   });
 </script>
-<script src="https://openpanel.dev/op1.js" defer async></script>
+<script src="schet.js" defer async></script>
 </head>
 <body>
 
