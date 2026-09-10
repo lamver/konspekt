@@ -22,6 +22,7 @@ from .core.single import SingleInstance, wake_running_instance, watch_show_reque
 from .tray import TrayIcon
 from .ui.hotkeys import HotkeyManager
 from .ui.window import MainWindow
+from .ui import уведомления
 
 log = logging.getLogger(__name__)
 
@@ -80,19 +81,81 @@ def _setup_logging() -> None:
         logging.getLogger(чужой).setLevel(logging.INFO)
 
 
+def _ответ_из_уведомления() -> str | None:
+    """Ответ человека, если нас запустила кнопка в уведомлении.
+
+    Windows отдаёт нажатие как ссылку `konspekt:off` в аргументах.
+    Возвращаем только известные ответы: в командную строку может
+    прилететь что угодно, и слепо доверять ей нельзя.
+    """
+    известные = {"off", "keep"}
+    for аргумент in sys.argv[1:]:
+        if not аргумент.lower().startswith(f"{уведомления.ПРОТОКОЛ}:"):
+            continue
+        значение = аргумент.split(":", 1)[1].strip().strip("/").lower()
+        if значение in известные:
+            return значение
+    return None
+
+
+def _слушать_ответы(service: AppService) -> None:
+    """Исполнять ответы, оставленные кнопками системного уведомления.
+
+    Человек нажал кнопку в углу экрана — значит он уже ответил, и
+    открывать ради этого окно незачем. Просто делаем то, что он выбрал.
+    """
+    import threading
+    import time
+
+    каталог = paths.data_dir()
+
+    def крутить() -> None:
+        while True:
+            time.sleep(1.0)
+            ответ = уведомления.прочитать_ответ(каталог)
+            if not ответ:
+                continue
+            try:
+                if ответ == "off":
+                    service.выключить_системный_звук()
+                    log.info("Системный звук выключен кнопкой в уведомлении")
+                elif ответ == "keep":
+                    service.не_спрашивать_про_системный_звук()
+                    log.info("Человек ответил в уведомлении: это собеседник")
+            except Exception:
+                log.exception("Не удалось исполнить ответ из уведомления")
+
+    threading.Thread(target=крутить, name="toast-answers", daemon=True).start()
+
+
 def main() -> int:
     _setup_logging()
     # Версия в первой строке журнала: по жалобе сразу видно, на какой
     # сборке сидит человек, и заодно видно, что обновление доехало.
     log.info("Запуск Konspekt %s, данные в %s", __version__, paths.data_dir())
 
+    # Нас могли запустить кнопкой из системного уведомления: Windows
+    # умеет только «открыть программу с аргументом», поэтому ответ
+    # человека приезжает ссылкой вида konspekt:off.
+    ответ = _ответ_из_уведомления()
+    if ответ:
+        уведомления.записать_ответ(paths.data_dir(), ответ)
+        log.info("Ответ из уведомления: %s", ответ)
+
     # Вторая копия делила бы с первой базу, каталог записей и загрузку
     # весов. У пользователя именно это и сломало распознавание: два
     # процесса писали модель в один файл и перемешали её.
     instance = SingleInstance(paths.data_dir() / "konspekt.lock")
     if not instance.acquire():
-        log.info("Уже запущен другой экземпляр, показываем его окно")
-        wake_running_instance(paths.data_dir())
+        # Ответ уже положен в файл выше: работающая копия его подхватит.
+        # Окно при этом показываем только если человек пришёл сам, а не
+        # нажал кнопку в уведомлении — иначе ответ «это собеседник»
+        # вытаскивал бы окно поверх встречи без всякой нужды.
+        if not ответ:
+            log.info("Уже запущен другой экземпляр, показываем его окно")
+            wake_running_instance(paths.data_dir())
+        else:
+            log.info("Ответ передан работающей копии, окно не трогаем")
         return 0
 
     service = AppService()
@@ -116,6 +179,11 @@ def main() -> int:
         # Человек, не нашедший окно в трее, запустит программу ещё раз.
         # Для него это и есть «открыть Konspekt», так что открываем.
         watch_show_requests(paths.data_dir(), lambda: bus.emit(WINDOW_SHOW, {}))
+        # Кнопки в системном уведомлении отвечают через файл: система
+        # умеет только запустить программу с аргументом, а не поговорить
+        # с уже работающей копией.
+        уведомления.зарегистрировать_протокол()
+        _слушать_ответы(service)
 
     try:
         webview.start(on_started, gui=None, debug=False)
