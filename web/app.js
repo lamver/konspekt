@@ -270,7 +270,7 @@ window.__konspekt_event = function (payload) {
       // В системном звуке слышен разговор. Ничего не меняем сами:
       // решает человек. Запись при этом идёт дальше, состояние кнопки
       // не трогаем.
-      showForeignSpeechAsk();
+      showForeignSpeechAsk(payload);
       break;
     case 'recording.error':
       // Запись не началась: сообщаем прямо, иначе человек будет думать,
@@ -1820,9 +1820,22 @@ function hideToast() {
    ничего не меняем: молча выключить звук так же плохо, как молча его
    писать. */
 
-function showForeignSpeechAsk() {
+function showForeignSpeechAsk(payload) {
   if (!ui.foreignSpeech) return;
-  if (ui.foreignSpeechText) ui.foreignSpeechText.textContent = t('foreign.ask');
+  // Два разных вопроса. Звук пишется — не выключить ли его (вдруг это
+  // чужой ролик). Не пишется — не включить ли: собеседника прямо сейчас
+  // нет в расшифровке.
+  const пишется = !payload || payload['пишется'] !== false;
+  state.foreignSpeechOn = !пишется;
+  if (ui.foreignSpeechText) {
+    ui.foreignSpeechText.textContent = пишется ? t('foreign.ask') : t('foreign.ask_on');
+  }
+  if (ui.foreignSpeechOff) {
+    ui.foreignSpeechOff.textContent = пишется ? t('foreign.turn_off') : t('foreign.turn_on');
+  }
+  if (ui.foreignSpeechKeep) {
+    ui.foreignSpeechKeep.textContent = пишется ? t('foreign.keep') : t('foreign.no_need');
+  }
   ui.foreignSpeech.hidden = false;
 }
 
@@ -1833,8 +1846,13 @@ function hideForeignSpeechAsk() {
 async function onForeignSpeechOff() {
   hideForeignSpeechAsk();
   try {
-    await api.turn_off_system_audio();
-    showToast(t('foreign.off_done'), 8000);
+    if (state.foreignSpeechOn) {
+      const res = await api.turn_on_system_audio();
+      showToast(res && res.ok ? t('foreign.on_done') : t('foreign.on_failed'), 8000);
+    } else {
+      await api.turn_off_system_audio();
+      showToast(t('foreign.off_done'), 8000);
+    }
   } catch (e) {
     showToast(String(e));
   }

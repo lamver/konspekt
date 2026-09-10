@@ -368,6 +368,11 @@
     "ask": "U zvuku sistema čuje se razgovor. Ako je to snimak ili muzika, a ne sagovornik, bolje da se ne snima: inače završi u transkriptu i u sažetku.",
     "turn_off": "Ne snimaj",
     "keep": "To je sagovornik",
-    "off_done": "Zvuk sistema se više ne snima. Sastanak se i dalje snima sa mikrofona."
+    "off_done": "Zvuk sistema se više ne snima. Sastanak se i dalje snima sa mikrofona.",
+    "ask_on": "U zvuku sistema čuje se razgovor, ali se ne snima. Izgleda da sagovornika sada nema u transkriptu.",
+    "turn_on": "Snimaj sagovornika",
+    "no_need": "Nije potrebno",
+    "on_done": "Zvuk sistema se sada snima. Sve pre ovoga ostaje kako je bilo.",
+    "on_failed": "Nije uspelo uključivanje zvuka sistema. Proveri podešavanja snimanja."
   }
 }

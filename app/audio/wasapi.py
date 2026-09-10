@@ -55,11 +55,19 @@ class _Track:
         wav_path: Path,
         chunk_seconds: float,
         on_chunk: ChunkCallback | None,
+        только_слушать: bool = False,
     ) -> None:
         self.name = name
         self._opener = opener
         self._wav_path = wav_path
         self._on_chunk = on_chunk
+        # Режим «слушаю, но не пишу». Нужен для обратного случая из
+        # задачи №28: человек начал встречу без системного звука, а через
+        # минуту собеседник заговорил в Zoom. Чтобы это заметить, звук
+        # надо слышать — но записывать его без спроса нельзя, человек
+        # ведь отказался. Поэтому открываем устройство, слушаем и ничего
+        # не сохраняем: ни в файл, ни в расшифровку.
+        self._только_слушать = только_слушать
         self._chunks = ChunkBuffer(chunk_seconds=chunk_seconds)
         self._writer: WavWriter | None = None
         self._thread: threading.Thread | None = None
@@ -222,7 +230,15 @@ class _Track:
         )
         bus.emit(
             RECORDING_FOREIGN_SPEECH,
-            {"track": self.name, "признаки": оценка.to_dict()},
+            {
+                "track": self.name,
+                "признаки": оценка.to_dict(),
+                # Смысл вопроса зависит от того, пишем мы звук или нет.
+                # Пишем — спрашиваем, не выключить ли (вдруг это чужой
+                # ролик). Не пишем — наоборот, предлагаем включить: скорее
+                # всего это собеседник, которого мы сейчас теряем.
+                "пишется": not self._только_слушать,
+            },
         )
 
     def _run(self) -> None:
@@ -234,8 +250,15 @@ class _Track:
             device = self._opener()
             recorder = device.recorder(samplerate=SAMPLE_RATE, channels=1, blocksize=BLOCK_FRAMES)
             recorder.__enter__()
-            self._writer = WavWriter(self._wav_path)
-            log.info("Дорожка %s: пишем с «%s»", self.name, getattr(device, "name", "?"))
+            # В режиме прослушивания файла не заводим вовсе: пустой WAV
+            # выглядел бы как записанная встреча, которой не было.
+            self._writer = None if self._только_слушать else WavWriter(self._wav_path)
+            log.info(
+                "Дорожка %s: %s с «%s»",
+                self.name,
+                "слушаем (без записи)" if self._только_слушать else "пишем",
+                getattr(device, "name", "?"),
+            )
         except Exception as exc:
             self._error = str(exc)
             log.exception("Дорожка %s: не удалось открыть устройство", self.name)
@@ -253,6 +276,9 @@ class _Track:
                 self._level = rms_level(mono)
                 self._следить_за_тишиной(mono)
                 self._следить_за_чужой_речью(mono)
+                if self._только_слушать:
+                    # Слушаем и молчим: ни в файл, ни в распознавание.
+                    continue
                 pcm16 = float_to_int16(mono)
                 if self._writer:
                     self._writer.write(pcm16)
@@ -348,8 +374,24 @@ class WasapiCapture:
                 chunk_seconds=self.chunk_seconds,
                 on_chunk=self.on_chunk,
             )
+        else:
+            # Системный звук выключен, но слушать его всё равно стоит.
+            # Обратный случай из задачи №28: человек начал встречу без
+            # системного звука, а через минуту собеседник заговорил в
+            # Zoom. Промолчать здесь — значит потерять половину встречи и
+            # не сказать об этом ни слова. Слушаем, ничего не записывая,
+            # и предлагаем включить.
+            self._tracks[devices.TRACK_THEM] = _Track(
+                name=devices.TRACK_THEM,
+                opener=lambda: devices.open_loopback(self.loopback_device_id),
+                wav_path=base / f"{stamp}-them.wav",
+                chunk_seconds=self.chunk_seconds,
+                on_chunk=None,
+                только_слушать=True,
+            )
 
-        if not self._tracks:
+        пишущие = {и: т for и, т in self._tracks.items() if not т._только_слушать}
+        if not пишущие:
             # Человек снял обе галочки в настройках: это не поломка,
             # но и записывать нечего.
             self._recording = False
@@ -360,13 +402,22 @@ class WasapiCapture:
         for track in self._tracks.values():
             track.start()
 
-        alive = [n for n, t in self._tracks.items() if t.error is None]
+        # Живой считаем только пишущую дорожку. Слушающая открыта ради
+        # вопроса про системный звук, и записью она не является: если
+        # микрофон не открылся, а она открылась, встречи всё равно нет,
+        # и делать вид, что запись идёт, нельзя.
+        alive = [n for n, t in пишущие.items() if t.error is None]
         if not alive:
             # Ни одна дорожка не открылась: честно сообщаем и не делаем вид,
             # что запись идёт.
             self._recording = False
             log.error("Запись не начата: ни одно устройство недоступно")
-            raise RuntimeError(_errors_text(self.errors()))
+            # Останавливаем и слушающую: устройство держать незачем.
+            for т in self._tracks.values():
+                т.stop()
+            raise RuntimeError(_errors_text(
+                {и: т.error for и, т in пишущие.items() if т.error}
+            ))
 
         self._recording = True
         self._level_stop.clear()
@@ -419,6 +470,48 @@ class WasapiCapture:
         трек = self._tracks.get(devices.TRACK_THEM)
         if трек is not None:
             трек.замолчать_про_чужую_речь()
+
+    def включить_системный_звук(self) -> dict[str, Any]:
+        """Начать писать системный звук посреди уже идущей встречи.
+
+        Обратный случай: человек начал без системного звука, а собеседник
+        заговорил в Zoom. Останавливать встречу ради этого нельзя —
+        поднимаем вторую дорожку на ходу.
+
+        Что записано до сих пор, тем и остаётся: первые минуты встречи
+        без собеседника. Дописать задним числом нечего, звук мы не
+        сохраняли, и делать вид, что он был, честнее не выйдет.
+        """
+        трек = self._tracks.get(devices.TRACK_THEM)
+        if трек is not None and not трек._только_слушать:
+            return {"ok": False, "причина": "системный звук и так пишется"}
+
+        if self._meeting_id is None:
+            return {"ok": False, "причина": "запись не идёт"}
+
+        # Слушающую останавливаем: устройство нельзя открыть дважды.
+        if трек is not None:
+            трек.stop()
+
+        stamp = time.strftime("%Y%m%d-%H%M%S")
+        base = audio_dir() / self._meeting_id
+        base.mkdir(parents=True, exist_ok=True)
+        новая = _Track(
+            name=devices.TRACK_THEM,
+            opener=lambda: devices.open_loopback(self.loopback_device_id),
+            wav_path=base / f"{stamp}-them.wav",
+            chunk_seconds=self.chunk_seconds,
+            on_chunk=self.on_chunk,
+        )
+        новая.start()
+        if новая.error:
+            log.error("Не удалось включить системный звук: %s", новая.error)
+            return {"ok": False, "причина": новая.error}
+
+        self._tracks[devices.TRACK_THEM] = новая
+        self.capture_system = True
+        log.info("Системный звук включён посреди записи по просьбе человека")
+        return {"ok": True}
 
     def выключить_системный_звук(self) -> dict[str, Any]:
         """Перестать писать системный звук, не прерывая встречу.

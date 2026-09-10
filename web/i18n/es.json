@@ -368,6 +368,11 @@
     "ask": "Se oye una conversación en el audio del sistema. Si es un vídeo o música y no la persona con la que hablas, mejor no grabarlo: acabaría en la transcripción y en el resumen.",
     "turn_off": "No grabarlo",
     "keep": "Es mi interlocutor",
-    "off_done": "El audio del sistema ya no se graba. La reunión sigue grabándose desde el micrófono."
+    "off_done": "El audio del sistema ya no se graba. La reunión sigue grabándose desde el micrófono.",
+    "ask_on": "Se oye una conversación en el audio del sistema, pero no se está grabando. Probablemente tu interlocutor falte ahora en la transcripción.",
+    "turn_on": "Grabar al interlocutor",
+    "no_need": "No hace falta",
+    "on_done": "El audio del sistema ya se graba. Todo lo anterior queda como estaba.",
+    "on_failed": "No se pudo activar el audio del sistema. Revisa los ajustes de grabación."
   }
 }

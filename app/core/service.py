@@ -1636,6 +1636,30 @@ class AppService:
             log.exception("Не удалось сохранить настройки после выключения звука")
         return ответ
 
+    def включить_системный_звук(self) -> dict[str, Any]:
+        """Ответ человека «это собеседник, пишите»: включить системный звук.
+
+        Обратный случай: встреча началась без системного звука, а
+        собеседник заговорил в Zoom. Дорожка поднимается на ходу, встречу
+        останавливать не нужно.
+        """
+        ответ: dict[str, Any] = {"ok": False}
+        включить = getattr(self.capture, "включить_системный_звук", None)
+        if включить is not None:
+            try:
+                ответ = включить()
+            except Exception as exc:
+                log.exception("Не удалось включить системный звук")
+                return {"ok": False, "причина": str(exc)}
+
+        if ответ.get("ok"):
+            self.settings.audio.capture_system = True
+            try:
+                settings_mod.save(self.settings)
+            except Exception:
+                log.exception("Не удалось сохранить настройки после включения звука")
+        return ответ
+
     def не_спрашивать_про_системный_звук(self) -> dict[str, Any]:
         """Ответ человека «всё верно, это собеседник»: больше не спрашивать.
 

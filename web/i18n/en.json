@@ -368,6 +368,11 @@
     "ask": "There is speech in the system audio. If that is a video or music rather than the person you are talking to, better not record it: otherwise it lands in the transcript and in the summary.",
     "turn_off": "Stop recording it",
     "keep": "That is my caller",
-    "off_done": "System audio is no longer recorded. The meeting keeps recording from the microphone."
+    "off_done": "System audio is no longer recorded. The meeting keeps recording from the microphone.",
+    "ask_on": "There is speech in the system audio, but it is not being recorded. Your caller is probably missing from the transcript right now.",
+    "turn_on": "Record the caller",
+    "no_need": "No need",
+    "on_done": "System audio is being recorded now. Everything before this stays as it was.",
+    "on_failed": "Could not turn on system audio. Check the recording settings."
   }
 }
