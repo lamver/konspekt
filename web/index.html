@@ -231,6 +231,19 @@
     <button class="toast__close" id="toast-close" data-i18n-title="toast.close" title="Закрыть">×</button>
   </div>
 
+  <!-- Вопрос про системный звук: в нём слышен разговор, и это может
+       оказаться ролик из соседней вкладки, а не собеседник. Спрашиваем
+       один раз за запись и даём выключить в один щелчок. -->
+  <div class="toast toast--ask" id="foreign-speech" hidden>
+    <span id="foreign-speech-text"></span>
+    <span class="toast__actions">
+      <button class="toast__action" id="foreign-speech-off"
+              data-i18n="foreign.turn_off">Не писать</button>
+      <button class="toast__action toast__action--ghost" id="foreign-speech-keep"
+              data-i18n="foreign.keep">Это собеседник</button>
+    </span>
+  </div>
+
   <!-- Подсказка при перетаскивании файлов в окно -->
   <div class="dropzone" id="dropzone" hidden>
     <div class="dropzone__box">

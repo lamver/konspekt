@@ -240,6 +240,10 @@ window.__konspekt_event = function (payload) {
       }
       renderRecordingState();
       stopTimer();
+      // Вопрос про системный звук относился к этой записи: она кончилась,
+      // отвечать больше не на что. Оставить плашку висеть значило бы
+      // предложить выключить то, что уже не пишется.
+      hideForeignSpeechAsk();
       // Именно refreshMeta, а не selectMeeting: перезагрузка встречи
       // затёрла бы текст, который пользователь печатает прямо сейчас.
       if (state.currentId) refreshMeta(state.currentId);
@@ -261,6 +265,12 @@ window.__konspekt_event = function (payload) {
       // состояние кнопки нельзя, иначе окно решит, что записи нет, и
       // кнопка перестанет слушаться посреди живой встречи.
       showToast(payload.message || t('recording.silent'), 10000);
+      break;
+    case 'recording.foreign_speech':
+      // В системном звуке слышен разговор. Ничего не меняем сами:
+      // решает человек. Запись при этом идёт дальше, состояние кнопки
+      // не трогаем.
+      showForeignSpeechAsk();
       break;
     case 'recording.error':
       // Запись не началась: сообщаем прямо, иначе человек будет думать,
@@ -1802,6 +1812,44 @@ function hideToast() {
   if (ui.toast) ui.toast.hidden = true;
 }
 
+/* --- Вопрос про системный звук -------------------------------------------
+
+   Программа пишет системный звук всегда, и человек может не знать, что в
+   расшифровку уезжает ролик из соседней вкладки. Спрашиваем один раз за
+   запись и даём выключить в один щелчок, не уводя в настройки. Сами
+   ничего не меняем: молча выключить звук так же плохо, как молча его
+   писать. */
+
+function showForeignSpeechAsk() {
+  if (!ui.foreignSpeech) return;
+  if (ui.foreignSpeechText) ui.foreignSpeechText.textContent = t('foreign.ask');
+  ui.foreignSpeech.hidden = false;
+}
+
+function hideForeignSpeechAsk() {
+  if (ui.foreignSpeech) ui.foreignSpeech.hidden = true;
+}
+
+async function onForeignSpeechOff() {
+  hideForeignSpeechAsk();
+  try {
+    await api.turn_off_system_audio();
+    showToast(t('foreign.off_done'), 8000);
+  } catch (e) {
+    showToast(String(e));
+  }
+}
+
+async function onForeignSpeechKeep() {
+  hideForeignSpeechAsk();
+  try {
+    await api.keep_system_audio();
+  } catch (e) {
+    // Ответ «всё верно» ничего не меняет, поэтому и сообщать не о чем:
+    // худшее, что случится, — вопрос задастся ещё раз.
+  }
+}
+
 /* --- Настройки звука ----------------------------------------------------- */
 
 function fillDeviceSelect(select, items, selectedId) {
@@ -2483,6 +2531,10 @@ function bindUi() {
     pin: el('btn-pin'),
     toast: el('toast'),
     toastText: el('toast-text'),
+    foreignSpeech: el('foreign-speech'),
+    foreignSpeechText: el('foreign-speech-text'),
+    foreignSpeechOff: el('foreign-speech-off'),
+    foreignSpeechKeep: el('foreign-speech-keep'),
     audioSheet: el('audio-sheet'),
     appVersion: el('app-version'),
     aboutVersion: el('about-version'),
@@ -2607,6 +2659,12 @@ function bindUi() {
   el('enroll-start').addEventListener('click', onEnrollClick);
   el('enroll-forget').addEventListener('click', onForgetOwner);
   el('toast-close').addEventListener('click', hideToast);
+  if (ui.foreignSpeechOff) {
+    ui.foreignSpeechOff.addEventListener('click', onForeignSpeechOff);
+  }
+  if (ui.foreignSpeechKeep) {
+    ui.foreignSpeechKeep.addEventListener('click', onForeignSpeechKeep);
+  }
   ui.modelAction.addEventListener('click', onModelAction);
 
   ui.summaryRun.addEventListener('click', runSummary);

@@ -363,5 +363,11 @@
       "audio_filter": "Audio y vídeo (*.mp3;*.wav;*.m4a;*.ogg;*.opus;*.flac;*.aac;*.wma;*.mp4;*.mkv;*.mov;*.webm;*.avi)",
       "all_files": "Todos los archivos (*.*)"
     }
+  },
+  "foreign": {
+    "ask": "Se oye una conversación en el audio del sistema. Si es un vídeo o música y no la persona con la que hablas, mejor no grabarlo: acabaría en la transcripción y en el resumen.",
+    "turn_off": "No grabarlo",
+    "keep": "Es mi interlocutor",
+    "off_done": "El audio del sistema ya no se graba. La reunión sigue grabándose desde el micrófono."
   }
 }

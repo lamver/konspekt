@@ -18,10 +18,16 @@ from typing import Any, Callable
 
 import numpy as np
 
-from ..core.events import RECORDING_LEVEL, RECORDING_SILENT, bus
+from ..core.events import (
+    RECORDING_FOREIGN_SPEECH,
+    RECORDING_LEVEL,
+    RECORDING_SILENT,
+    bus,
+)
 from ..core.paths import audio_dir
 from . import devices
 from .buffers import SAMPLE_RATE, ChunkBuffer, WavWriter, float_to_int16, rms_level
+from .чужая_речь import Слушатель
 
 log = logging.getLogger(__name__)
 
@@ -68,6 +74,12 @@ class _Track:
         # встречу, а в расшифровке получает обрывки из микрофона.
         self._тишина_секунд = 0.0
         self._было_слышно = False
+        # Слушаем системный звук на предмет чужого разговора. Только его:
+        # в микрофоне речь — это и есть смысл записи, а вот в системном
+        # звуке она может оказаться роликом из соседней вкладки.
+        self._чужая_речь = (
+            Слушатель() if name == devices.TRACK_THEM else None
+        )
         # Длительность записанного. Считаем её до закрытия файла: после
         # writer обнуляется, а знать, сколько секунд в файле, нужно, чтобы
         # потом переслушать нужную реплику.
@@ -164,6 +176,41 @@ class _Track:
         except Exception:
             log.exception("Ошибка обработчика чанка на дорожке %s", self.name)
 
+    def замолчать_про_чужую_речь(self) -> None:
+        """Человек ответил на вопрос: больше не спрашиваем до конца записи."""
+        if self._чужая_речь is not None:
+            self._чужая_речь.замолчать()
+
+    def _следить_за_чужой_речью(self, блок: np.ndarray) -> None:
+        """Спросить человека, если в системном звуке идёт разговор.
+
+        Ошибка здесь стоит дорого в обе стороны: промолчать — значит
+        пустить чужой ролик в расшифровку и в саммари, а спросить зря —
+        перебить человека посреди встречи. Поэтому решение принимает
+        `Слушатель`, а он ждёт двух согласных окон подряд и говорит
+        ровно один раз.
+        """
+        if self._чужая_речь is None:
+            return
+        try:
+            if not self._чужая_речь.добавить(блок):
+                return
+        except Exception:
+            # Слушатель — вспомогательная вещь: его поломка не имеет
+            # права оборвать запись встречи.
+            log.exception("Дорожка %s: сбой поиска чужой речи", self.name)
+            return
+        оценка = self._чужая_речь.последняя
+        log.info(
+            "В системном звуке слышен разговор (доля %.2f, переключений %.1f, "
+            "тембр %.2f): спрашиваем человека",
+            оценка.доля_звука, оценка.переключений, оценка.тембр,
+        )
+        bus.emit(
+            RECORDING_FOREIGN_SPEECH,
+            {"track": self.name, "признаки": оценка.to_dict()},
+        )
+
     def _run(self) -> None:
         recorder = None
         try:
@@ -191,6 +238,7 @@ class _Track:
                 mono = data.reshape(-1) if data.ndim == 1 else data.mean(axis=1)
                 self._level = rms_level(mono)
                 self._следить_за_тишиной(mono)
+                self._следить_за_чужой_речью(mono)
                 pcm16 = float_to_int16(mono)
                 if self._writer:
                     self._writer.write(pcm16)
@@ -352,6 +400,37 @@ class WasapiCapture:
                 },
             )
 
+    def замолчать_про_чужую_речь(self) -> None:
+        """Человек ответил «это и есть собеседник»: вопрос снят до конца записи."""
+        трек = self._tracks.get(devices.TRACK_THEM)
+        if трек is not None:
+            трек.замолчать_про_чужую_речь()
+
+    def выключить_системный_звук(self) -> dict[str, Any]:
+        """Перестать писать системный звук, не прерывая встречу.
+
+        Человек ответил на вопрос «это чужой ролик». Останавливаем одну
+        дорожку и оставляем вторую: остановить запись целиком значило бы
+        наказать человека за честный ответ.
+
+        Файл уже записанного не удаляем. Он привязан ко времени встречи,
+        и по нему работает прослушивание реплик: снести его — значит
+        сломать кнопку «переслушать» на всём, что было до выключения.
+        Разбираться с уже распознанным будем в расшифровке, а не здесь.
+        """
+        трек = self._tracks.get(devices.TRACK_THEM)
+        if трек is None:
+            return {"ok": False, "причина": "системный звук и так не пишется"}
+
+        путь = трек.stop()
+        self._tracks.pop(devices.TRACK_THEM, None)
+        # Чтобы следующая встреча не начиналась с сюрприза, настройку
+        # тоже переключаем: человек уже сказал, чего хочет.
+        self.capture_system = False
+        if путь is not None:
+            self._paths[devices.TRACK_THEM] = str(путь)
+        log.info("Системный звук выключен посреди записи по просьбе человека")
+        return {"ok": True, "остановлено": путь is not None}
 
 def _errors_text(errors: dict[str, str]) -> str:
     if not errors:

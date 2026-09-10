@@ -106,6 +106,19 @@ class Api:
     def save_audio_settings(self, fields: dict[str, Any]) -> dict[str, Any]:
         return self._service.save_audio_settings(**fields)
 
+    # --- чужая речь в системном звуке -------------------------------------
+
+    def turn_off_system_audio(self) -> dict[str, Any]:
+        """Ответ «это не собеседник»: перестать писать системный звук.
+
+        Встреча продолжает писаться с микрофона.
+        """
+        return self._service.выключить_системный_звук()
+
+    def keep_system_audio(self) -> dict[str, Any]:
+        """Ответ «всё верно»: оставить как есть и больше не спрашивать."""
+        return self._service.не_спрашивать_про_системный_звук()
+
     # --- распознавание ---------------------------------------------------
 
     def model_status(self) -> dict[str, Any]:

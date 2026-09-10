@@ -363,5 +363,11 @@
       "audio_filter": "Audio and video (*.mp3;*.wav;*.m4a;*.ogg;*.opus;*.flac;*.aac;*.wma;*.mp4;*.mkv;*.mov;*.webm;*.avi)",
       "all_files": "All files (*.*)"
     }
+  },
+  "foreign": {
+    "ask": "There is speech in the system audio. If that is a video or music rather than the person you are talking to, better not record it: otherwise it lands in the transcript and in the summary.",
+    "turn_off": "Stop recording it",
+    "keep": "That is my caller",
+    "off_done": "System audio is no longer recorded. The meeting keeps recording from the microphone."
   }
 }
