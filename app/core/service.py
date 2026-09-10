@@ -1634,6 +1634,25 @@ class AppService:
             settings_mod.save(self.settings)
         except Exception:
             log.exception("Не удалось сохранить настройки после выключения звука")
+
+        # Что уже записалось до этого мгновения, помечаем как сомнительное.
+        # Тихо оставить нельзя: именно эти реплики и есть источник
+        # испорченного саммари, ради которого человек нажал кнопку.
+        # Удалять тоже нельзя: он мог ошибиться, а запись уже не вернуть.
+        помечено = 0
+        if self.active_meeting_id:
+            try:
+                помечено = self.store.mark_doubtful(
+                    self.active_meeting_id,
+                    Speaker.THEM.value,
+                    self._last_segment_end(self.active_meeting_id) + 1.0,
+                )
+            except Exception:
+                log.exception("Не удалось пометить реплики системного звука")
+            if помечено:
+                log.info("Помечено сомнительных реплик: %d", помечено)
+                bus.emit(MEETING_UPDATED, {"meeting_id": self.active_meeting_id})
+        ответ["помечено"] = помечено
         return ответ
 
     def включить_системный_звук(self) -> dict[str, Any]:
@@ -1974,6 +1993,12 @@ class AppService:
         for seg in self.store.list_segments(meeting_id):
             text = seg.text.strip()
             if not text:
+                continue
+            if seg.doubtful:
+                # Человек сказал, что это был чужой ролик, а не
+                # собеседник. В расшифровке реплика остаётся, а в
+                # пересказ не идёт: иначе модель добросовестно превратит
+                # озвучку ролика в «решения встречи».
                 continue
             who = seg.voice_label.strip()
             if not who:

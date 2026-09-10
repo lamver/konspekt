@@ -373,6 +373,8 @@
     "turn_on": "Snimaj sagovornika",
     "no_need": "Nije potrebno",
     "on_done": "Zvuk sistema se sada snima. Sve pre ovoga ostaje kako je bilo.",
-    "on_failed": "Nije uspelo uključivanje zvuka sistema. Proveri podešavanja snimanja."
+    "on_failed": "Nije uspelo uključivanje zvuka sistema. Proveri podešavanja snimanja.",
+    "doubtful_hint": "Rekao si da to nije sagovornik. Replika ostaje u transkriptu, ali neće ući u beleške.",
+    "off_done_marked": "Zvuk sistema se više ne snima. Ono što je snimljeno ranije je označeno i neće ući u beleške."
   }
 }

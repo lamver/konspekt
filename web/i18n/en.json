@@ -373,6 +373,8 @@
     "turn_on": "Record the caller",
     "no_need": "No need",
     "on_done": "System audio is being recorded now. Everything before this stays as it was.",
-    "on_failed": "Could not turn on system audio. Check the recording settings."
+    "on_failed": "Could not turn on system audio. Check the recording settings.",
+    "doubtful_hint": "You said this was not your caller. The line stays in the transcript but will not go into the notes.",
+    "off_done_marked": "System audio is no longer recorded. What was captured before is marked and will not go into the notes."
   }
 }

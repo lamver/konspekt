@@ -30,7 +30,7 @@ from ..core.models import (
 
 log = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 
 SCHEMA = """
 -- Комментарии внутри CREATE TABLE не писать: SQLite до 3.44 хранит
@@ -68,6 +68,12 @@ CREATE TABLE IF NOT EXISTS note_lines (
     created_at  REAL NOT NULL
 );
 
+-- Про `doubtful` в таблице ниже. Это пометка «реплика под сомнением»:
+-- человек сказал, что в системном звуке был чужой ролик, а не
+-- собеседник. Удалять такое нельзя (вдруг он ошибся, а запись уже не
+-- вернёшь), и тихо оставить тоже нельзя: именно оно портит саммари.
+-- Комментарий вынесен над таблицей намеренно: внутри CREATE TABLE он
+-- ломает DROP COLUMN на старом SQLite.
 CREATE TABLE IF NOT EXISTS transcript_segments (
     id          TEXT PRIMARY KEY,
     meeting_id  TEXT NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,
@@ -78,7 +84,8 @@ CREATE TABLE IF NOT EXISTS transcript_segments (
     lang        TEXT NOT NULL DEFAULT 'ru',
     voice_id    TEXT NOT NULL DEFAULT '',
     person_id   TEXT,
-    voice_label TEXT NOT NULL DEFAULT ''
+    voice_label TEXT NOT NULL DEFAULT '',
+    doubtful   INTEGER NOT NULL DEFAULT 0
 );
 
 -- Голоса, знакомые между встречами. Вектор лежит сырыми байтами float32:
@@ -239,6 +246,14 @@ class Store:
                 # спасти, по одному разу каждую.
                 self._add_columns(
                     "meetings", {"rescued": "INTEGER NOT NULL DEFAULT 0"}
+                )
+            if was < 10:
+                # Пометка «реплика под сомнением». В старом архиве таких
+                # нет: человека тогда никто не спрашивал, и разметить
+                # задним числом нечего.
+                self._add_columns(
+                    "transcript_segments",
+                    {"doubtful": "INTEGER NOT NULL DEFAULT 0"},
                 )
             self._conn.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
             self._conn.commit()
@@ -609,6 +624,7 @@ class Store:
                 start=r["start_s"], end=r["end_s"], lang=r["lang"],
                 voice_id=r["voice_id"], person_id=r["person_id"],
                 voice_label=r["voice_label"],
+                doubtful=bool(r["doubtful"]),
             )
             for r in rows
         ]
@@ -641,7 +657,28 @@ class Store:
             start=r["start_s"], end=r["end_s"], lang=r["lang"],
             voice_id=r["voice_id"], person_id=r["person_id"],
             voice_label=r["voice_label"],
+            doubtful=bool(r["doubtful"]),
         )
+
+    def mark_doubtful(self, meeting_id: str, speaker: str, until: float) -> int:
+        """Пометить реплики дорожки как сомнительные.
+
+        Человек сказал, что в системном звуке был чужой ролик.
+        Всё, что успело записаться до этого мгновения, помечаем:
+        удалять нельзя (вдруг человек ошибся), а тихо оставить тоже:
+        именно эти реплики попадут в саммари и превратятся в «решения
+        встречи», которых никто не принимал.
+
+        Возвращает число помеченных реплик.
+        """
+        with self._lock:
+            курсор = self._conn.execute(
+                "UPDATE transcript_segments SET doubtful=1 "
+                "WHERE meeting_id=? AND speaker=? AND start_s<=?",
+                (meeting_id, speaker, until),
+            )
+            self._conn.commit()
+            return курсор.rowcount or 0
 
     def relabel_segments(self, meeting_id: str, voice_id: str, label: str) -> int:
         """Переименовать участника во всех его репликах этой встречи."""

@@ -57,12 +57,23 @@ try:
     # Приводим копию к состоянию прошлого выпуска: у меня на машине база
     # давно обновлена, и без этого миграция ничего бы не делала, а
     # проверка молча превратилась бы в проверку пустого места.
-    столбцы = [
-        с[1] for с in было.execute("PRAGMA table_info(meetings)").fetchall()
-    ]
-    if "rescued" in столбцы:
-        было.execute("ALTER TABLE meetings DROP COLUMN rescued")
-    было.execute(f"PRAGMA user_version={SCHEMA_VERSION - 1}")
+    # Сносим все колонки, добавленные миграциями, и откатываем версию в
+    # ноль. Раньше здесь стояло `SCHEMA_VERSION - 1` и сносилась одна
+    # колонка: со следующей же миграцией это разъезжалось, и проверка
+    # падала на ровном месте — база оказывалась без колонки, но с
+    # версией, при которой её уже не добавляют.
+    поздние = {
+        "meetings": ["rescued"],
+        "transcript_segments": ["doubtful"],
+    }
+    for таблица, колонки in поздние.items():
+        есть = [
+            с[1] for с in было.execute(f"PRAGMA table_info({таблица})").fetchall()
+        ]
+        for колонка in колонки:
+            if колонка in есть:
+                было.execute(f"ALTER TABLE {таблица} DROP COLUMN {колонка}")
+    было.execute("PRAGMA user_version=0")
     было.commit()
     исходно_встреч = было.execute("SELECT COUNT(*) FROM meetings").fetchone()[0]
     исходно_реплик = было.execute(

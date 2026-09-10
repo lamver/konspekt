@@ -1216,6 +1216,13 @@ function appendSegment(seg, scroll = true) {
     turn.dataset.voice = seg.voice_id || '';
     turn.dataset.ids = seg.id || '';
     turn.dataset.lang = seg.lang || '';
+    // Реплика под сомнением: человек сказал, что это был чужой ролик.
+    // Показываем это прямо в расшифровке, иначе пометка молчаливая:
+    // текст в саммари не попал, а почему — непонятно.
+    if (seg.doubtful) {
+      turn.classList.add('turn--doubtful');
+      turn.title = t('foreign.doubtful_hint');
+    }
 
     const head = document.createElement('div');
     head.className = 'turn__head';
@@ -1850,8 +1857,13 @@ async function onForeignSpeechOff() {
       const res = await api.turn_on_system_audio();
       showToast(res && res.ok ? t('foreign.on_done') : t('foreign.on_failed'), 8000);
     } else {
-      await api.turn_off_system_audio();
-      showToast(t('foreign.off_done'), 8000);
+      const res = await api.turn_off_system_audio();
+      // Если что-то уже успело записаться, честно говорим, что с ним
+      // стало: иначе человек не поймёт, почему часть расшифровки
+      // приглушена и не попала в заметки.
+      const помечено = res && res['помечено'];
+      showToast(помечено ? t('foreign.off_done_marked') : t('foreign.off_done'), 8000);
+      if (помечено && state.currentId) selectMeeting(state.currentId);
     }
   } catch (e) {
     showToast(String(e));
