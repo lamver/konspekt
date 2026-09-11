@@ -5,10 +5,19 @@
 трее. Обычное «облачко» у трея кнопок не имеет вовсе, а тост Windows
 имеет — и ответить можно прямо из угла экрана, не бросая разговор.
 
-Почему через PowerShell, а не библиотекой. Тосты живут в WinRT, и
-питонских обёрток к нему пришлось бы тащить целую зависимость ради
-одного окна. PowerShell есть в любой Windows и умеет то же самое.
-Запуск стоит около секунды, но уведомление и так не срочное.
+Почему не через PowerShell. Раньше тост показывался запуском
+`powershell -ExecutionPolicy Bypass -Command ...` в скрытом окне. Это
+работало, но выглядело ровно так, как ведёт себя закрепившийся в
+системе троян: запуск интерпретатора с обходом политики выполнения,
+без окна, из чужого процесса. Microsoft Defender в 0.9.0 так и решил —
+`Trojan:Win32/Wacatac.C!ml`, а он стоит у каждого пользователя Windows.
+Цена ошибки здесь не «одна тревога из 75»: человек просто не сможет
+запустить программу.
+
+Поэтому тост показывается напрямую через WinRT из самого процесса,
+никаких дочерних интерпретаторов. Библиотека `winrt-Windows.UI.Notifications`
+ставится как зависимость: пара сотен килобайт против сломанной
+установки у половины людей.
 
 Как возвращается ответ. Кнопка в тосте умеет только одно: запустить
 программу с аргументом. Поэтому кнопки пишут ответ в файл, а
@@ -19,7 +28,6 @@
 from __future__ import annotations
 
 import logging
-import subprocess
 import sys
 import threading
 from pathlib import Path
@@ -27,36 +35,20 @@ from pathlib import Path
 log = logging.getLogger(__name__)
 
 ОТВЕТ = "toast-answer"          # файл с ответом человека
-ЗАПУСК_БЕЗ_ОКНА = 0x08000000    # CREATE_NO_WINDOW: без чёрного окна консоли
 
 # XML тоста. `launch` на кнопках — это протокол konspekt:, который
-# регистрируется при установке; если он не зарегистрирован, кнопки
+# регистрируется при запуске; если он не зарегистрирован, кнопки
 # просто откроют программу, и человек ответит в окне.
-ШАБЛОН = """
-$ErrorActionPreference = 'Stop'
-[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] > $null
-[Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom, ContentType = WindowsRuntime] > $null
-
-$xml = @"
-<toast activationType="protocol" launch="{протокол}:show">
-  <visual>
-    <binding template="ToastGeneric">
-      <text>{заголовок}</text>
-      <text>{текст}</text>
-    </binding>
-  </visual>
-  <actions>
-    <action content="{кнопка1}" activationType="protocol" arguments="{протокол}:{ответ1}"/>
-    <action content="{кнопка2}" activationType="protocol" arguments="{протокол}:{ответ2}"/>
-  </actions>
-</toast>
-"@
-
-$doc = [Windows.Data.Xml.Dom.XmlDocument]::new()
-$doc.LoadXml($xml)
-$toast = [Windows.UI.Notifications.ToastNotification]::new($doc)
-[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('{приложение}').Show($toast)
-"""
+ШАБЛОН = (
+    '<toast activationType="protocol" launch="{протокол}:show">'
+    '<visual><binding template="ToastGeneric">'
+    '<text>{заголовок}</text><text>{текст}</text>'
+    '</binding></visual>'
+    '<actions>'
+    '<action content="{кнопка1}" activationType="protocol" arguments="{протокол}:{ответ1}"/>'
+    '<action content="{кнопка2}" activationType="protocol" arguments="{протокол}:{ответ2}"/>'
+    '</actions></toast>'
+)
 
 
 def _экранировать(текст: str) -> str:
@@ -68,8 +60,29 @@ def _экранировать(текст: str) -> str:
 
 
 def доступны() -> bool:
-    """Тосты бывают только на Windows."""
-    return sys.platform == "win32"
+    """Тосты бывают только на Windows, и только если есть WinRT."""
+    if sys.platform != "win32":
+        return False
+    try:
+        import winrt.windows.ui.notifications  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+def _показать_тост(xml: str, приложение: str) -> None:
+    """Отдать готовый XML системе. Зовётся из фонового потока."""
+    from winrt.windows.data.xml.dom import XmlDocument
+    from winrt.windows.ui.notifications import (
+        ToastNotification,
+        ToastNotificationManager,
+    )
+
+    документ = XmlDocument()
+    документ.load_xml(xml)
+    ToastNotificationManager.create_toast_notifier(приложение).show(
+        ToastNotification(документ)
+    )
 
 
 def показать_вопрос(
@@ -84,13 +97,13 @@ def показать_вопрос(
 ) -> bool:
     """Показать уведомление с двумя кнопками. Возвращает, удалось ли.
 
-    Работает в фоновом потоке: PowerShell поднимается около секунды, и
-    держать из-за этого поток захвата звука нельзя.
+    Работает в фоновом потоке: WinRT отвечает быстро, но держать из-за
+    него поток захвата звука всё равно незачем.
     """
     if not доступны():
         return False
 
-    скрипт = ШАБЛОН.format(
+    xml = ШАБЛОН.format(
         заголовок=_экранировать(заголовок),
         текст=_экранировать(текст),
         кнопка1=_экранировать(кнопка1),
@@ -98,17 +111,11 @@ def показать_вопрос(
         ответ1=ответ1,
         ответ2=ответ2,
         протокол=протокол,
-        приложение=приложение,
     )
 
     def запустить() -> None:
         try:
-            subprocess.run(
-                ["powershell", "-NoProfile", "-NonInteractive",
-                 "-ExecutionPolicy", "Bypass", "-Command", скрипт],
-                capture_output=True, timeout=20,
-                creationflags=ЗАПУСК_БЕЗ_ОКНА,
-            )
+            _показать_тост(xml, приложение)
         except Exception:
             # Уведомление — вежливость, а не работа программы: его
             # поломка не имеет права мешать записи встречи.

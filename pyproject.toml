@@ -1,6 +1,6 @@
 [project]
 name = "konspekt"
-version = "0.9.0"
+version = "0.9.1"
 description = "Умный блокнот для встреч: локальная запись, распознавание и синтез заметок"
 requires-python = ">=3.12,<3.13"
 dependencies = [
@@ -19,6 +19,14 @@ dependencies = [
     # Запросы к LLM и проверка новой версии. Вместо sdk от OpenAI:
     # тот тянет в билд десятки лишних мегабайт.
     "httpx>=0.28",
+    # Уведомления с кнопками. Раньше тост показывался запуском
+    # powershell с -ExecutionPolicy Bypass в скрытом окне, и Microsoft
+    # Defender в 0.9.0 счёл это трояном (Trojan:Win32/Wacatac.C!ml): для
+    # эвристики это вылитое поведение закрепившегося зловреда. Defender
+    # стоит у каждого, поэтому цена такой приметы — сломанная установка,
+    # а не строчка в отчёте. Пара сотен килобайт дешевле.
+    "winrt-Windows.UI.Notifications>=3.2; sys_platform == 'win32'",
+    "winrt-Windows.Data.Xml.Dom>=3.2; sys_platform == 'win32'",
 ]
 
 [project.scripts]
