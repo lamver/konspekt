@@ -37,6 +37,7 @@ from ..core.events import (
     RECORDING_ERROR,
     RECORDING_FOREIGN_SPEECH,
     RECORDING_SILENT,
+    SYSTEM_SPEECH_NOTICED,
     RECORDING_STARTED,
     RECORDING_STOPPED,
     SUMMARY_CHUNK,
@@ -66,6 +67,10 @@ FORWARDED_EVENTS = (
     RECORDING_ERROR,
     RECORDING_SILENT,
     RECORDING_FOREIGN_SPEECH,
+    # Сторож заметил разговор при выключенной записи. Без этой строки
+    # предложение живёт только в уведомлении, а плашка в окне не
+    # появляется никогда: ровно та беда, что была с черновиками в 0.7.0.
+    SYSTEM_SPEECH_NOTICED,
     TRANSCRIPT_DRAFT,
     TRANSCRIPT_SEGMENT,
     MODEL_DOWNLOAD,

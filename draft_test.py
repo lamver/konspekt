@@ -411,6 +411,13 @@ global.onChatMessage = () => {};
 global.onChatError = () => {};
 global.renderImports = () => {};
 global.onImportProgress = () => {};
+// Плашки вопросов живут в другой части app.js, которую этот сценарий не
+// вырезает: здесь проверяются кнопки после записи, а не они. Без заглушек
+// обработчик падает на первом же событии остановки записи.
+global.hideForeignSpeechAsk = () => {};
+global.showForeignSpeechAsk = () => {};
+global.hideNoticedTalkAsk = () => {};
+global.showNoticedTalkAsk = () => {};
 
 const src = fs.readFileSync(path.join(process.argv[2], 'web', 'app.js'), 'utf8');
 const от = src.indexOf('window.__konspekt_event = function (payload) {');
