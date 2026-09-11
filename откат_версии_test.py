@@ -14,6 +14,8 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import testenv  # noqa: E402,F401  русский вывод и свой каталог данных
+
 from app.storage.db import SCHEMA_VERSION, Store  # noqa: E402
 
 КОРЕНЬ = Path(__file__).resolve().parent
