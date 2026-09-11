@@ -64,7 +64,11 @@
     "start": "Start recording",
     "stop": "Stop",
     "silent": "One of the tracks has no sound",
-    "error": "Couldn't start recording"
+    "error": "Couldn't start recording",
+    "silent_mic": "microphone",
+    "silent_system": "system audio",
+    "silent_where": "The “{track}” track is silent: not a sound in {seconds} s.",
+    "silent_hint": "Check that the right device is selected in recording settings."
   },
   "tab": {
     "notes": "My notes",

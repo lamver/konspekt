@@ -64,7 +64,11 @@
     "start": "Empezar grabación",
     "stop": "Detener",
     "silent": "Una de las pistas no tiene sonido",
-    "error": "No se pudo empezar a grabar"
+    "error": "No se pudo empezar a grabar",
+    "silent_mic": "micrófono",
+    "silent_system": "audio del sistema",
+    "silent_where": "La pista «{track}» está en silencio: ni un sonido en {seconds} s.",
+    "silent_hint": "Compruebe que el dispositivo correcto esté elegido en los ajustes de grabación."
   },
   "tab": {
     "notes": "Mis notas",

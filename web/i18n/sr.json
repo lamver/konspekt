@@ -64,7 +64,11 @@
     "start": "Počni snimanje",
     "stop": "Zaustavi",
     "silent": "Na jednoj od traka nema zvuka",
-    "error": "Snimanje nije moglo da počne"
+    "error": "Snimanje nije moglo da počne",
+    "silent_mic": "mikrofon",
+    "silent_system": "sistemski zvuk",
+    "silent_where": "Traka „{track}“ ćuti: ni jedan zvuk za {seconds} s.",
+    "silent_hint": "Proverite da li je u podešavanjima snimanja izabran pravi uređaj."
   },
   "tab": {
     "notes": "Moje beleške",
