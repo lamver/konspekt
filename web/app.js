@@ -215,6 +215,9 @@ window.__konspekt_event = function (payload) {
       state.startedAt = payload.started_at ? payload.started_at * 1000 : Date.now();
       renderRecordingState();
       startTimer();
+      // Предложение «не записать ли» стало бессмысленным: запись пошла.
+      // Плашка, предлагающая начать уже начатое, только сбивает с толку.
+      hideNoticedTalkAsk();
       // Статус в шапке должен сразу стать «Запись», а не остаться прежним.
       if (payload.meeting_id === state.currentId) refreshMeta(payload.meeting_id);
       break;
@@ -271,6 +274,11 @@ window.__konspekt_event = function (payload) {
       // решает человек. Запись при этом идёт дальше, состояние кнопки
       // не трогаем.
       showForeignSpeechAsk(payload);
+      break;
+    case 'system.speech_noticed':
+      // Разговор идёт, а запись не включена. Ничего не пишем, пока
+      // человек не согласится: это предложение, а не действие.
+      showNoticedTalkAsk(payload);
       break;
     case 'recording.error':
       // Запись не началась: сообщаем прямо, иначе человек будет думать,
@@ -1829,6 +1837,9 @@ function hideToast() {
 
 function showForeignSpeechAsk(payload) {
   if (!ui.foreignSpeech) return;
+  // Вопрос сторожа («не записать ли») уже не к месту: запись идёт.
+  // Две плашки в одном углу закрывают друг друга.
+  hideNoticedTalkAsk();
   // Два разных вопроса. Звук пишется — не выключить ли его (вдруг это
   // чужой ролик). Не пишется — не включить ли: собеседника прямо сейчас
   // нет в расшифровке.
@@ -1880,6 +1891,55 @@ async function onForeignSpeechKeep() {
   }
 }
 
+/* --- Разговор при выключенной записи --------------------------------------
+
+   Сторож услышал разговор на компьютере, а запись не идёт. Открыл Zoom,
+   а кнопку нажать забыл: вспоминают об этом в конце встречи, когда уже
+   ничего не вернуть. Предлагаем начать, но ничего не пишем сами. */
+
+function showNoticedTalkAsk(payload) {
+  if (!ui.noticedTalk) return;
+  // Плашка про системный звук и эта — про разные вещи, но выглядят
+  // одинаково и лезут в один угол. Показывать обе разом значит закрыть
+  // одну другой, поэтому прежнюю убираем.
+  hideForeignSpeechAsk();
+  const секунд = (payload && payload['секунд']) || 30;
+  if (ui.noticedTalkText) {
+    ui.noticedTalkText.textContent = t('noticed.ask', { seconds: секунд });
+  }
+  ui.noticedTalk.hidden = false;
+}
+
+function hideNoticedTalkAsk() {
+  if (ui.noticedTalk) ui.noticedTalk.hidden = true;
+}
+
+async function onNoticedTalkRecord() {
+  hideNoticedTalkAsk();
+  try {
+    const res = await api.record_noticed_talk();
+    if (res && res.ok) {
+      // Дальше всё как при обычном нажатии кнопки: событие
+      // recording.started придёт само и переключит окно.
+      showToast(t('noticed.started'), 6000);
+    } else {
+      showToast(t('noticed.start_failed'));
+    }
+  } catch (e) {
+    showToast(String(e));
+  }
+}
+
+async function onNoticedTalkSkip() {
+  hideNoticedTalkAsk();
+  try {
+    await api.ignore_noticed_talk();
+  } catch (e) {
+    // Отказ ничего не ломает: худшее, что случится, — вопрос
+    // задастся ещё раз, когда начнётся другой разговор.
+  }
+}
+
 /* --- Настройки звука ----------------------------------------------------- */
 
 function fillDeviceSelect(select, items, selectedId) {
@@ -1910,6 +1970,7 @@ async function openAudioSheet() {
   fillDeviceSelect(ui.loopbackSelect, data.speakers || [], sel.loopback_device_id || '');
   ui.micEnabled.checked = sel.capture_mic !== false;
   ui.systemEnabled.checked = sel.capture_system !== false;
+  loadAttention();
   refreshEnrollment();
   refreshPeople();
   refreshLlmStatus();
@@ -1923,6 +1984,46 @@ async function showVersion() {
   if (!ui.appVersion || ui.appVersion.textContent) return;
   const version = await api.app_version();
   if (version) ui.appVersion.textContent = t('about.version_prefix') + version;
+}
+
+/* --- Когда программа подаёт голос сама ------------------------------------
+
+   Две галочки про одно: как Konspekt лезет к человеку. Слежка за звуком
+   при выключенной записи и системные уведомления поверх других окон.
+   Обе включены по умолчанию и обе выключаются насовсем. */
+
+async function loadAttention() {
+  if (!ui.attentionWatch) return;
+  const s = await api.attention_settings();
+  if (!s) return;
+  ui.attentionWatch.checked = s['сторож'] !== false;
+  ui.attentionToasts.checked = s['уведомления'] !== false;
+  showAttentionProblem(s);
+}
+
+/** Сказать, почему слежка не работает, хотя галочка стоит.
+ *
+ * Устройство мог занять кто-то другой, и тогда галочка врёт: человек
+ * надеется, что программа его подстрахует, а она глухая. Молчать об
+ * этом хуже, чем не иметь слежки вовсе. */
+function showAttentionProblem(s) {
+  if (!ui.attentionProblem) return;
+  let текст = '';
+  if (s['сторож'] && !s['работает']) {
+    текст = s['проблема']
+      ? t('attention.problem_reason', { reason: s['проблема'] })
+      : t('attention.problem');
+  }
+  ui.attentionProblem.textContent = текст;
+  ui.attentionProblem.hidden = !текст;
+}
+
+async function saveAttention() {
+  const s = await api.save_attention_settings({
+    'сторож': ui.attentionWatch.checked,
+    'уведомления': ui.attentionToasts.checked,
+  });
+  if (s) showAttentionProblem(s);
 }
 
 /* --- Разделы настроек ---------------------------------------------------- */
@@ -2565,6 +2666,13 @@ function bindUi() {
     foreignSpeechText: el('foreign-speech-text'),
     foreignSpeechOff: el('foreign-speech-off'),
     foreignSpeechKeep: el('foreign-speech-keep'),
+    noticedTalk: el('noticed-talk'),
+    noticedTalkText: el('noticed-talk-text'),
+    noticedTalkRec: el('noticed-talk-rec'),
+    noticedTalkSkip: el('noticed-talk-skip'),
+    attentionWatch: el('attention-watch'),
+    attentionToasts: el('attention-toasts'),
+    attentionProblem: el('attention-problem'),
     audioSheet: el('audio-sheet'),
     appVersion: el('app-version'),
     aboutVersion: el('about-version'),
@@ -2691,6 +2799,21 @@ function bindUi() {
   el('toast-close').addEventListener('click', hideToast);
   if (ui.foreignSpeechOff) {
     ui.foreignSpeechOff.addEventListener('click', onForeignSpeechOff);
+  }
+  if (ui.noticedTalkRec) {
+    ui.noticedTalkRec.addEventListener('click', onNoticedTalkRecord);
+  }
+  if (ui.noticedTalkSkip) {
+    ui.noticedTalkSkip.addEventListener('click', onNoticedTalkSkip);
+  }
+  // Галочки применяются сразу: человек снял их, чтобы программа
+  // перестала лезть, и заставлять его искать кнопку «сохранить»
+  // было бы издевательством.
+  if (ui.attentionWatch) {
+    ui.attentionWatch.addEventListener('change', saveAttention);
+  }
+  if (ui.attentionToasts) {
+    ui.attentionToasts.addEventListener('change', saveAttention);
   }
   if (ui.foreignSpeechKeep) {
     ui.foreignSpeechKeep.addEventListener('click', onForeignSpeechKeep);

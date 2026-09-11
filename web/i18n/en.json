@@ -376,5 +376,20 @@
     "on_failed": "Could not turn on system audio. Check the recording settings.",
     "doubtful_hint": "You said this was not your caller. The line stays in the transcript but will not go into the notes.",
     "off_done_marked": "System audio is no longer recorded. What was captured before is marked and will not go into the notes."
+  },
+  "noticed": {
+    "ask": "Someone has been talking on this computer for {seconds} seconds, and recording is off. Record this meeting?",
+    "record": "Record",
+    "skip": "No thanks",
+    "started": "Recording started. Whatever was said before this is gone: we were not saving the audio.",
+    "start_failed": "Could not start recording. Check the recording settings."
+  },
+  "attention": {
+    "watch": "Notice conversations when recording is off",
+    "watch_hint": "If someone talks on this computer for half a minute while recording is off, Konspekt will offer to start. Nothing is saved until you agree.",
+    "toasts": "Ask with a system notification",
+    "toasts_hint": "The question appears on top of other windows, so you can answer without opening Konspekt. Otherwise it waits for you inside the app.",
+    "problem": "Watching is on, but there is no sound right now: the device is busy with another program.",
+    "problem_reason": "Watching is on, but there is no sound right now: {reason}."
   }
 }

@@ -376,5 +376,20 @@
     "on_failed": "Nije uspelo uključivanje zvuka sistema. Proveri podešavanja snimanja.",
     "doubtful_hint": "Rekao si da to nije sagovornik. Replika ostaje u transkriptu, ali neće ući u beleške.",
     "off_done_marked": "Zvuk sistema se više ne snima. Ono što je snimljeno ranije je označeno i neće ući u beleške."
+  },
+  "noticed": {
+    "ask": "Na računaru se već {seconds} sekundi priča, a snimanje je isključeno. Da snimimo ovaj sastanak?",
+    "record": "Snimaj",
+    "skip": "Nije potrebno",
+    "started": "Snimanje je počelo. Ono što je rečeno ranije nije sačuvano: zvuk nismo snimali.",
+    "start_failed": "Nije uspelo pokretanje snimanja. Proverite podešavanja snimanja."
+  },
+  "attention": {
+    "watch": "Primeti razgovor kada snimanje ne radi",
+    "watch_hint": "Ako se na računaru priča pola minuta, a snimanje je isključeno, Konspekt će ponuditi da počne. Ništa se ne snima dok ne pristanete.",
+    "toasts": "Pitaj sistemskim obaveštenjem",
+    "toasts_hint": "Pitanje se pojavljuje preko drugih prozora, pa možete odgovoriti bez otvaranja Konspekta. Bez toga vas pitanje čeka u programu.",
+    "problem": "Praćenje je uključeno, ali se zvuk trenutno ne čuje: uređaj koristi drugi program.",
+    "problem_reason": "Praćenje je uključeno, ali se zvuk trenutno ne čuje: {reason}."
   }
 }

@@ -244,6 +244,19 @@
     </span>
   </div>
 
+  <!-- Сторож заметил разговор, а запись не идёт. Открыл Zoom, а кнопку
+       нажать забыл: самая обидная потеря встречи, потому что вспоминают
+       о ней в конце. Ничего не пишем, пока человек не согласится. -->
+  <div class="toast toast--ask" id="noticed-talk" hidden>
+    <span id="noticed-talk-text"></span>
+    <span class="toast__actions">
+      <button class="toast__action" id="noticed-talk-rec"
+              data-i18n="noticed.record">Записать</button>
+      <button class="toast__action toast__action--ghost" id="noticed-talk-skip"
+              data-i18n="noticed.skip">Не нужно</button>
+    </span>
+  </div>
+
   <!-- Подсказка при перетаскивании файлов в окно -->
   <div class="dropzone" id="dropzone" hidden>
     <div class="dropzone__box">
@@ -304,6 +317,25 @@
             <p class="hint" data-i18n="audio.system_hint">Системный звук берётся с того же устройства, куда идёт
             воспроизведение. Если собеседника не слышно, выберите то устройство,
             в котором вы его слушаете.</p>
+          </div>
+
+          <!-- Когда программа подаёт голос сама. Обе галочки про то, как
+               Konspekt лезет к человеку, поэтому живут рядом. -->
+          <div class="card">
+            <label class="check">
+              <input type="checkbox" id="attention-watch" checked>
+              <span data-i18n="attention.watch">Замечать разговор, когда запись не идёт</span>
+            </label>
+            <p class="hint" data-i18n="attention.watch_hint">Если на компьютере полминуты идёт разговор, а запись
+            выключена, Konspekt предложит её начать. Ничего не записывается,
+            пока вы не согласитесь.</p>
+            <p class="hint" id="attention-problem" hidden></p>
+            <label class="check">
+              <input type="checkbox" id="attention-toasts" checked>
+              <span data-i18n="attention.toasts">Спрашивать системным уведомлением</span>
+            </label>
+            <p class="hint" data-i18n="attention.toasts_hint">Вопрос появится поверх других окон, и ответить можно
+            не открывая Konspekt. Без этого вопрос ждёт вас внутри программы.</p>
           </div>
         </section>
 

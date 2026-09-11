@@ -127,6 +127,24 @@ class Api:
         """
         return self._service.включить_системный_звук()
 
+    # --- разговор при выключенной записи ----------------------------------
+
+    def attention_settings(self) -> dict[str, Any]:
+        """Слежка за звуком и уведомления: что включено и работает ли."""
+        return self._service.настройки_внимания()
+
+    def save_attention_settings(self, fields: dict[str, Any]) -> dict[str, Any]:
+        """Сохранить настройки внимания и применить сразу."""
+        return self._service.сохранить_внимание(**(fields or {}))
+
+    def record_noticed_talk(self) -> dict[str, Any]:
+        """Ответ «да, записывай»: начать встречу прямо сейчас."""
+        return self._service.записать_замеченный_разговор()
+
+    def ignore_noticed_talk(self) -> dict[str, Any]:
+        """Ответ «не надо»: молчим, пока этот разговор не кончится."""
+        return self._service.не_записывать_замеченный_разговор()
+
     # --- распознавание ---------------------------------------------------
 
     def model_status(self) -> dict[str, Any]:

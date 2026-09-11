@@ -376,5 +376,20 @@
     "on_failed": "No se pudo activar el audio del sistema. Revisa los ajustes de grabación.",
     "doubtful_hint": "Dijiste que esto no era tu interlocutor. La línea queda en la transcripción pero no irá a las notas.",
     "off_done_marked": "El audio del sistema ya no se graba. Lo grabado antes queda marcado y no irá a las notas."
+  },
+  "noticed": {
+    "ask": "Llevan {seconds} segundos hablando en este ordenador y la grabación está apagada. ¿Grabar esta reunión?",
+    "record": "Grabar",
+    "skip": "No hace falta",
+    "started": "La grabación ha empezado. Lo dicho antes no se guardó: no estábamos grabando el sonido.",
+    "start_failed": "No se pudo empezar a grabar. Revisa los ajustes de grabación."
+  },
+  "attention": {
+    "watch": "Detectar conversaciones cuando la grabación está apagada",
+    "watch_hint": "Si alguien habla en el ordenador durante medio minuto con la grabación apagada, Konspekt se ofrecerá a empezar. No se guarda nada hasta que aceptes.",
+    "toasts": "Preguntar con una notificación del sistema",
+    "toasts_hint": "La pregunta aparece sobre las demás ventanas y puedes responder sin abrir Konspekt. Si no, te espera dentro del programa.",
+    "problem": "La detección está activada, pero ahora no se oye nada: otro programa ocupa el dispositivo.",
+    "problem_reason": "La detección está activada, pero ahora no se oye nada: {reason}."
   }
 }
