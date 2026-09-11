@@ -25,16 +25,26 @@ let i18n = { lang: 'ru', dict: {} };
  * Словарь идёт через мост, как и любые другие данные из Python.
  */
 async function loadDict(lang) {
-  try {
-    const dict = await api.get_i18n_dict(lang);
-    if (!dict || typeof dict !== 'object' || !Object.keys(dict).length) {
+  // Три попытки с паузой. Мост pywebview иногда отвечает не с первого
+  // раза сразу после старта окна, а словарь нужен один раз за запуск:
+  // не доехал — и человек до перезапуска сидит с ключами вместо слов.
+  // Дешевле подождать пару сотен миллисекунд, чем оставить его без
+  // подписей на кнопках.
+  for (let попытка = 1; попытка <= 3; попытка += 1) {
+    try {
+      const dict = await api.get_i18n_dict(lang);
+      if (dict && typeof dict === 'object' && Object.keys(dict).length) {
+        return dict;
+      }
       throw new Error('пустой словарь');
+    } catch (e) {
+      console.error(`Не удалось загрузить словарь ${lang} (попытка ${попытка}):`, e);
+      if (попытка < 3) {
+        await new Promise((r) => setTimeout(r, 150 * попытка));
+      }
     }
-    return dict;
-  } catch (e) {
-    console.error(`Не удалось загрузить словарь ${lang}:`, e);
-    return null;
   }
+  return null;
 }
 
 /**
@@ -42,6 +52,13 @@ async function loadDict(lang) {
  *
  * Отсутствующий ключ — не повод падать: возвращаем сам ключ, чтобы
  * дыра была видна на экране и её нашли, а не тихая пустая строка.
+ * Текстов в коде сотни, и большинство из них без ключа превратились бы
+ * в пустоту: пустая плашка хуже плашки с ключом.
+ *
+ * А вот там, где надпись уже есть в разметке (кнопки, подписи,
+ * подсказки из index.html), ключ показывать нельзя: человек увидит
+ * «recording.start» вместо «Начать запись», если словарь опоздал к
+ * первой отрисовке. Для таких мест есть `tЕслиЕсть`.
  */
 function t(key, vars) {
   const parts = key.split('.');
@@ -55,6 +72,24 @@ function t(key, vars) {
   return node.replace(/\{(\w+)\}/g, (m, name) => (name in vars ? String(vars[name]) : m));
 }
 
+/**
+ * Перевод для текста, который уже написан в разметке.
+ *
+ * Отвечает null, пока словарь не доехал через мост. Тот, кто
+ * рисует, в этом случае оставляет то, что уже лежит в index.html:
+ * там человеческая надпись, и она лучше голого ключа.
+ *
+ * Разница с `t()` в том, что здесь есть запасной текст, а в
+ * плашках и сообщениях, рождающихся в коде, его нет.
+ */
+function tЕслиЕсть(key, vars) {
+  if (!i18n.dict || !Object.keys(i18n.dict).length) return null;
+  const значение = t(key, vars);
+  // Ключ вернулся как есть: перевода нет. В разметке лежит
+  // русский текст, и он честнее ключа на любом языке.
+  return значение === key ? null : значение;
+}
+
 /** Русское/славянское склонение через ключи вида foo.one/few/many. */
 function tPlural(baseKey, n, vars) {
   const forms = t(`${baseKey}.one`) !== `${baseKey}.one`
@@ -64,22 +99,30 @@ function tPlural(baseKey, n, vars) {
   return plural(n, forms.one, forms.few, forms.many);
 }
 
-/** Пройти по DOM и подставить переводы в data-i18n / data-i18n-placeholder. */
+/** Пройти по DOM и подставить переводы в data-i18n / data-i18n-placeholder.
+ *
+ * Если `t()` вернул null (словарь ещё не доехал), узел не трогаем:
+ * в разметке уже лежит человеческая надпись, и она лучше голого
+ * ключа вроде «recording.start». */
 function applyI18n(root = document) {
   root.querySelectorAll('[data-i18n]').forEach((node) => {
     const key = node.dataset.i18n;
-    const html = t(key);
+    const html = tЕслиЕсть(key);
+    if (html === null) return;
     if (node.dataset.i18nHtml === '1') node.innerHTML = html;
     else node.textContent = html;
   });
   root.querySelectorAll('[data-i18n-placeholder]').forEach((node) => {
-    node.placeholder = t(node.dataset.i18nPlaceholder);
+    const текст = tЕслиЕсть(node.dataset.i18nPlaceholder);
+    if (текст !== null) node.placeholder = текст;
   });
   root.querySelectorAll('[data-i18n-title]').forEach((node) => {
-    node.title = t(node.dataset.i18nTitle);
+    const текст = tЕслиЕсть(node.dataset.i18nTitle);
+    if (текст !== null) node.title = текст;
   });
   root.querySelectorAll('[data-i18n-aria-label]').forEach((node) => {
-    node.setAttribute('aria-label', t(node.dataset.i18nAriaLabel));
+    const текст = tЕслиЕсть(node.dataset.i18nAriaLabel);
+    if (текст !== null) node.setAttribute('aria-label', текст);
   });
 }
 
@@ -115,10 +158,17 @@ async function setLanguage(lang, { persist = true } = {}) {
 
 /** Перерисовать тексты, которые app.js генерирует сам, а не через data-i18n. */
 function refreshDynamicTexts() {
-  if (ui.recLabel) ui.recLabel.textContent = state.isRecording ? t('recording.stop') : t('recording.start');
+  // null значит «словарь ещё не доехал»: оставляем то, что уже
+  // написано в разметке.
+  if (ui.recLabel) {
+    const надпись = state.isRecording
+      ? tЕслиЕсть('recording.stop') : tЕслиЕсть('recording.start');
+    if (надпись !== null) ui.recLabel.textContent = надпись;
+  }
   if (ui.summaryRun) {
     const has = ui.summaryBody && !ui.summaryBody.hidden && ui.summaryBody.innerHTML.trim();
-    ui.summaryRun.textContent = has ? t('summary.redo') : t('summary.run');
+    const надпись = has ? tЕслиЕсть('summary.redo') : tЕслиЕсть('summary.run');
+    if (надпись !== null) ui.summaryRun.textContent = надпись;
   }
   if (state.currentId && state.current) renderMeta(state.current);
   if (ui.list) renderMeetingList();
@@ -1622,7 +1672,11 @@ async function toggleRecording() {
 function renderRecordingState() {
   const active = state.isRecording;
   ui.record.classList.toggle('is-recording', active);
-  ui.recLabel.textContent = active ? t('recording.stop') : t('recording.start');
+  // Словарь едет через мост и может опоздать к первой отрисовке.
+  // Затирать надпись ключом нельзя: человек увидит на главной
+  // кнопке «recording.start» вместо «Начать запись».
+  const надпись = active ? tЕслиЕсть('recording.stop') : tЕслиЕсть('recording.start');
+  if (надпись !== null) ui.recLabel.textContent = надпись;
   ui.levels.hidden = !active;
   ui.timer.hidden = !active;
   if (!active) {
@@ -1846,13 +1900,16 @@ function showForeignSpeechAsk(payload) {
   const пишется = !payload || payload['пишется'] !== false;
   state.foreignSpeechOn = !пишется;
   if (ui.foreignSpeechText) {
-    ui.foreignSpeechText.textContent = пишется ? t('foreign.ask') : t('foreign.ask_on');
+    ui.foreignSpeechText.textContent = пишется
+      ? t('foreign.ask') : t('foreign.ask_on');
   }
   if (ui.foreignSpeechOff) {
-    ui.foreignSpeechOff.textContent = пишется ? t('foreign.turn_off') : t('foreign.turn_on');
+    ui.foreignSpeechOff.textContent = пишется
+      ? t('foreign.turn_off') : t('foreign.turn_on');
   }
   if (ui.foreignSpeechKeep) {
-    ui.foreignSpeechKeep.textContent = пишется ? t('foreign.keep') : t('foreign.no_need');
+    ui.foreignSpeechKeep.textContent = пишется
+      ? t('foreign.keep') : t('foreign.no_need');
   }
   ui.foreignSpeech.hidden = false;
 }

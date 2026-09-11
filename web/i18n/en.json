@@ -94,7 +94,8 @@
       "one": "piece",
       "few": "pieces",
       "many": "pieces"
-    }
+    },
+    "downloading_model_title": "Downloading the notes model"
   },
   "chat": {
     "title": "Ask about the meeting",
@@ -118,7 +119,8 @@
     "lang_tooltip": "Was this line recognized in the wrong language?",
     "lang_failed": "No recording of this line, nothing to redo",
     "lang_retry_failed": "Couldn't redo it",
-    "audio_clip_not_found": "No recording of this line"
+    "audio_clip_not_found": "No recording of this line",
+    "lang_placeholder": "lang"
   },
   "toast": {
     "close": "Close"
@@ -180,7 +182,8 @@
       "type": "Type character by character (leaves clipboard untouched)"
     },
     "paste_hint": "Via clipboard the text appears instantly, and the clipboard's previous contents are restored afterward. Typing character by character never touches the clipboard, but takes about a second per line and can drop characters in some apps.",
-    "recording_conflict": "Dictation doesn't work while recording a meeting: there's only one model, and it can't do two things at once. Windows won't pass keyboard input from any app into windows running as administrator — in that case the text stays in the clipboard."
+    "recording_conflict": "Dictation doesn't work while recording a meeting: there's only one model, and it can't do two things at once. Windows won't pass keyboard input from any app into windows running as administrator — in that case the text stays in the clipboard.",
+    "hotkey_taken": "The shortcut is taken by another program, so dictation will not respond. Pick another one."
   },
   "speech": {
     "primary_language": "Main meeting language",
@@ -391,5 +394,8 @@
     "toasts_hint": "The question appears on top of other windows, so you can answer without opening Konspekt. Otherwise it waits for you inside the app.",
     "problem": "Watching is on, but there is no sound right now: the device is busy with another program.",
     "problem_reason": "Watching is on, but there is no sound right now: {reason}."
+  },
+  "level": {
+    "them": "Them"
   }
 }

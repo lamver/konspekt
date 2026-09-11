@@ -55,6 +55,10 @@ FAST = [
     "vad_test.py",
     "relang_test.py",
     "langui_test.py",
+    # Голый ключ вместо надписи — это сломанный интерфейс, а не «видно
+    # дыру в переводе». Человек увидел на главной кнопке
+    # «recording.start» вместо «Начать запись».
+    "ключи_перевода_test.py",
     "asrset_test.py",
     "draft_test.py",
     "backfill_test.py",

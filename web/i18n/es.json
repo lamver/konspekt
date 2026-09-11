@@ -94,7 +94,8 @@
       "one": "fragmento",
       "few": "fragmentos",
       "many": "fragmentos"
-    }
+    },
+    "downloading_model_title": "Descargando el modelo de notas"
   },
   "chat": {
     "title": "Preguntas sobre la reunión",
@@ -118,7 +119,8 @@
     "lang_tooltip": "¿Esta línea se reconoció en el idioma equivocado?",
     "lang_failed": "No hay grabación de esta línea, no hay nada que rehacer",
     "lang_retry_failed": "No se pudo rehacer",
-    "audio_clip_not_found": "No hay grabación de esta línea"
+    "audio_clip_not_found": "No hay grabación de esta línea",
+    "lang_placeholder": "idi"
   },
   "toast": {
     "close": "Cerrar"
@@ -180,7 +182,8 @@
       "type": "Escribiendo letra por letra (no toca el portapapeles)"
     },
     "paste_hint": "Mediante el portapapeles el texto aparece al instante y el contenido anterior del portapapeles se restaura después. Escribir letra por letra no toca el portapapeles en absoluto, pero tarda alrededor de un segundo por línea y en algunas aplicaciones puede perder caracteres.",
-    "recording_conflict": "El dictado no funciona mientras se graba una reunión: solo hay un modelo y no alcanza para ambas cosas a la vez. Windows no deja pasar la entrada de teclado de ninguna aplicación a ventanas ejecutadas como administrador; en ese caso el texto quedará en el portapapeles."
+    "recording_conflict": "El dictado no funciona mientras se graba una reunión: solo hay un modelo y no alcanza para ambas cosas a la vez. Windows no deja pasar la entrada de teclado de ninguna aplicación a ventanas ejecutadas como administrador; en ese caso el texto quedará en el portapapeles.",
+    "hotkey_taken": "Otro programa ocupa el atajo y el dictado no responderá. Elige otra combinación."
   },
   "speech": {
     "primary_language": "Idioma principal de las reuniones",
@@ -391,5 +394,8 @@
     "toasts_hint": "La pregunta aparece sobre las demás ventanas y puedes responder sin abrir Konspekt. Si no, te espera dentro del programa.",
     "problem": "La detección está activada, pero ahora no se oye nada: otro programa ocupa el dispositivo.",
     "problem_reason": "La detección está activada, pero ahora no se oye nada: {reason}."
+  },
+  "level": {
+    "them": "Ellos"
   }
 }

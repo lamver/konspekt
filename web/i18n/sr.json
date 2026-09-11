@@ -94,7 +94,8 @@
       "one": "deo",
       "few": "dela",
       "many": "delova"
-    }
+    },
+    "downloading_model_title": "Preuzimamo model za beleške"
   },
   "chat": {
     "title": "Pitanja o sastanku",
@@ -118,7 +119,8 @@
     "lang_tooltip": "Da li je ova linija prepoznata na pogrešnom jeziku?",
     "lang_failed": "Nema snimka ove linije, nema šta da se preračuna",
     "lang_retry_failed": "Nije uspelo ponovno preračunavanje",
-    "audio_clip_not_found": "Nema snimka ove linije"
+    "audio_clip_not_found": "Nema snimka ove linije",
+    "lang_placeholder": "jez"
   },
   "toast": {
     "close": "Zatvori"
@@ -180,7 +182,8 @@
       "type": "Kucanje slovo po slovo (ne dira klipbord)"
     },
     "paste_hint": "Preko klipborda tekst se pojavi trenutno, a prethodni sadržaj klipborda se vraća nazad. Kucanje slovo po slovo uopšte ne dira klipbord, ali traje oko sekundu po liniji i u nekim programima gubi znakove.",
-    "recording_conflict": "Diktiranje ne radi tokom snimanja sastanka: model je jedan i ne stiže za oba zadatka odjednom. Windows ne propušta unos s tastature nijednom programu u prozore pokrenute kao administrator — u tom slučaju tekst ostaje u klipbordu."
+    "recording_conflict": "Diktiranje ne radi tokom snimanja sastanka: model je jedan i ne stiže za oba zadatka odjednom. Windows ne propušta unos s tastature nijednom programu u prozore pokrenute kao administrator — u tom slučaju tekst ostaje u klipbordu.",
+    "hotkey_taken": "Prečicu koristi drugi program, pa diktiranje neće reagovati. Izaberite drugu."
   },
   "speech": {
     "primary_language": "Osnovni jezik sastanaka",
@@ -391,5 +394,8 @@
     "toasts_hint": "Pitanje se pojavljuje preko drugih prozora, pa možete odgovoriti bez otvaranja Konspekta. Bez toga vas pitanje čeka u programu.",
     "problem": "Praćenje je uključeno, ali se zvuk trenutno ne čuje: uređaj koristi drugi program.",
     "problem_reason": "Praćenje je uključeno, ali se zvuk trenutno ne čuje: {reason}."
+  },
+  "level": {
+    "them": "Oni"
   }
 }
