@@ -496,6 +496,15 @@ function renderMarkdown(text) {
       continue;
     }
     if (list) { out.push(`<ul>${list.join('')}</ul>`); list = null; }
+    // Заголовок решётками. Модели пишут их сплошь и рядом, а мы их не
+    // разбирали: человек видел «# Итоги встречи» дословно, вместе со
+    // знаком. Мелочь, но она выдаёт, что заметки показаны как есть, а
+    // не разобраны.
+    const решётки = bold.match(/^(#{1,6})\s+(.*)$/);
+    if (решётки) {
+      out.push(`<h4>${решётки[2]}</h4>`);
+      continue;
+    }
     // Строка целиком жирная — это заголовок раздела.
     if (/^<strong>[^<]*<\/strong>$/.test(bold)) out.push(`<h4>${bold}</h4>`);
     else out.push(`<p>${bold}</p>`);
@@ -510,7 +519,88 @@ function renderSummary(text) {
   ui.summaryBody.hidden = !has;
   ui.summaryEmpty.hidden = has;
   ui.summaryRun.textContent = has ? t('summary.redo') : t('summary.run');
+  // Копировать нечего, пока заметок нет. Живая кнопка, которая молча
+  // кладёт в буфер пустоту, хуже спрятанной: человек решит, что
+  // скопировал, и вставит пустоту в чат команды.
+  const копии = [ui.summaryCopy, ui.summaryCopyPlain];
+  for (const кнопка of копии) {
+    if (кнопка) кнопка.hidden = !has;
+  }
   setSummaryStatus('');
+}
+
+/**
+ * Убрать разметку, оставив читаемый текст.
+ *
+ * Markdown хорош в трекере и мессенджере, который его понимает. В поле,
+ * которое не понимает, звёздочки и решётки выглядят мусором, и человек
+ * вычищает их руками. Поэтому копируем в двух видах (задача №26).
+ *
+ * Разбираем не регулярками по сырому тексту, а готовым деревом: оно уже
+ * построено для показа, и списки с заголовками в нём разложены верно.
+ */
+function markdownToPlain(md) {
+  const холст = document.createElement('div');
+  холст.innerHTML = renderMarkdown(md || '');
+  const куски = [];
+  const обойти = (узел, отступ) => {
+    for (const дитя of Array.from(узел.childNodes || [])) {
+      const имя = (дитя.nodeName || '').toLowerCase();
+      if (имя === 'li') {
+        куски.push(`${отступ}- ${(дитя.textContent || '').trim()}`);
+        continue;
+      }
+      if (имя === 'ul' || имя === 'ol') {
+        обойти(дитя, отступ);
+        continue;
+      }
+      const текст = (дитя.textContent || '').trim();
+      if (текст) куски.push(текст);
+    }
+  };
+  обойти(холст, '');
+  return куски.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+/**
+ * Реплика как цитата: кто, когда и что сказал.
+ *
+ * Голый текст реплики в чате команды бесполезен: «это надо переделать»
+ * без говорящего и места во встрече ничего не значит, а спросить уже
+ * не у кого (задача №26).
+ */
+function цитатаРеплики(кто, когда, текст) {
+  const имя = (кто || '').trim();
+  const время = (когда || '').trim();
+  const слова = (текст || '').trim();
+  if (!слова) return '';
+  const шапка = [имя, время].filter(Boolean).join(', ');
+  return шапка ? `[${шапка}] ${слова}` : слова;
+}
+
+/**
+ * Положить текст в буфер обмена и сказать об этом человеку.
+ *
+ * Без ответа непонятно, сработало ли: буфер обмена невидим. Молчание
+ * здесь читается как поломка, и человек жмёт кнопку ещё раз.
+ */
+async function копировать(текст, ключУспеха) {
+  const готово = (текст || '').trim();
+  if (!готово) {
+    showToast(t('copy.nothing'));
+    return false;
+  }
+  try {
+    await navigator.clipboard.writeText(готово);
+    showToast(t(ключУспеха));
+    return true;
+  } catch (err) {
+    // Буфер может быть занят другой программой или закрыт политикой.
+    // Врать «скопировано» нельзя: человек уйдёт вставлять пустоту.
+    console.warn('Не удалось скопировать:', err);
+    showToast(t('copy.failed'));
+    return false;
+  }
 }
 
 /** Ход разбора в шапке саммари: чем занята модель прямо сейчас. */
@@ -626,12 +716,38 @@ function setBubbleText(node, text) {
   if (text.trim()) {
     node.classList.remove('is-waiting');
     node.innerHTML = renderMarkdown(text);
+    // Ответ чата — такой же итог работы, как заметки: его несут в чат
+    // команды или в задачу. Выделять мышью длинный ответ неудобно,
+    // поэтому даём кнопку (задача №26). Сырой текст держим на узле:
+    // в буфер должна уйти разметка, а не то, что нарисовано.
+    node.dataset.raw = text;
+    добавитьКнопкуКопии(node);
   } else {
     // Пустой ответ значит, что модель ещё думает: показываем это,
     // иначе на экране просто пустой прямоугольник.
     node.classList.add('is-waiting');
     node.innerHTML = '<span class="dots"><i></i><i></i><i></i></span>';
   }
+}
+
+/**
+ * Кнопка «копировать» в пузыре ответа.
+ *
+ * Вешаем только на ответы программы: свой вопрос человек и так знает,
+ * а лишняя кнопка у каждой строки превращает переписку в мусорку.
+ */
+function добавитьКнопкуКопии(node) {
+  if (!node || !node.classList || node.classList.contains('bubble--me')) return;
+  const кнопка = document.createElement('button');
+  кнопка.className = 'bubble__copy';
+  кнопка.type = 'button';
+  кнопка.textContent = t('copy.short');
+  кнопка.title = t('summary.copy');
+  кнопка.addEventListener('click', (e) => {
+    e.stopPropagation();
+    копировать(node.dataset.raw || node.textContent, 'copy.done_answer');
+  });
+  node.appendChild(кнопка);
 }
 
 function onChatChunk(payload) {
@@ -1328,9 +1444,23 @@ function appendSegment(seg, scroll = true) {
     lang.addEventListener('click', () => pickLanguage(lang, turn));
     lang.hidden = state.hasAudio === false;
 
+    // Забрать реплику как цитату. Без имени и времени цитата теряет
+    // смысл: в чате команды «это надо переделать» без говорящего и
+    // места во встрече ничего не значит (задача №26).
+    const copy = document.createElement('button');
+    copy.className = 'turn__copy';
+    copy.type = 'button';
+    copy.title = t('transcript.copy_tooltip');
+    copy.textContent = t('copy.short');
+    copy.addEventListener('click', () => {
+      копировать(цитатаРеплики(who.textContent, time.textContent, seg.text),
+                 'copy.done_quote');
+    });
+
     head.appendChild(who);
     head.appendChild(time);
     head.appendChild(lang);
+    head.appendChild(copy);
     head.appendChild(play);
 
     const text = document.createElement('div');
@@ -2825,6 +2955,8 @@ function bindUi() {
     summaryEmpty: el('summary-empty'),
     summaryRun: el('summary-run'),
     summaryStop: el('summary-stop'),
+    summaryCopy: el('summary-copy'),
+    summaryCopyPlain: el('summary-copy-plain'),
     chatList: el('chat-list'),
     chatHint: el('chat-hint'),
     chatText: el('chat-text'),
@@ -2910,6 +3042,21 @@ function bindUi() {
 
   ui.summaryRun.addEventListener('click', runSummary);
   ui.summaryStop.addEventListener('click', () => api.stop_generation());
+  // Копируем сырую разметку, а не то, что нарисовано: в трекере и
+  // мессенджере она развернётся в списки и заголовки. Вторая кнопка —
+  // для полей, которые разметку не понимают.
+  if (ui.summaryCopy) {
+    ui.summaryCopy.addEventListener('click', () => {
+      const текст = state.current ? state.current.summary : '';
+      копировать(текст, 'copy.done');
+    });
+  }
+  if (ui.summaryCopyPlain) {
+    ui.summaryCopyPlain.addEventListener('click', () => {
+      const текст = state.current ? state.current.summary : '';
+      копировать(markdownToPlain(текст), 'copy.done_plain');
+    });
+  }
   ui.chatSend.addEventListener('click', sendQuestion);
   ui.chatClear.addEventListener('click', clearChat);
   ui.chatText.addEventListener('input', resizeChatInput);

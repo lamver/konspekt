@@ -99,7 +99,9 @@
       "few": "fragmentos",
       "many": "fragmentos"
     },
-    "downloading_model_title": "Descargando el modelo de notas"
+    "downloading_model_title": "Descargando el modelo de notas",
+    "copy": "Copiar",
+    "copy_plain": "Texto simple"
   },
   "chat": {
     "title": "Preguntas sobre la reunión",
@@ -124,7 +126,8 @@
     "lang_failed": "No hay grabación de esta línea, no hay nada que rehacer",
     "lang_retry_failed": "No se pudo rehacer",
     "audio_clip_not_found": "No hay grabación de esta línea",
-    "lang_placeholder": "idi"
+    "lang_placeholder": "idi",
+    "copy_tooltip": "Copiar la frase con hablante y hora"
   },
   "toast": {
     "close": "Cerrar"
@@ -401,5 +404,14 @@
   },
   "level": {
     "them": "Ellos"
+  },
+  "copy": {
+    "done": "Notas copiadas",
+    "done_plain": "Notas copiadas como texto simple",
+    "nothing": "Todavía no hay nada que copiar",
+    "failed": "No se pudo copiar: el portapapeles está ocupado",
+    "short": "Copiar",
+    "done_answer": "Respuesta copiada",
+    "done_quote": "Frase copiada"
   }
 }

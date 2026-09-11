@@ -99,7 +99,9 @@
       "few": "pieces",
       "many": "pieces"
     },
-    "downloading_model_title": "Downloading the notes model"
+    "downloading_model_title": "Downloading the notes model",
+    "copy": "Copy",
+    "copy_plain": "Plain text"
   },
   "chat": {
     "title": "Ask about the meeting",
@@ -124,7 +126,8 @@
     "lang_failed": "No recording of this line, nothing to redo",
     "lang_retry_failed": "Couldn't redo it",
     "audio_clip_not_found": "No recording of this line",
-    "lang_placeholder": "lang"
+    "lang_placeholder": "lang",
+    "copy_tooltip": "Copy the line with speaker and time"
   },
   "toast": {
     "close": "Close"
@@ -401,5 +404,14 @@
   },
   "level": {
     "them": "Them"
+  },
+  "copy": {
+    "done": "Notes copied",
+    "done_plain": "Notes copied as plain text",
+    "nothing": "Nothing to copy yet",
+    "failed": "Could not copy: the clipboard is busy",
+    "short": "Copy",
+    "done_answer": "Answer copied",
+    "done_quote": "Line copied"
   }
 }

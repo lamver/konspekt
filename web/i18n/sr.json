@@ -99,7 +99,9 @@
       "few": "dela",
       "many": "delova"
     },
-    "downloading_model_title": "Preuzimamo model za beleške"
+    "downloading_model_title": "Preuzimamo model za beleške",
+    "copy": "Kopiraj",
+    "copy_plain": "Običan tekst"
   },
   "chat": {
     "title": "Pitanja o sastanku",
@@ -124,7 +126,8 @@
     "lang_failed": "Nema snimka ove linije, nema šta da se preračuna",
     "lang_retry_failed": "Nije uspelo ponovno preračunavanje",
     "audio_clip_not_found": "Nema snimka ove linije",
-    "lang_placeholder": "jez"
+    "lang_placeholder": "jez",
+    "copy_tooltip": "Kopiraj repliku sa imenom i vremenom"
   },
   "toast": {
     "close": "Zatvori"
@@ -401,5 +404,14 @@
   },
   "level": {
     "them": "Oni"
+  },
+  "copy": {
+    "done": "Beleške su kopirane",
+    "done_plain": "Beleške su kopirane kao običan tekst",
+    "nothing": "Još nema šta da se kopira",
+    "failed": "Kopiranje nije uspelo: ostava je zauzeta",
+    "short": "Kopiraj",
+    "done_answer": "Odgovor je kopiran",
+    "done_quote": "Replika je kopirana"
   }
 }

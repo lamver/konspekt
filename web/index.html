@@ -172,6 +172,13 @@
                      держим не второе такое же слово, а ход разбора. -->
                 <span class="summary__title" id="summary-title"></span>
                 <div class="summary__actions">
+                  <!-- Копирование заметок: ради этого человек и разбирал
+                       встречу. Раньше оставалось только перепечатывать
+                       руками или возить мышью по всему тексту. Две
+                       кнопки, потому что разметка в поле, которое её не
+                       понимает, выглядит мусором (задача №26). -->
+                  <button class="btn-small" id="summary-copy" data-i18n="summary.copy">Копировать</button>
+                  <button class="btn-small" id="summary-copy-plain" data-i18n="summary.copy_plain">Без разметки</button>
                   <button class="btn-small" id="summary-run" data-i18n="summary.run">Сделать заметки</button>
                   <button class="btn-small" id="summary-stop" data-i18n="summary.stop" hidden>Остановить</button>
                 </div>

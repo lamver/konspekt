@@ -887,6 +887,26 @@ body { display: flex; flex-direction: column; }
 .turn__lang:hover { opacity: 1; color: var(--accent); background: var(--paper-3); }
 .turn__lang--failed { opacity: 1; color: var(--ink-3); }
 
+/* «Копировать» у реплики. Ведёт себя как соседние кнопки строки:
+   проявляется на наведении, чтобы расшифровка не пестрила. */
+.turn__copy {
+  padding: 0 4px;
+  height: 16px;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--ink-3);
+  font: inherit;
+  font-size: 9px;
+  letter-spacing: .04em;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity .12s, color .12s, background .12s;
+}
+.turn:hover .turn__copy { opacity: .55; }
+.turn__copy:hover,
+.turn__copy:focus-visible { opacity: 1; color: var(--accent); background: var(--paper-3); }
+
 .lang-menu {
   position: absolute;
   z-index: 20;
@@ -1021,6 +1041,28 @@ body { display: flex; flex-direction: column; }
   color: var(--ink);
 }
 .bubble--bot { align-self: flex-start; }
+
+/* Кнопка «копировать» в ответе. Держим её бледной и показываем ярче на
+   наведении: нужна она изредка, а мозолит глаза в каждом ответе. */
+.bubble { position: relative; }
+.bubble__copy {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  padding: 1px 6px;
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--ink-3);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity .12s ease;
+}
+.bubble:hover .bubble__copy,
+.bubble__copy:focus-visible { opacity: 1; }
+.bubble__copy:hover { color: var(--ink); border-color: var(--ink-3); }
 .bubble--me {
   align-self: flex-end;
   background: var(--accent-soft);
