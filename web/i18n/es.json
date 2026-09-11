@@ -112,7 +112,11 @@
     "empty_question": "Pregunta vacía",
     "no_meeting": "Abre primero una reunión",
     "send_error": "No se pudo enviar la pregunta",
-    "error": "No se pudo obtener una respuesta"
+    "error": "No se pudo obtener una respuesta",
+    "dictate": "Dictar una pregunta",
+    "dictate_stop": "Detener e insertar el texto",
+    "dictate_empty": "No se escuchó nada",
+    "dictate_failed": "No se pudo dictar"
   },
   "transcript": {
     "empty_title": "La transcripción aparecerá aquí",

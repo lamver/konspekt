@@ -712,6 +712,90 @@ function appendChatMessage(msg) {
   scrollChat();
 }
 
+/**
+ * Продиктовать вопрос к встрече.
+ *
+ * Нажали — слушаем, нажали второй раз — распознаём и кладём текст в
+ * поле. Именно в поле, а не отправляем: человек говорит небрежнее, чем
+ * пишет, и должен успеть поправить сказанное (задача №26).
+ *
+ * Держать кнопку нажатой здесь нельзя, в отличие от горячей клавиши:
+ * мышь занята кнопкой, а поправить текст всё равно понадобится.
+ */
+async function toggleFieldDictation() {
+  if (state.dictating) {
+    // Второе нажатие: заканчиваем и забираем текст.
+    state.dictating = false;
+    setMicState('думает');
+    let ответ = null;
+    try {
+      ответ = await api.finish_field_dictation();
+    } catch (e) {
+      console.warn('Диктовка не ответила:', e);
+    }
+    setMicState('');
+    const текст = (ответ && ответ['текст']) || '';
+    if (!текст) {
+      // Молчание или случайное нажатие. Ругаться не за что, но и
+      // делать вид, что всё получилось, нельзя.
+      showToast(t('chat.dictate_empty'));
+      return;
+    }
+    вставитьВПоле(ui.chatText, текст);
+    return;
+  }
+
+  let ответ = null;
+  try {
+    ответ = await api.start_field_dictation();
+  } catch (e) {
+    console.warn('Диктовка не запустилась:', e);
+  }
+  if (!ответ || !ответ.ok) {
+    // Говорим, почему нельзя. Мёртвая кнопка без объяснения читается
+    // как поломка программы, и человек идёт её перезапускать.
+    const причина = (ответ && ответ['причина']) || '';
+    showToast(причина ? `${t('chat.dictate_failed')}: ${причина}`
+                      : t('chat.dictate_failed'));
+    return;
+  }
+  state.dictating = true;
+  setMicState('слушает');
+}
+
+/** Вид кнопки микрофона: слушает, думает или ничего не делает. */
+function setMicState(режим) {
+  if (!ui.chatMic) return;
+  ui.chatMic.classList.toggle('is-listening', режим === 'слушает');
+  ui.chatMic.classList.toggle('is-thinking', режим === 'думает');
+  ui.chatMic.title = режим === 'слушает' ? t('chat.dictate_stop')
+                                         : t('chat.dictate');
+}
+
+/**
+ * Положить продиктованное в поле, не затирая написанное.
+ *
+ * Человек мог начать печатать, а договорить голосом. Затереть начало —
+ * значит отнять сделанную работу, поэтому вставляем на место курсора.
+ */
+function вставитьВПоле(поле, текст) {
+  if (!поле) return;
+  const было = поле.value || '';
+  const начало = typeof поле.selectionStart === 'number'
+    ? поле.selectionStart : было.length;
+  const конец = typeof поле.selectionEnd === 'number'
+    ? поле.selectionEnd : было.length;
+  const слева = было.slice(0, начало);
+  const справа = было.slice(конец);
+  // Пробел между своим текстом и продиктованным, иначе слова слипнутся.
+  const разделитель = слева && !/\s$/.test(слева) ? ' ' : '';
+  поле.value = слева + разделитель + текст + справа;
+  const курсор = (слева + разделитель + текст).length;
+  if (поле.setSelectionRange) поле.setSelectionRange(курсор, курсор);
+  поле.focus();
+  resizeChatInput();
+}
+
 function setBubbleText(node, text) {
   if (text.trim()) {
     node.classList.remove('is-waiting');
@@ -2960,6 +3044,7 @@ function bindUi() {
     chatList: el('chat-list'),
     chatHint: el('chat-hint'),
     chatText: el('chat-text'),
+    chatMic: el('chat-mic'),
     chatSend: el('chat-send'),
     chatClear: el('chat-clear'),
     llmBackend: el('llm-backend'),
@@ -3058,6 +3143,7 @@ function bindUi() {
     });
   }
   ui.chatSend.addEventListener('click', sendQuestion);
+  if (ui.chatMic) ui.chatMic.addEventListener('click', toggleFieldDictation);
   ui.chatClear.addEventListener('click', clearChat);
   ui.chatText.addEventListener('input', resizeChatInput);
   ui.chatText.addEventListener('keydown', (e) => {

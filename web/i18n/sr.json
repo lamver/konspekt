@@ -112,7 +112,11 @@
     "empty_question": "Prazno pitanje",
     "no_meeting": "Prvo otvorite sastanak",
     "send_error": "Pitanje nije moglo da se pošalje",
-    "error": "Odgovor nije mogao da se dobije"
+    "error": "Odgovor nije mogao da se dobije",
+    "dictate": "Izdiktiraj pitanje",
+    "dictate_stop": "Zaustavi i ubaci tekst",
+    "dictate_empty": "Ništa se nije čulo",
+    "dictate_failed": "Diktiranje nije pokrenuto"
   },
   "transcript": {
     "empty_title": "Transkript će se pojaviti ovde",

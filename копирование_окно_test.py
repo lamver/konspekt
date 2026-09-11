@@ -56,6 +56,9 @@ def осмотреть(окно):
               (document.getElementById('summary-body').textContent || '').includes('#'),
             простой: markdownToPlain(state.current.summary),
             цитата: цитатаРеплики('Маша', '12:30', 'переделать'),
+            есть_микрофон: !!document.getElementById('chat-mic'),
+            подсказка_микрофона:
+              (document.getElementById('chat-mic') || {}).title || '',
           })
         """))
     except Exception as e:  # noqa: BLE001
@@ -91,5 +94,11 @@ assert "#" not in (д.get("простой") or ""), (
     f"в простом тексте осталась разметка: {д.get('простой')!r}"
 )
 assert д.get("цитата") == "[Маша, 12:30] переделать", д.get("цитата")
+assert д.get("есть_микрофон"), (
+    "в живом окне нет кнопки диктовки в поле вопроса"
+)
+assert д.get("подсказка_микрофона"), (
+    "у кнопки диктовки нет подсказки: человек не поймёт, что это"
+)
 
 print("\n[ok] живое окно: кнопки на месте, заголовки разобраны, цитата собрана")

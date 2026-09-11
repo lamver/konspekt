@@ -112,7 +112,11 @@
     "empty_question": "Empty question",
     "no_meeting": "Open a meeting first",
     "send_error": "Couldn't send the question",
-    "error": "Couldn't get an answer"
+    "error": "Couldn't get an answer",
+    "dictate": "Dictate a question",
+    "dictate_stop": "Stop and insert the text",
+    "dictate_empty": "Nothing was picked up",
+    "dictate_failed": "Dictation did not start"
   },
   "transcript": {
     "empty_title": "The transcript will appear here",

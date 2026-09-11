@@ -1113,6 +1113,34 @@ body { display: flex; flex-direction: column; }
 }
 .chat__input textarea:focus { border-color: var(--accent); }
 
+/* Микрофон в поле вопроса. Держим спокойным: это помощь, а не главное
+   действие, поэтому без заливки, в отличие от «отправить». */
+.btn-mic {
+  flex: none;
+  width: 30px; height: 30px;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: none;
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: color .12s, border-color .12s, background .12s;
+}
+.btn-mic:hover { color: var(--ink); border-color: var(--ink-3); }
+/* Слушает: видно издалека, иначе человек не поймёт, что говорить уже
+   можно, и будет ждать. */
+.btn-mic.is-listening {
+  color: var(--paper);
+  background: var(--rec);
+  border-color: transparent;
+  animation: mic-pulse 1.4s ease-in-out infinite;
+}
+.btn-mic.is-thinking { color: var(--accent); border-color: var(--accent); }
+@keyframes mic-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .6; }
+}
+
 .btn-send {
   flex: none;
   width: 30px; height: 30px;
