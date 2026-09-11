@@ -22,16 +22,17 @@ const I18N = {
     lead: 'A local, privacy-first alternative to Granola. Nothing is uploaded anywhere: not the audio, not the transcript, not your notes.',
     download: 'Download for Windows',
     downloadNote: 'Free. Installs in a minute and works offline afterwards.',
+    vtNote: 'engines flag this file',
     sourceLink: 'Source code on GitHub',
 
     featuresTitle: 'What it does',
     features: [
+      ['Notices the conversation', 'If people are talking on your computer and recording is off, Konspekt offers to start. Nothing is saved until you agree.'],
       ['Records both sides', 'Your microphone and the system audio, so the other person in a call is captured too.'],
       ['Transcribes locally', 'Russian through GigaAM, other languages through Whisper. No cloud, no account, no API key.'],
       ['Tells speakers apart', 'Name someone once and Konspekt recognises their voice in later meetings.'],
       ['Writes the summary', 'Decisions, who does what, and what is still open — from the actual conversation.'],
       ['Answers questions', 'Ask who promised what or what was agreed, and get an answer from the transcript.'],
-      ['Imports recordings', 'Drag in files from any source; each becomes a meeting with its own transcript.'],
     ],
 
     shotsTitle: 'What it looks like',
@@ -64,16 +65,17 @@ const I18N = {
     lead: 'Una alternativa local y privada a Granola. No se sube nada a ningún sitio: ni el audio, ni la transcripción, ni tus notas.',
     download: 'Descargar para Windows',
     downloadNote: 'Gratis. Se instala en un minuto y luego funciona sin conexión.',
+    vtNote: 'antivirus marcan este archivo',
     sourceLink: 'Código fuente en GitHub',
 
     featuresTitle: 'Qué hace',
     features: [
+      ['Detecta la conversación', 'Si alguien habla en tu ordenador y la grabación está apagada, Konspekt se ofrece a empezar. No se guarda nada hasta que aceptes.'],
       ['Graba ambos lados', 'Tu micrófono y el sonido del sistema, así también se registra a la otra persona en una llamada.'],
       ['Transcribe en local', 'Ruso con GigaAM, otros idiomas con Whisper. Sin nube, sin cuenta, sin clave de API.'],
       ['Distingue a quien habla', 'Pon un nombre una vez y Konspekt reconocerá esa voz en las siguientes reuniones.'],
       ['Escribe el resumen', 'Decisiones, quién hace qué y qué queda abierto, sacado de la conversación real.'],
       ['Responde preguntas', 'Pregunta quién prometió qué o en qué se quedó, y la respuesta sale de la transcripción.'],
-      ['Importa grabaciones', 'Arrastra archivos de cualquier origen; cada uno se convierte en una reunión con su transcripción.'],
     ],
 
     shotsTitle: 'Cómo se ve',
@@ -106,16 +108,17 @@ const I18N = {
     lead: 'Lokalna alternativa Granoli, sa privatnošću na prvom mestu. Ništa se nigde ne šalje: ni zvuk, ni transkript, ni tvoje beleške.',
     download: 'Preuzmi za Windows',
     downloadNote: 'Besplatno. Instalira se za minut i posle radi bez interneta.',
+    vtNote: 'antivirusa prijavljuje ovaj fajl',
     sourceLink: 'Izvorni kod na GitHubu',
 
     featuresTitle: 'Šta radi',
     features: [
+      ['Primeti razgovor', 'Ako se na računaru priča, a snimanje je isključeno, Konspekt ponudi da počne. Ništa se ne snima dok ne pristanete.'],
       ['Snima obe strane', 'Tvoj mikrofon i zvuk sistema, pa se sagovornik u pozivu takođe snima.'],
       ['Prepisuje lokalno', 'Ruski preko GigaAM-a, ostale jezike preko Whispera. Bez oblaka, bez naloga, bez API ključa.'],
       ['Razlikuje govornike', 'Imenuj nekoga jednom i Konspekt će prepoznati taj glas na sledećim sastancima.'],
       ['Piše sažetak', 'Odluke, ko šta radi i šta je ostalo otvoreno — iz stvarnog razgovora.'],
       ['Odgovara na pitanja', 'Pitaj ko je šta obećao ili šta je dogovoreno, a odgovor stiže iz transkripta.'],
-      ['Uvozi snimke', 'Prevuci fajlove bilo kog porekla; svaki postaje sastanak sa svojim transkriptom.'],
     ],
 
     shotsTitle: 'Kako izgleda',
@@ -148,16 +151,17 @@ const I18N = {
     lead: 'Запись, расшифровка и заметки никуда не уходят: ни звук, ни текст, ни ваши тезисы.',
     download: 'Скачать для Windows',
     downloadNote: 'Бесплатно. Ставится за минуту, дальше работает без интернета.',
+    vtNote: 'антивирусов считают файл опасным',
     sourceLink: 'Исходный код на GitHub',
 
     featuresTitle: 'Что умеет',
     features: [
+      ['Замечает разговор', 'Если на компьютере идёт разговор, а запись выключена, Konspekt предложит её начать. Ничего не сохраняется, пока вы не согласитесь.'],
       ['Пишет обе стороны', 'Микрофон и системный звук, поэтому собеседник в звонке тоже записывается.'],
       ['Расшифровывает на месте', 'Русский через GigaAM, другие языки через Whisper. Без облака, без учётной записи, без ключа.'],
       ['Различает голоса', 'Назовите человека один раз, и на следующих встречах он подпишется сам.'],
       ['Пишет саммари', 'Решения, кто что делает и что осталось нерешённым — из самого разговора.'],
       ['Отвечает на вопросы', 'Спросите, кто что обещал и о чём договорились, ответ придёт из расшифровки.'],
-      ['Загружает записи', 'Бросьте файлы в окно: на каждую запись заведётся своя встреча с расшифровкой.'],
     ],
 
     shotsTitle: 'Как выглядит',

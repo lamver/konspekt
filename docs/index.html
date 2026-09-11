@@ -150,6 +150,32 @@
   .download-note { color: var(--muted); font-size: 0.88rem; margin: 12px 0 0; }
   .source-link { font-size: 0.9rem; margin-top: 6px; }
 
+  /* Проверка антивирусами под кнопкой. Скрыта, пока не придёт ответ от
+     GitHub: пустая или устаревшая плашка про вирусы хуже её отсутствия,
+     ведь это ровно то место, где человек решает, доверять нам или нет. */
+  .vt {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin: 14px 0 0;
+    padding: 7px 14px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    font-size: 0.86rem;
+    color: var(--muted);
+    text-decoration: none;
+  }
+  .vt:hover { border-color: var(--accent); text-decoration: none; }
+  .vt__dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #3fb950;
+    flex-shrink: 0;
+  }
+  .vt--dirty .vt__dot { background: #d29922; }
+  .vt__count { color: var(--ink); font-weight: 600; }
+
   /* --- Секции --- */
   section { padding: 56px 0; border-top: 1px solid var(--line); }
   h2 {
@@ -245,6 +271,10 @@
          href="https://github.com/lamver/konspekt-releases/releases/latest"></a>
     </p>
     <p class="download-note" id="t-download-note"></p>
+    <!-- Заполняется из описания последнего релиза, см. показатьПроверку().
+         Скрыт, пока ответа нет: молчание честнее устаревшего числа. -->
+    <p><a class="vt" id="t-vt" hidden rel="noopener" target="_blank"
+          ><span class="vt__dot"></span><span id="t-vt-text"></span></a></p>
     <p class="source-link"><a id="t-source-link" href="https://github.com/lamver/konspekt"></a></p>
   </div>
 </header>
@@ -428,6 +458,10 @@ function render(lang) {
   setText('t-license-text', d.licenseText);
   setText('t-license-link', d.licenseLink);
 
+  // Подпись у виджета проверки на языке страницы, поэтому обновляем его
+  // при каждой отрисовке, а не один раз при загрузке.
+  показатьПроверку(lang);
+
   for (const btn of document.querySelectorAll('#langbar button')) {
     btn.setAttribute('aria-pressed', String(btn.dataset.lang === lang));
   }
@@ -451,6 +485,63 @@ function buildLangBar(current) {
     btn.setAttribute('aria-pressed', String(lang === current));
     btn.addEventListener('click', () => switchTo(lang));
     bar.append(btn);
+  }
+}
+
+/* --- Проверка антивирусами -----------------------------------------------
+
+   Виджета, который сам показывал бы свежий счёт, у VirusTotal нет: их
+   API требует ключ, а класть ключ на публичную страницу нельзя — его
+   заберёт первый же любопытный и сожжёт квоту.
+
+   Но число у нас уже есть в надёжном месте. Сборка кладёт в описание
+   релиза значок вида «VirusTotal-0%2F75» и ссылку на отчёт, а GitHub
+   отдаёт описание браузеру без ключа и с разрешающим CORS. Значит,
+   страница может спросить последний релиз и достать счёт оттуда:
+   вышла новая версия — виджет обновился сам, править страницу не надо.
+
+   Молчим, если что-то пошло не так. Плашка про вирусы стоит там, где
+   человек решает, доверять нам или нет, и устаревшее или выдуманное
+   число здесь хуже, чем его отсутствие. */
+
+const РЕЛИЗЫ = 'https://api.github.com/repos/lamver/konspekt-releases/releases/latest';
+
+/** Достать счёт проверки и ссылку на отчёт из описания релиза. */
+function разобратьПроверку(описание) {
+  if (typeof описание !== 'string') return null;
+  // Значок из shields.io: «VirusTotal-0%2F75-brightgreen».
+  const счёт = описание.match(/VirusTotal-(\d+)%2F(\d+)/);
+  const отчёт = описание.match(/virustotal\.com\/gui\/file\/([a-f0-9]{64})/);
+  if (!счёт || !отчёт) return null;
+  const тревог = Number(счёт[1]);
+  const всего = Number(счёт[2]);
+  // Ноль движков — это не «всё чисто», это сломанный разбор.
+  if (!Number.isFinite(тревог) || !Number.isFinite(всего) || всего <= 0) return null;
+  return { тревог, всего, ссылка: 'https://www.virustotal.com/gui/file/' + отчёт[1] };
+}
+
+async function показатьПроверку(lang) {
+  const узел = document.getElementById('t-vt');
+  if (!узел) return;
+  try {
+    const ответ = await fetch(РЕЛИЗЫ, { headers: { Accept: 'application/vnd.github+json' } });
+    if (!ответ.ok) return;
+    const разбор = разобратьПроверку((await ответ.json()).body);
+    if (!разбор) return;
+    const d = I18N[lang] || I18N.en;
+    const текст = document.getElementById('t-vt-text');
+    if (текст) {
+      текст.innerHTML = '';
+      const число = document.createElement('span');
+      число.className = 'vt__count';
+      число.textContent = разбор.тревог + '/' + разбор.всего;
+      текст.append(число, document.createTextNode(' ' + d.vtNote));
+    }
+    узел.href = разбор.ссылка;
+    узел.classList.toggle('vt--dirty', разбор.тревог > 0);
+    узел.hidden = false;
+  } catch (e) {
+    // Нет сети, GitHub недоступен, превышена квота: молча не показываем.
   }
 }
 
