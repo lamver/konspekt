@@ -17,6 +17,8 @@ const I18N = {
   en: {
     label: 'English',
     htmlLang: 'en',
+    description: 'A smart notepad for meetings. Records, transcribes and summarises entirely on your own computer. Free, open source, works offline.',
+    ogDescription: 'Records the conversation, transcribes it and turns it into notes, entirely on your own machine.',
     title: 'Konspekt — meeting notes that never leave your computer',
     tagline: 'A smart notepad for meetings. Konspekt records the conversation, transcribes it and turns it into notes — entirely on your own machine.',
     lead: 'A local, privacy-first alternative to Granola. Nothing is uploaded anywhere: not the audio, not the transcript, not your notes.',
@@ -62,6 +64,8 @@ const I18N = {
   es: {
     label: 'Español',
     htmlLang: 'es',
+    description: 'Un bloc de notas inteligente para reuniones. Graba, transcribe y resume entero en tu propio ordenador. Gratis, código abierto, funciona sin conexión.',
+    ogDescription: 'Graba la conversación, la transcribe y la convierte en notas, entero en tu propio ordenador.',
     title: 'Konspekt — notas de reuniones que nunca salen de tu ordenador',
     tagline: 'Un cuaderno inteligente para reuniones. Konspekt graba la conversación, la transcribe y la convierte en notas, todo en tu propio ordenador.',
     lead: 'Una alternativa local y privada a Granola. No se sube nada a ningún sitio: ni el audio, ni la transcripción, ni tus notas.',
@@ -107,6 +111,8 @@ const I18N = {
   sr: {
     label: 'Srpski',
     htmlLang: 'sr-Latn',
+    description: 'Pametna beležnica za sastanke. Snima, transkribuje i sažima u celosti na tvom računaru. Besplatno, otvoren kod, radi bez interneta.',
+    ogDescription: 'Snima razgovor, transkribuje ga i pretvara u beleške, u celosti na tvom računaru.',
     title: 'Konspekt — beleške sa sastanaka koje ne napuštaju tvoj računar',
     tagline: 'Pametna beležnica za sastanke. Konspekt snima razgovor, prepisuje ga i pretvara u beleške — sve na tvom računaru.',
     lead: 'Lokalna alternativa Granoli, sa privatnošću na prvom mestu. Ništa se nigde ne šalje: ni zvuk, ni transkript, ni tvoje beleške.',
@@ -152,6 +158,8 @@ const I18N = {
   ru: {
     label: 'Русский',
     htmlLang: 'ru',
+    description: 'Умный блокнот для встреч. Записывает, расшифровывает и делает заметки целиком на вашем компьютере. Бесплатно, открытый код, работает без интернета.',
+    ogDescription: 'Слушает разговор, расшифровывает его и превращает в заметки — целиком на вашем компьютере.',
     title: 'Konspekt — заметки со встреч, которые остаются на вашем компьютере',
     tagline: 'Умный блокнот для встреч. Konspekt слушает разговор, расшифровывает его и превращает в заметки — целиком на вашем компьютере.',
     lead: 'Запись, расшифровка и заметки никуда не уходят: ни звук, ни текст, ни ваши тезисы.',

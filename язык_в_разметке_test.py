@@ -1,0 +1,237 @@
+# -*- coding: utf-8 -*-
+"""Каждый язык страницы честен уже в разметке, без JavaScript.
+
+Беда, ради которой проверка написана: страница одна на четыре языка, и
+язык переключается скриптом. В сыром ответе сервера при любом `?lang=`
+стоял `lang="en"`, английский `title` и английское описание. Человек с
+браузером этого не видел, а читают сырой ответ как раз те, кто скриптов
+не выполняет:
+
+- Bing и Яндекс по большей части не выполняют;
+- Google выполняет с отсрочкой и не всегда;
+- мессенджеры и соцсети не выполняют никогда: карточка ссылки берётся
+  из og-тегов разметки.
+
+То есть для поиска сайт существовал только по-английски, а присланная в
+чат ссылка разворачивалась по-английски кому угодно.
+
+Здесь проверяются собранные страницы `/ru/`, `/es/`, `/sr/`: в разметке
+свой язык, свой заголовок, своё описание и свои og-теги. Отдельно
+проверяется, что скрипт не перебивает язык обратно — это случилось
+сразу: страница приходила русской, а через миг скрипт находил в памяти
+браузера прежний выбор и переписывал её на английский.
+
+Собираются страницы `node tools/собрать-языки.mjs`, руками не правятся.
+"""
+from __future__ import annotations
+
+import json
+import re
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+import testenv  # noqa: F401  русский вывод в консоли Windows
+
+КОРЕНЬ = Path(__file__).resolve().parent
+ДОКИ = КОРЕНЬ / "docs"
+
+# язык: (папка, код в html, слово, которое обязано быть в тексте)
+ЯЗЫКИ = {
+    "ru": ("ru", "ru", "встреч"),
+    "es": ("es", "es", "reuniones"),
+    "sr": ("sr", "sr-Latn", "sastanaka"),
+}
+
+сбои: list[str] = []
+
+
+def проверить(условие: bool, что: str, подробности: str = "") -> None:
+    хвост = f" ({подробности})" if подробности else ""
+    print(("[ок] " if условие else "[СБОЙ] ") + что + хвост)
+    if not условие:
+        сбои.append(что)
+
+
+def взять(html: str, образец: str) -> str:
+    м = re.search(образец, html, re.S | re.I)
+    return м.group(1).strip() if м else ""
+
+
+def текст_без_скриптов(html: str) -> str:
+    без = re.sub(r"<script[\s\S]*?</script>", " ", html, flags=re.I)
+    без = re.sub(r"<style[\s\S]*?</style>", " ", без, flags=re.I)
+    без = re.sub(r"<!--[\s\S]*?-->", " ", без)
+    без = re.sub(r"<[^>]+>", " ", без)
+    return re.sub(r"\s+", " ", без).strip()
+
+
+# --- Разметка каждой языковой страницы ------------------------------------
+for язык, (папка, код, слово) in ЯЗЫКИ.items():
+    файл = ДОКИ / папка / "index.html"
+    if not файл.exists():
+        проверить(False, f"/{папка}/ собрана", "файла нет, запустите tools/собрать-языки.mjs")
+        continue
+
+    html = файл.read_text(encoding="utf-8")
+    видно = текст_без_скриптов(html)
+
+    объявленный = взять(html, r'<html lang="([^"]+)"')
+    проверить(объявленный == код,
+              f"/{папка}/ объявляет язык в разметке",
+              f'lang="{объявленный}"')
+
+    заголовок = взять(html, r"<title>(.*?)</title>")
+    проверить(слово.lower() in заголовок.lower(),
+              f"/{папка}/ заголовок на своём языке", заголовок[:48])
+
+    описание = взять(html, r'name="description" content="([^"]*)"')
+    проверить(len(описание) > 40 and "smart notepad" not in описание.lower(),
+              f"/{папка}/ описание переведено", описание[:48])
+
+    ог = взять(html, r'property="og:title" content="([^"]*)"')
+    проверить(слово.lower() in ог.lower(),
+              f"/{папка}/ карточка для мессенджеров на своём языке", ог[:44])
+
+    локаль = взять(html, r'property="og:locale" content="([^"]*)"')
+    проверить(локаль == код.replace("-", "_"),
+              f"/{папка}/ og:locale выставлен", локаль or "нет тега")
+
+    # Текст, а не пустые заголовки: ровно то, что читает робот.
+    проверить(len(видно) > 1500, f"/{папка}/ в разметке есть связный текст",
+              f"{len(видно)} знаков")
+    проверить(слово in видно, f"/{папка}/ текст на своём языке, а не английский")
+
+    canonical = взять(html, r'rel="canonical" href="([^"]*)"')
+    ждём = ("https://konspekt.aisearch.ru/" if язык == "ru"
+            else f"https://konspekt.aisearch.tech/{папка}/")
+    проверить(canonical == ждём, f"/{папка}/ canonical на себя", canonical)
+
+# --- hreflang ведёт на настоящие адреса, а не на ?lang= -------------------
+корень = (ДОКИ / "index.html").read_text(encoding="utf-8")
+ссылки = re.findall(r'rel="alternate" hreflang="([^"]+)" href="([^"]+)"', корень)
+объявлены = {код: адрес for код, адрес in ссылки}
+
+проверить(set(объявлены) >= {"en", "es", "sr", "ru"},
+          "объявлены все четыре языка", ", ".join(sorted(объявлены)))
+
+# Смотрим все страницы, а не только корень: собранные копии тоже несут
+# этот блок, и разъехаться они могут поодиночке.
+плохие = []
+for путь in [ДОКИ / "index.html"] + [ДОКИ / п / "index.html"
+                                     for п, _, _ in ЯЗЫКИ.values()]:
+    if not путь.exists():
+        continue
+    для_страницы = re.findall(r'rel="alternate" hreflang="[^"]+" href="([^"]+)"',
+                              путь.read_text(encoding="utf-8"))
+    плохие += [f"{путь.parent.name}: {а}" for а in для_страницы if "?lang=" in а]
+
+проверить(not плохие,
+          "hreflang ведёт на настоящие адреса, а не на ?lang=",
+          "; ".join(плохие) or "чисто")
+
+карта = (ДОКИ / "sitemap.xml").read_text(encoding="utf-8")
+# Смотрим адреса, а не весь файл: в примечании слово «?lang=» стоит
+# законно, оно объясняет, почему этих адресов больше нет.
+адреса_карты = re.findall(r'(?:<loc>|href=")([^<"]+)', карта)
+проверить(all("?lang=" not in а for а in адреса_карты),
+          "в карте сайта нет адресов с ?lang=",
+          "; ".join(а for а in адреса_карты if "?lang=" in а) or "чисто")
+for папка in ("es/", "sr/"):
+    проверить(f"konspekt.aisearch.tech/{папка}" in карта,
+              f"карта сайта знает про /{папка}")
+
+# --- Скрипт не перебивает язык обратно ------------------------------------
+#
+# Главная ловушка. Разметка приходит русской, но следом выполняется
+# скрипт, и если он выберет язык по памяти браузера, человек увидит
+# английский на русской ссылке. Гоняем настоящий браузерный движок и
+# нарочно подсовываем чужой язык браузера.
+СЦЕНАРИЙ = r"""
+const { JSDOM } = require('jsdom');
+const fs = require('fs');
+const path = require('path');
+
+const где = process.argv[2];
+const html = fs.readFileSync(path.join(где, 'index.html'), 'utf8');
+
+const дом = new JSDOM(html, {
+  runScripts: 'dangerously',
+  resources: 'usable',
+  url: 'file://' + где.replace(/\\/g, '/') + '/index.html',
+  beforeParse(окно) {
+    окно.fetch = () => new Promise(() => {});
+    // Чужой язык браузера и чужой прошлый выбор: и то, и другое не
+    // должно перебить язык, указанный в адресе страницы.
+    Object.defineProperty(окно.navigator, 'languages',
+      { value: ['de-DE'], configurable: true });
+    Object.defineProperty(окно.navigator, 'language',
+      { value: 'de-DE', configurable: true });
+    try { окно.localStorage.setItem('konspekt-lang', 'en'); } catch (e) {}
+  },
+});
+
+setTimeout(() => {
+  const d = дом.window.document;
+  console.log(JSON.stringify({ lang: d.documentElement.lang, title: d.title }));
+  process.exit(0);
+}, 1500);
+"""
+
+node = shutil.which("node")
+есть_jsdom = node and subprocess.run(
+    [node, "-e", "require.resolve('jsdom')"],
+    capture_output=True, cwd=КОРЕНЬ).returncode == 0
+
+if not есть_jsdom:
+    print("[..] node или jsdom нет: не проверяли, перебивает ли скрипт язык")
+else:
+    сценарий = КОРЕНЬ / "tools" / "_язык_в_адресе.js"
+    сценарий.write_text(СЦЕНАРИЙ, encoding="utf-8")
+    try:
+        for язык, (папка, код, слово) in ЯЗЫКИ.items():
+            итог = subprocess.run(
+                [node, str(сценарий), str(ДОКИ / папка)],
+                capture_output=True, text=True, encoding="utf-8", timeout=90)
+            строки = (итог.stdout or "").strip().splitlines()
+            if not строки:
+                проверить(False, f"/{папка}/ пережила запуск скриптов",
+                          итог.stderr[-120:])
+                continue
+            в = json.loads(строки[-1])
+            проверить(в["lang"] == код,
+                      f"/{папка}/ скрипт не перебил язык на чужой",
+                      f'стало lang="{в["lang"]}"')
+            проверить(слово.lower() in в["title"].lower(),
+                      f"/{папка}/ заголовок остался своим",
+                      в["title"][:44])
+    finally:
+        сценарий.unlink(missing_ok=True)
+
+# --- Собранное совпадает с исходником -------------------------------------
+#
+# Страницы собираются из docs/index.html. Если их поправить руками, они
+# молча разойдутся с исходником, и заметит это только робот.
+итог = subprocess.run(
+    ["node", str(КОРЕНЬ / "tools" / "собрать-языки.mjs")],
+    capture_output=True, text=True, encoding="utf-8", cwd=КОРЕНЬ)
+if итог.returncode != 0:
+    проверить(False, "сборщик языковых страниц работает", итог.stderr[-160:])
+else:
+    разошлись = subprocess.run(
+        ["git", "diff", "--name-only", "--", "docs/"],
+        capture_output=True, text=True, encoding="utf-8", cwd=КОРЕНЬ).stdout
+    # Пересборка не должна ничего менять: если меняет, кто-то правил
+    # собранные файлы руками или забыл пересобрать после правки исходника.
+    правленые = [и for и in разошлись.split("\n")
+                 if re.search(r"docs/(ru|es|sr)/", и)]
+    проверить(not правленые,
+              "собранные страницы совпадают с исходником",
+              ", ".join(правленые) or "совпадают")
+
+print()
+if сбои:
+    print(f"Не прошло проверок: {len(сбои)}")
+    sys.exit(1)
+print("Каждый язык честен уже в разметке: робот и мессенджер видят свой.")

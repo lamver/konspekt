@@ -7,6 +7,12 @@
   на него ещё никто не ссылается, и объявить языковые версии рядом с
   адресом, а не только в разметке страницы.
 
+  Адреса настоящие, а не «?lang=». Раньше испанская и сербская версии
+  объявлялись параметром, но по этому адресу лежала страница, которая в
+  сыром виде английская: язык переключался скриптом, а робот скриптов не
+  выполняет. Теперь у каждого языка своя собранная страница, и обещание
+  в карте совпадает с тем, что по адресу лежит.
+
   Русская копия перечислена отдельной записью: у неё свой адрес, свой
   язык и свой читатель.
 -->
@@ -15,18 +21,38 @@
   <url>
     <loc>https://konspekt.aisearch.tech/</loc>
     <xhtml:link rel="alternate" hreflang="en" href="https://konspekt.aisearch.tech/"/>
-    <xhtml:link rel="alternate" hreflang="es" href="https://konspekt.aisearch.tech/?lang=es"/>
-    <xhtml:link rel="alternate" hreflang="sr" href="https://konspekt.aisearch.tech/?lang=sr"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://konspekt.aisearch.tech/es/"/>
+    <xhtml:link rel="alternate" hreflang="sr" href="https://konspekt.aisearch.tech/sr/"/>
     <xhtml:link rel="alternate" hreflang="ru" href="https://konspekt.aisearch.ru/"/>
     <xhtml:link rel="alternate" hreflang="x-default" href="https://konspekt.aisearch.tech/"/>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
+    <loc>https://konspekt.aisearch.tech/es/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://konspekt.aisearch.tech/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://konspekt.aisearch.tech/es/"/>
+    <xhtml:link rel="alternate" hreflang="sr" href="https://konspekt.aisearch.tech/sr/"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://konspekt.aisearch.ru/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://konspekt.aisearch.tech/"/>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://konspekt.aisearch.tech/sr/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://konspekt.aisearch.tech/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://konspekt.aisearch.tech/es/"/>
+    <xhtml:link rel="alternate" hreflang="sr" href="https://konspekt.aisearch.tech/sr/"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://konspekt.aisearch.ru/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://konspekt.aisearch.tech/"/>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>https://konspekt.aisearch.ru/</loc>
     <xhtml:link rel="alternate" hreflang="en" href="https://konspekt.aisearch.tech/"/>
-    <xhtml:link rel="alternate" hreflang="es" href="https://konspekt.aisearch.tech/?lang=es"/>
-    <xhtml:link rel="alternate" hreflang="sr" href="https://konspekt.aisearch.tech/?lang=sr"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://konspekt.aisearch.tech/es/"/>
+    <xhtml:link rel="alternate" hreflang="sr" href="https://konspekt.aisearch.tech/sr/"/>
     <xhtml:link rel="alternate" hreflang="ru" href="https://konspekt.aisearch.ru/"/>
     <xhtml:link rel="alternate" hreflang="x-default" href="https://konspekt.aisearch.tech/"/>
     <changefreq>weekly</changefreq>
