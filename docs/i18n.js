@@ -23,6 +23,8 @@ const I18N = {
     download: 'Download for Windows',
     downloadNote: 'Free. Installs in a minute and works offline afterwards.',
     vtNote: 'engines flag this file',
+    releaseVersion: 'Version %s',
+    releaseChanges: 'What changed',
     sourceLink: 'Source code on GitHub',
 
     featuresTitle: 'What it does',
@@ -66,6 +68,8 @@ const I18N = {
     download: 'Descargar para Windows',
     downloadNote: 'Gratis. Se instala en un minuto y luego funciona sin conexión.',
     vtNote: 'antivirus marcan este archivo',
+    releaseVersion: 'Versión %s',
+    releaseChanges: 'Qué cambió',
     sourceLink: 'Código fuente en GitHub',
 
     featuresTitle: 'Qué hace',
@@ -109,6 +113,8 @@ const I18N = {
     download: 'Preuzmi za Windows',
     downloadNote: 'Besplatno. Instalira se za minut i posle radi bez interneta.',
     vtNote: 'antivirusa prijavljuje ovaj fajl',
+    releaseVersion: 'Verzija %s',
+    releaseChanges: 'Šta je novo',
     sourceLink: 'Izvorni kod na GitHubu',
 
     featuresTitle: 'Šta radi',
@@ -152,6 +158,8 @@ const I18N = {
     download: 'Скачать для Windows',
     downloadNote: 'Бесплатно. Ставится за минуту, дальше работает без интернета.',
     vtNote: 'антивирусов считают файл опасным',
+    releaseVersion: 'Версия %s',
+    releaseChanges: 'Что изменилось',
     sourceLink: 'Исходный код на GitHub',
 
     featuresTitle: 'Что умеет',

@@ -150,6 +150,13 @@
   .download-note { color: var(--muted); font-size: 0.88rem; margin: 12px 0 0; }
   .source-link { font-size: 0.9rem; margin-top: 6px; }
 
+  /* Какая версия сейчас выложена. Берётся из того же ответа GitHub, что и
+     проверка антивирусами, и точно так же скрыта, пока ответа нет:
+     подписанный вручную номер устаревает в первом же выпуске и начинает
+     врать. */
+  .release { font-size: 0.9rem; margin-top: 6px; color: var(--muted); }
+  .release__ver { color: var(--text); font-weight: 600; }
+
   /* Проверка антивирусами под кнопкой. Скрыта, пока не придёт ответ от
      GitHub: пустая или устаревшая плашка про вирусы хуже её отсутствия,
      ведь это ровно то место, где человек решает, доверять нам или нет. */
@@ -271,6 +278,9 @@
          href="https://github.com/lamver/konspekt-releases/releases/latest"></a>
     </p>
     <p class="download-note" id="t-download-note"></p>
+    <!-- Номер выложенной версии и ссылка на список изменений.
+         Скрыт, пока GitHub не ответил: см. показатьВыпуск(). -->
+    <p class="release" id="t-release" hidden></p>
     <!-- Заполняется из описания последнего релиза, см. показатьПроверку().
          Скрыт, пока ответа нет: молчание честнее устаревшего числа. -->
     <p><a class="vt" id="t-vt" hidden rel="noopener" target="_blank"
@@ -520,13 +530,67 @@ function разобратьПроверку(описание) {
   return { тревог, всего, ссылка: 'https://www.virustotal.com/gui/file/' + отчёт[1] };
 }
 
+/** Показать номер выложенной версии и ссылку на список изменений.
+ *
+ *  Номер не вписан в страницу руками нарочно: вписанный устаревает в
+ *  первом же выпуске, и страница начинает врать о том, что человек
+ *  скачает. Здесь он приходит из того же ответа GitHub, что и проверка
+ *  антивирусами, и обновляется сам.
+ *
+ *  Ссылка ведёт на страницу самого выпуска: список изменений там уже
+ *  лежит, отдельной страницы вести не нужно, и она не разъедется с тем,
+ *  что выложено. */
+function показатьВыпуск(релиз, lang) {
+  const узел = document.getElementById('t-release');
+  if (!узел) return;
+  const тег = typeof релиз.tag_name === 'string' ? релиз.tag_name : '';
+  if (!тег) return;
+  const d = I18N[lang] || I18N.en || {};
+  // Словари едут отдельным файлом, и кэш браузера легко оставит старый
+  // i18n.js рядом с новой страницей. Без запасных подписей строка тогда
+  // показала бы «undefined», а падение внутри — погасило бы заодно и
+  // плашку проверки антивирусами, которая стоит ниже.
+  const подпись = d.releaseVersion || 'Version %s';
+  const кИзменениям = d.releaseChanges || 'What changed';
+
+  узел.innerHTML = '';
+  const версия = document.createElement('span');
+  версия.className = 'release__ver';
+  версия.textContent = подпись.replace('%s', тег.replace(/^v/, ''));
+  const ссылка = document.createElement('a');
+  ссылка.href = адресВыпуска(релиз, тег);
+  ссылка.rel = 'noopener';
+  ссылка.target = '_blank';
+  ссылка.textContent = кИзменениям;
+  узел.append(версия, document.createTextNode(' · '), ссылка);
+  узел.hidden = false;
+}
+
+/** Адрес страницы выпуска. Своё поле GitHub отдаёт не всегда. */
+function адресВыпуска(релиз, тег) {
+  if (typeof релиз.html_url === 'string' && релиз.html_url) return релиз.html_url;
+  return 'https://github.com/lamver/konspekt-releases/releases/tag/' + тег;
+}
+
 async function показатьПроверку(lang) {
   const узел = document.getElementById('t-vt');
-  if (!узел) return;
   try {
     const ответ = await fetch(РЕЛИЗЫ, { headers: { Accept: 'application/vnd.github+json' } });
     if (!ответ.ok) return;
-    const разбор = разобратьПроверку((await ответ.json()).body);
+    // Один запрос на обе плашки: у GitHub без ключа шестьдесят запросов
+    // в час на адрес, и тратить два там, где хватает одного, значит
+    // ронять обе плашки вдвое быстрее.
+    const релиз = await ответ.json();
+    // В своей защите: плашка проверки антивирусами важнее номера
+    // версии, и сломанная строка версии не должна её уносить с собой.
+    try {
+      показатьВыпуск(релиз, lang);
+    } catch (e) {
+      /* номер версии не показался, остальное работает */
+    }
+
+    if (!узел) return;
+    const разбор = разобратьПроверку(релиз.body);
     if (!разбор) return;
     const d = I18N[lang] || I18N.en;
     const текст = document.getElementById('t-vt-text');
