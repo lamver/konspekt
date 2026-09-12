@@ -70,6 +70,18 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
         '      <div class="feature"><h3>Records both sides</h3>'
         '<p>Your microphone and the system audio.</p></div>',
     ),
+    (
+        "переключатель снова ставит ?lang= вместо настоящего адреса",
+        СТРАНИЦА,
+        "  return lang === 'en' ? (вверх || './') : `${вверх}${lang}/`;",
+        "  return '?lang=' + lang;",
+    ),
+    (
+        "щелчок по языку перестал переключать страницу",
+        СТРАНИЦА,
+        "      switchTo(lang);",
+        "      return;",
+    ),
 ]
 
 

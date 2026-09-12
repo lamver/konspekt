@@ -144,7 +144,7 @@
     gap: 4px;
     padding: 16px 0 0;
   }
-  .langbar button {
+  .langbar a {
     background: none;
     border: 1px solid transparent;
     color: var(--muted);
@@ -153,9 +153,10 @@
     padding: 4px 10px;
     border-radius: 6px;
     cursor: pointer;
+    text-decoration: none;
   }
-  .langbar button:hover { color: var(--text); }
-  .langbar button[aria-pressed="true"] {
+  .langbar a:hover { color: var(--text); text-decoration: none; }
+  .langbar a[aria-current="true"] {
     color: var(--accent);
     border-color: var(--line);
     background: var(--accent-soft);
@@ -596,24 +597,61 @@ function render(lang) {
   }
 }
 
+/** Адрес страницы на выбранном языке.
+ *
+ *  Относительный, а не полный: страница живёт на двух доменах, и
+ *  полный адрес уводил бы человека с того, на котором он сейчас.
+ */
+function адресЯзыка(lang) {
+  // Из подпапки (/es/, /ru/) поднимаемся на уровень выше.
+  const вложена = Boolean(langFromPath());
+  const вверх = вложена ? '../' : '';
+  return lang === 'en' ? (вверх || './') : `${вверх}${lang}/`;
+}
+
 function switchTo(lang) {
   try { localStorage.setItem('konspekt-lang', lang); } catch (e) { /* ничего */ }
-  const url = new URL(location.href);
-  url.searchParams.set('lang', lang);
-  history.replaceState(null, '', url);
+  // Адрес меняем на настоящий: так ссылкой можно поделиться, и человек
+  // на другом конце увидит тот же язык. Раньше здесь появлялся
+  // «?lang=es», а по такому адресу лежит английская разметка, и в
+  // мессенджере ссылка разворачивалась по-английски.
+  //
+  // Смена адреса может не удаться: браузер запрещает replaceState на
+  // file:// и в песочнице. Тогда язык всё равно нужно переключить —
+  // иначе щелчок не делает ничего, а это хуже несменившегося адреса.
+  try {
+    history.replaceState(null, '', new URL(адресЯзыка(lang), location.href));
+  } catch (e) {
+    /* адрес остался прежним, но язык сменится */
+  }
   render(lang);
 }
 
 function buildLangBar(current) {
   const bar = document.getElementById('langbar');
   for (const lang of LANGS) {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.dataset.lang = lang;
-    btn.textContent = I18N[lang].label;
-    btn.setAttribute('aria-pressed', String(lang === current));
-    btn.addEventListener('click', () => switchTo(lang));
-    bar.append(btn);
+    // Ссылка, а не кнопка: её видно в строке состояния, можно открыть в
+    // новой вкладке и скопировать. Поиск по ней тоже ходит и связывает
+    // языковые версии между собой.
+    const a = document.createElement('a');
+    a.href = адресЯзыка(lang);
+    a.dataset.lang = lang;
+    a.hreflang = lang;
+    a.textContent = I18N[lang].label;
+    if (lang === current) a.setAttribute('aria-current', 'true');
+    // Щелчок переключает на месте, без перезагрузки: так быстрее и не
+    // теряется место, до которого человек долистал. Обычное открытие в
+    // новой вкладке и средней кнопкой работает как у любой ссылки.
+    a.addEventListener('click', (e) => {
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+      e.preventDefault();
+      switchTo(lang);
+      for (const другая of bar.querySelectorAll('a')) {
+        if (другая.dataset.lang === lang) другая.setAttribute('aria-current', 'true');
+        else другая.removeAttribute('aria-current');
+      }
+    });
+    bar.append(a);
   }
 }
 

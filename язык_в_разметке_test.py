@@ -200,9 +200,33 @@ const дом = new JSDOM(html, {
 });
 
 setTimeout(() => {
-  const d = дом.window.document;
-  console.log(JSON.stringify({ lang: d.documentElement.lang, title: d.title }));
-  process.exit(0);
+  const окно = дом.window;
+  const d = окно.document;
+  const ссылки = [...d.querySelectorAll('#langbar a')];
+
+  // Язык страницы до всякого вмешательства: он не должен зависеть ни от
+  // языка браузера, ни от прошлого выбора.
+  const язык = d.documentElement.lang;
+  const заголовок = d.title;
+  const адресаЯзыков = ссылки.map((a) => a.getAttribute('href'));
+
+  // И отдельно: щелчок по языку должен переключать страницу, а не
+  // оставлять её как была.
+  const английская = ссылки.find((a) => a.dataset.lang === 'en');
+  if (английская) {
+    английская.dispatchEvent(new окно.MouseEvent('click',
+      { bubbles: true, cancelable: true, button: 0 }));
+  }
+
+  setTimeout(() => {
+    console.log(JSON.stringify({
+      lang: язык,
+      title: заголовок,
+      адресаЯзыков,
+      послеЩелчка: d.documentElement.lang,
+    }));
+    process.exit(0);
+  }, 300);
 }, 1500);
 """
 
@@ -233,6 +257,23 @@ else:
             проверить(слово.lower() in в["title"].lower(),
                       f"/{папка}/ заголовок остался своим",
                       в["title"][:44])
+
+            # Остаток исходной жалобы: переключатель ставил в адрес
+            # «?lang=es», а по такому адресу лежит английская разметка.
+            # Отправив такую ссылку, человек показал бы собеседнику
+            # английскую страницу.
+            адреса = в.get("адресаЯзыков") or []
+            проверить(len(адреса) == 4,
+                      f"/{папка}/ в переключателе четыре ссылки",
+                      str(адреса))
+            проверить(all("?lang=" not in а for а in адреса),
+                      f"/{папка}/ переключатель даёт адрес, которым можно поделиться",
+                      str(адреса))
+
+            # И щелчок должен работать: переключать язык на месте.
+            проверить(в.get("послеЩелчка") == "en",
+                      f"/{папка}/ щелчок по языку переключает страницу",
+                      f'стало lang="{в.get("послеЩелчка")}"')
     finally:
         сценарий.unlink(missing_ok=True)
 
