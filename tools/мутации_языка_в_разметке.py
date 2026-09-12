@@ -62,6 +62,14 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
         "title: 'Konspekt — заметки со встреч, которые остаются на вашем компьютере'",
         "title: 'Konspekt — совершенно другое название'",
     ),
+    (
+        "карточки удвоились: русские вперемешку с английскими",
+        РУССКАЯ,
+        '<div class="features" id="features">',
+        '<div class="features" id="features">\n'
+        '      <div class="feature"><h3>Records both sides</h3>'
+        '<p>Your microphone and the system audio.</p></div>',
+    ),
 ]
 
 
