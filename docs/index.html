@@ -26,6 +26,13 @@
 <link rel="alternate" hreflang="en" href="https://konspekt.aisearch.tech/">
 <link rel="alternate" hreflang="ru" href="https://konspekt.aisearch.ru/">
 <link rel="alternate" hreflang="x-default" href="https://konspekt.aisearch.tech/">
+<!-- Испанский и сербский тоже объявлены: интерфейс переведён на четыре
+     языка, а поиску были известны только два, и для него испанской со
+     сербской версий не существовало вовсе. Отдельных адресов у них нет,
+     поэтому указываем ?lang= — тот же параметр, который понимает выбор
+     языка на странице, так что ссылка ведёт именно туда, куда обещает. -->
+<link rel="alternate" hreflang="es" href="https://konspekt.aisearch.tech/?lang=es">
+<link rel="alternate" hreflang="sr" href="https://konspekt.aisearch.tech/?lang=sr">
 
 <!-- Русская копия должна быть канонической сама для себя, иначе поиск
      склеит её с английской и по-русски нас не найдут. Файл один на все
@@ -46,8 +53,60 @@
 <meta property="og:title" content="Konspekt — meeting notes that never leave your computer">
 <meta property="og:description" content="Records the conversation, transcribes it and turns it into notes, entirely on your own machine.">
 <meta property="og:type" content="website">
-<meta property="og:url" content="https://lamver.github.io/konspekt/">
-<meta property="og:image" content="https://lamver.github.io/konspekt/screenshots/en/summary.png">
+<!-- Свой домен, а не адрес на чужой площадке: каноническим объявлен
+     konspekt.aisearch.tech, и расходиться с ним нельзя. При пересылке
+     ссылки в мессенджере подставлялся github.io, то есть мы своими
+     руками рекламировали адрес, который завтра может смениться. -->
+<meta property="og:url" content="https://konspekt.aisearch.tech/">
+<meta property="og:image" content="https://konspekt.aisearch.tech/screenshots/en/summary.png">
+<meta property="og:image:width" content="1044">
+<meta property="og:image:height" content="721">
+<meta name="twitter:card" content="summary_large_image">
+
+<!-- Описание приложения для поиска.
+
+     Без него поисковик видит обычную страницу с текстом и не знает, что
+     за ней стоит программа: какая цена, под какую систему, откуда
+     скачать. Цена указана нулём явно — «бесплатно» в тексте машина не
+     прочитает, а поле offers прочитает.
+
+     Снимки перечислены здесь же: по ним нас находят в поиске картинок,
+     а сами они грузятся отложенно и роботу-сборщику могут не достаться. -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Konspekt",
+  "applicationCategory": "BusinessApplication",
+  "applicationSubCategory": "Meeting notes and transcription",
+  "operatingSystem": "Windows",
+  "url": "https://konspekt.aisearch.tech/",
+  "downloadUrl": "https://github.com/lamver/konspekt-releases/releases/latest",
+  "description": "A smart notepad for meetings. Records the conversation, transcribes it and turns it into notes entirely on your own computer. Nothing is uploaded anywhere.",
+  "inLanguage": ["en", "es", "sr", "ru"],
+  "isAccessibleForFree": true,
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD"
+  },
+  "license": "https://github.com/lamver/konspekt/blob/master/LICENSE.md",
+  "featureList": [
+    "Records microphone and system audio",
+    "Transcribes locally without cloud services",
+    "Tells speakers apart",
+    "Writes a summary with decisions and open questions",
+    "Answers questions about the meeting",
+    "Dictation into any application"
+  ],
+  "screenshot": [
+    "https://konspekt.aisearch.tech/screenshots/en/summary.png",
+    "https://konspekt.aisearch.tech/screenshots/en/transcript.png",
+    "https://konspekt.aisearch.tech/screenshots/en/notes.png",
+    "https://konspekt.aisearch.tech/screenshots/en/dictation.png"
+  ]
+}
+</script>
 
 <style>
   /* Цвета взяты из самой программы: страница и приложение должны
@@ -270,14 +329,14 @@
 <header>
   <div class="wrap">
     <div class="logo"><span class="mark"></span>Konspekt</div>
-    <h1 id="t-title"></h1>
-    <p class="tagline" id="t-tagline"></p>
-    <p class="lead" id="t-lead"></p>
+    <h1 id="t-title">meeting notes that never leave your computer</h1>
+    <p class="tagline" id="t-tagline">A smart notepad for meetings. Konspekt records the conversation, transcribes it and turns it into notes — entirely on your own machine.</p>
+    <p class="lead" id="t-lead">A local, privacy-first alternative to Granola. Nothing is uploaded anywhere: not the audio, not the transcript, not your notes.</p>
     <p>
       <a class="download" id="t-download" data-track="download_click" data-lang="en"
-         href="https://github.com/lamver/konspekt-releases/releases/latest"></a>
+         href="https://github.com/lamver/konspekt-releases/releases/latest">Download for Windows</a>
     </p>
-    <p class="download-note" id="t-download-note"></p>
+    <p class="download-note" id="t-download-note">Free. Installs in a minute and works offline afterwards.</p>
     <!-- Номер выложенной версии и ссылка на список изменений.
          Скрыт, пока GitHub не ответил: см. показатьВыпуск(). -->
     <p class="release" id="t-release" hidden></p>
@@ -285,50 +344,62 @@
          Скрыт, пока ответа нет: молчание честнее устаревшего числа. -->
     <p><a class="vt" id="t-vt" hidden rel="noopener" target="_blank"
           ><span class="vt__dot"></span><span id="t-vt-text"></span></a></p>
-    <p class="source-link"><a id="t-source-link" href="https://github.com/lamver/konspekt"></a></p>
+    <p class="source-link"><a id="t-source-link" href="https://github.com/lamver/konspekt">Source code on GitHub</a></p>
   </div>
 </header>
 
 <section>
   <div class="wrap">
-    <h2 id="t-features-title"></h2>
-    <div class="features" id="features"></div>
+    <h2 id="t-features-title">What it does</h2>
+    <div class="features" id="features">
+      <div class="feature"><h3>Notices the conversation</h3><p>If people are talking on your computer and recording is off, Konspekt offers to start. Nothing is saved until you agree.</p></div>
+      <div class="feature"><h3>Records both sides</h3><p>Your microphone and the system audio, so the other person in a call is captured too.</p></div>
+      <div class="feature"><h3>Transcribes locally</h3><p>Russian through GigaAM, other languages through Whisper. No cloud, no account, no API key.</p></div>
+      <div class="feature"><h3>Tells speakers apart</h3><p>Name someone once and Konspekt recognises their voice in later meetings.</p></div>
+      <div class="feature"><h3>Writes the summary</h3><p>Decisions, who does what, and what is still open — from the actual conversation.</p></div>
+      <div class="feature"><h3>Answers questions</h3><p>Ask who promised what or what was agreed, and get an answer from the transcript.</p></div>
+    </div>
   </div>
 </section>
 
 <section>
   <div class="wrap">
-    <h2 id="t-shots-title"></h2>
-    <div id="shots"></div>
+    <h2 id="t-shots-title">What it looks like</h2>
+    <div id="shots">
+      <div class="shot"><img src="screenshots/en/summary.png" alt="The summary" loading="eager" width="1044" height="721"><h3>The summary</h3><p>Decisions, owners and open questions, pulled out of the conversation.</p></div>
+      <div class="shot"><img src="screenshots/en/transcript.png" alt="The transcript" loading="lazy" width="1044" height="721"><h3>The transcript</h3><p>Every line attributed to the person who said it.</p></div>
+      <div class="shot"><img src="screenshots/en/notes.png" alt="Your own notes" loading="lazy" width="1044" height="721"><h3>Your own notes</h3><p>Type your own points during the call; they sit next to the transcript.</p></div>
+      <div class="shot"><img src="screenshots/en/dictation.png" alt="Dictation" loading="lazy" width="1044" height="721"><h3>Dictation</h3><p>Hold a hotkey, speak, release — the text lands wherever your cursor is, in any app.</p></div>
+    </div>
   </div>
 </section>
 
 <section>
   <div class="wrap">
-    <h2 id="t-privacy-title"></h2>
-    <p class="prose" id="t-privacy-text"></p>
+    <h2 id="t-privacy-title">Why local matters</h2>
+    <p class="prose" id="t-privacy-text">Meetings are where salaries, deals and disagreements get discussed. Sending that to someone else's server means trusting a company you have never met with the most sensitive half of your work. Konspekt keeps the audio, the transcript and the notes in a folder on your disk. Nothing leaves it unless you connect an external model yourself.</p>
   </div>
 </section>
 
 <section>
   <div class="wrap">
-    <h2 id="t-langs-title"></h2>
-    <p class="prose" id="t-langs-text"></p>
+    <h2 id="t-langs-title">Speaks your language</h2>
+    <p class="prose" id="t-langs-text">The interface is available in English, Spanish, Serbian and Russian. Speech recognition handles Russian particularly well: it runs on GigaAM, a model built for it, rather than on a translation of an English-first tool.</p>
   </div>
 </section>
 
 <section>
   <div class="wrap">
-    <h2 id="t-verify-title"></h2>
-    <p class="prose" id="t-verify-text"></p>
+    <h2 id="t-verify-title">Verifying the download</h2>
+    <p class="prose" id="t-verify-text">The installer ships with SHA256SUMS and a GitHub build provenance attestation, so you can confirm the file came from this repository and was built by CI rather than by someone on the internet.</p>
   </div>
 </section>
 
 <section>
   <div class="wrap">
-    <h2 id="t-license-title"></h2>
-    <p class="prose" id="t-license-text"></p>
-    <p><a id="t-license-link" href="https://github.com/lamver/konspekt/blob/master/LICENSE.md"></a></p>
+    <h2 id="t-license-title">Open source</h2>
+    <p class="prose" id="t-license-text">Konspekt is distributed under FSL-1.1-MIT: read the code, change it, use it. The single restriction is repackaging it as a competing commercial product. Every release becomes plain MIT two years after it ships.</p>
+    <p><a id="t-license-link" href="https://github.com/lamver/konspekt/blob/master/LICENSE.md">Read the license</a></p>
   </div>
 </section>
 

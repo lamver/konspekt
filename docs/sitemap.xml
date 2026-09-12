@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Карта сайта.
+
+  Страница одна, и карта для неё выглядит избыточной. Нужна она не ради
+  перечисления адресов, а ради двух вещей: заявить сайт поисковику, когда
+  на него ещё никто не ссылается, и объявить языковые версии рядом с
+  адресом, а не только в разметке страницы.
+
+  Русская копия перечислена отдельной записью: у неё свой адрес, свой
+  язык и свой читатель.
+-->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  <url>
+    <loc>https://konspekt.aisearch.tech/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://konspekt.aisearch.tech/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://konspekt.aisearch.tech/?lang=es"/>
+    <xhtml:link rel="alternate" hreflang="sr" href="https://konspekt.aisearch.tech/?lang=sr"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://konspekt.aisearch.ru/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://konspekt.aisearch.tech/"/>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://konspekt.aisearch.ru/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://konspekt.aisearch.tech/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://konspekt.aisearch.tech/?lang=es"/>
+    <xhtml:link rel="alternate" hreflang="sr" href="https://konspekt.aisearch.tech/?lang=sr"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://konspekt.aisearch.ru/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://konspekt.aisearch.tech/"/>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+</urlset>
