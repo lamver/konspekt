@@ -23,7 +23,7 @@
     <xhtml:link rel="alternate" hreflang="en" href="https://konspekt.aisearch.tech/"/>
     <xhtml:link rel="alternate" hreflang="es" href="https://konspekt.aisearch.tech/es/"/>
     <xhtml:link rel="alternate" hreflang="sr" href="https://konspekt.aisearch.tech/sr/"/>
-    <xhtml:link rel="alternate" hreflang="ru" href="https://konspekt.aisearch.ru/"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://konspekt.aisearch.ru/ru/"/>
     <xhtml:link rel="alternate" hreflang="x-default" href="https://konspekt.aisearch.tech/"/>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
@@ -33,7 +33,7 @@
     <xhtml:link rel="alternate" hreflang="en" href="https://konspekt.aisearch.tech/"/>
     <xhtml:link rel="alternate" hreflang="es" href="https://konspekt.aisearch.tech/es/"/>
     <xhtml:link rel="alternate" hreflang="sr" href="https://konspekt.aisearch.tech/sr/"/>
-    <xhtml:link rel="alternate" hreflang="ru" href="https://konspekt.aisearch.ru/"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://konspekt.aisearch.ru/ru/"/>
     <xhtml:link rel="alternate" hreflang="x-default" href="https://konspekt.aisearch.tech/"/>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
@@ -43,17 +43,17 @@
     <xhtml:link rel="alternate" hreflang="en" href="https://konspekt.aisearch.tech/"/>
     <xhtml:link rel="alternate" hreflang="es" href="https://konspekt.aisearch.tech/es/"/>
     <xhtml:link rel="alternate" hreflang="sr" href="https://konspekt.aisearch.tech/sr/"/>
-    <xhtml:link rel="alternate" hreflang="ru" href="https://konspekt.aisearch.ru/"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://konspekt.aisearch.ru/ru/"/>
     <xhtml:link rel="alternate" hreflang="x-default" href="https://konspekt.aisearch.tech/"/>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://konspekt.aisearch.ru/</loc>
+    <loc>https://konspekt.aisearch.ru/ru/</loc>
     <xhtml:link rel="alternate" hreflang="en" href="https://konspekt.aisearch.tech/"/>
     <xhtml:link rel="alternate" hreflang="es" href="https://konspekt.aisearch.tech/es/"/>
     <xhtml:link rel="alternate" hreflang="sr" href="https://konspekt.aisearch.tech/sr/"/>
-    <xhtml:link rel="alternate" hreflang="ru" href="https://konspekt.aisearch.ru/"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://konspekt.aisearch.ru/ru/"/>
     <xhtml:link rel="alternate" hreflang="x-default" href="https://konspekt.aisearch.tech/"/>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
