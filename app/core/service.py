@@ -2456,6 +2456,16 @@ class AppService:
         return self.settings.auto_update
 
     def save_window_geometry(self, x: int, y: int, width: int, height: int) -> None:
+        """Запомнить, где стоит окно.
+
+        Свёрнутое окно Windows отвечает координатами -32000, -32000: это
+        не место на экране, а условный «угол» для минимизированных окон.
+        Записав их, мы при следующем запуске ставили окно туда же, и
+        человек видел значок в трее, но не находил самого окна.
+        """
+        if not settings_mod.геометрия_годится(x, y, width, height):
+            log.debug("Не запоминаем положение окна x=%s y=%s: оно вне экрана", x, y)
+            return
         self.settings.window.x = int(x)
         self.settings.window.y = int(y)
         self.settings.window.width = int(width)

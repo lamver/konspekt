@@ -49,6 +49,12 @@ if AVAILABLE:
     _u.GetCursorPos.restype = wintypes.BOOL
     _u.GetAsyncKeyState.argtypes = [ctypes.c_int]
     _u.GetAsyncKeyState.restype = ctypes.c_short
+    _u.IsIconic.argtypes = [wintypes.HWND]
+    _u.IsIconic.restype = wintypes.BOOL
+    _u.SetForegroundWindow.argtypes = [wintypes.HWND]
+    _u.SetForegroundWindow.restype = wintypes.BOOL
+    _u.EnumDisplayMonitors.restype = wintypes.BOOL
+    _u.GetMonitorInfoW.restype = wintypes.BOOL
 
     HWND_TOPMOST = wintypes.HWND(-1)
     HWND_NOTOPMOST = wintypes.HWND(-2)
@@ -57,6 +63,8 @@ if AVAILABLE:
     SWP_NOZORDER = 0x0004
     SWP_NOACTIVATE = 0x0010
     SW_MINIMIZE = 6
+    SW_RESTORE = 9
+    SW_SHOW = 5
 
     # Сообщения окна
     WM_NCLBUTTONDOWN = 0x00A1
@@ -209,3 +217,112 @@ def _drag_loop(hwnd: int) -> None:
     finally:
         with _drag_lock:
             _drag_active = False
+
+
+def свёрнуто(window) -> bool:
+    """Свёрнуто ли окно в панель задач."""
+    hwnd = _hwnd(window)
+    if not hwnd:
+        return False
+    return bool(_u.IsIconic(hwnd))
+
+
+def показать(window) -> bool:
+    """Показать окно так, чтобы человек его увидел.
+
+    Обычного `show()` мало. Свёрнутое окно от `SW_SHOW` не разворачивается:
+    получается, что окно «показано», а на экране по-прежнему ничего. И даже
+    развёрнутое может остаться за чужими окнами, раз мы не держимся поверх
+    всех. Поэтому здесь и восстановление, и вывод вперёд.
+    """
+    hwnd = _hwnd(window)
+    if not hwnd:
+        return False
+    _u.ShowWindow(hwnd, SW_RESTORE if _u.IsIconic(hwnd) else SW_SHOW)
+    _u.SetForegroundWindow(hwnd)
+    return True
+
+
+def системный_масштаб() -> float:
+    """Во сколько раз физические пиксели крупнее логических у системы.
+
+    Экраны WinAPI отдаёт в физических пикселях, а положение окна мы храним
+    в логических. Без пересчёта на мониторе со 125% окно посреди экрана
+    выглядело бы уехавшим за край.
+    """
+    if not AVAILABLE:
+        return 1.0
+    try:
+        return (_u.GetDpiForSystem() or 96) / 96.0
+    except Exception:
+        return 1.0
+
+
+def экраны() -> list[tuple[int, int, int, int]]:
+    """Рабочие области всех мониторов в логических пикселях.
+
+    Берём именно рабочую область, без панели задач: окно, целиком
+    накрытое панелью, человеку не поймать.
+
+    Первым идёт основной монитор — туда возвращается потерянное окно.
+    """
+    if not AVAILABLE:
+        return []
+    найденные: list[tuple[int, int, int, int, bool]] = []
+
+    class MONITORINFO(ctypes.Structure):
+        _fields_ = [
+            ("cbSize", wintypes.DWORD),
+            ("rcMonitor", wintypes.RECT),
+            ("rcWork", wintypes.RECT),
+            ("dwFlags", wintypes.DWORD),
+        ]
+
+    MONITORINFOF_PRIMARY = 1
+    PROC = ctypes.WINFUNCTYPE(
+        wintypes.BOOL, wintypes.HMONITOR, wintypes.HDC,
+        ctypes.POINTER(wintypes.RECT), wintypes.LPARAM,
+    )
+
+    def на_каждый(hmon, _hdc, _rect, _param):
+        info = MONITORINFO()
+        info.cbSize = ctypes.sizeof(MONITORINFO)
+        if _u.GetMonitorInfoW(hmon, ctypes.byref(info)):
+            r = info.rcWork
+            найденные.append((
+                int(r.left), int(r.top),
+                int(r.right - r.left), int(r.bottom - r.top),
+                bool(info.dwFlags & MONITORINFOF_PRIMARY),
+            ))
+        return True
+
+    try:
+        _u.EnumDisplayMonitors(None, None, PROC(на_каждый), 0)
+    except Exception:
+        return []
+
+    return основной_первым(найденные, системный_масштаб() or 1.0)
+
+
+def основной_первым(
+    найденные: list[tuple[int, int, int, int, bool]],
+    масштаб: float = 1.0,
+) -> list[tuple[int, int, int, int]]:
+    """Разложить мониторы так, чтобы основной оказался первым.
+
+    Порядок важен: именно на первый экран возвращается потерянное окно.
+    Система перечисляет мониторы как ей удобно, и без сортировки окно
+    могло бы уехать на боковой экран, а то и на тот, что стоит за спиной.
+
+    Заодно переводим физические пиксели в логические: положение окна мы
+    храним в логических, и на мониторе со 125% числа разъехались бы.
+
+    Отдельной функцией — чтобы порядок можно было проверить на двух
+    мониторах, не имея двух мониторов.
+    """
+    k = масштаб or 1.0
+    по_порядку = sorted(найденные, key=lambda м: not м[4])
+    return [
+        (int(x / k), int(y / k), int(ш / k), int(в / k))
+        for x, y, ш, в, _ in по_порядку
+    ]

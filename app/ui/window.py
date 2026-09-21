@@ -18,7 +18,7 @@ from typing import Any
 
 import webview
 
-from ..core import paths
+from ..core import paths, settings as settings_mod
 from ..core.events import (
     APP_QUIT,
     CHAT_CHUNK,
@@ -52,6 +52,7 @@ from ..core.events import (
     bus,
 )
 from ..core.service import AppService
+from . import win32
 from .api import Api
 
 log = logging.getLogger(__name__)
@@ -106,6 +107,7 @@ class MainWindow:
     def create(self) -> webview.Window:
         geom = self.service.settings.window
         index = str(paths.web_dir() / "index.html")
+        x, y = self._исправить_положение(geom)
 
         self.window = webview.create_window(
             title="Konspekt",
@@ -113,8 +115,8 @@ class MainWindow:
             js_api=self.api,
             width=geom.width,
             height=geom.height,
-            x=geom.x,
-            y=geom.y,
+            x=x,
+            y=y,
             frameless=True,
             easy_drag=False,  # таскаем сами за заголовок, иначе не выделить текст
             on_top=self.service.settings.always_on_top,
@@ -138,6 +140,32 @@ class MainWindow:
 
         self._subscribe()
         return self.window
+
+    def _исправить_положение(self, geom) -> tuple[int | None, int | None]:
+        """Вернуть окно на экран, если сохранённое место недоступно.
+
+        Так бывает после сворачивания (Windows отдаёт -32000, -32000) и
+        после отключения второго монитора. Значок в трее при этом есть,
+        а окна не видно нигде, и достать его нечем.
+
+        Правим не только на лету, но и в файле настроек: иначе при
+        каждом запуске повторялась бы одна и та же починка.
+        """
+        экраны = win32.экраны() if win32.AVAILABLE else []
+        было = (geom.x, geom.y, geom.width, geom.height)
+        if not settings_mod.починить_геометрию(geom, экраны):
+            return geom.x, geom.y
+        log.warning(
+            "Окно было потеряно (x=%s y=%s %sx%s), возвращаем на видное место "
+            "(x=%s y=%s %sx%s)",
+            *было, geom.x, geom.y, geom.width, geom.height,
+        )
+        try:
+            settings_mod.save(self.service.settings)
+        except Exception:
+            # Не смогли записать — окно всё равно покажем как надо.
+            log.debug("Не удалось сохранить исправленное положение окна", exc_info=True)
+        return geom.x, geom.y
 
     def _on_loaded(self) -> None:
         """Подписаться на брошенные файлы, когда документ готов."""
@@ -200,12 +228,40 @@ class MainWindow:
             if self.window is None:
                 return
             try:
+                # Сохранённое место могло стать недоступным, пока окно
+                # было спрятано: например, отключили второй монитор.
+                self._вернуть_если_потеряно()
                 self.window.show()
+                # Одного show() мало: свёрнутое окно от него не
+                # разворачивается, и человек по-прежнему ничего не видит.
+                if win32.AVAILABLE:
+                    win32.показать(self.window)
                 self._visible = True
                 self.service._window_visible = True
                 log.info("Окно показано")
             except Exception:
                 log.exception("Не удалось показать окно")
+
+    def _вернуть_если_потеряно(self) -> None:
+        """Переставить окно на экран, если оно оказалось вне его."""
+        if self.window is None or not win32.AVAILABLE:
+            return
+        try:
+            rect = win32.get_rect(self.window)
+            if rect is None:
+                return
+            x, y, width, height = rect
+            экраны = win32.экраны()
+            if settings_mod.геометрия_годится(x, y, width, height, экраны):
+                return
+            нx, нy = settings_mod.поставить_по_центру(width, height, экраны)
+            if нx is None or нy is None:
+                return
+            log.warning("Окно было вне экрана (x=%s y=%s), возвращаем", x, y)
+            win32.set_geometry(self.window, нx, нy, width, height)
+            self.service.save_window_geometry(нx, нy, width, height)
+        except Exception:
+            log.debug("Не удалось вернуть окно на экран", exc_info=True)
 
     def hide(self) -> None:
         with self._lock:
@@ -250,9 +306,19 @@ class MainWindow:
         return False
 
     def _on_geometry_changed(self, *_args: Any) -> None:
+        """Окно подвинули или растянули: запомнить новое место.
+
+        Сворачивание тоже приходит сюда, но координатами -32000, -32000:
+        так Windows обозначает свёрнутое окно. Записать их означало бы
+        при следующем запуске создать окно за пределами экрана, поэтому
+        такие сообщения пропускаем. Само значение отсеивает
+        `save_window_geometry`, здесь же не трогаем и размер.
+        """
         if self.window is None:
             return
         try:
+            if win32.AVAILABLE and win32.свёрнуто(self.window):
+                return
             self.api.save_geometry(
                 self.window.x, self.window.y, self.window.width, self.window.height
             )
