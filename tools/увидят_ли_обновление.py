@@ -21,6 +21,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import httpx
 
+from app import __version__  # вписанный номер пришлось бы править на каждый выпуск
+
 АДРЕС = "https://raw.githubusercontent.com/lamver/konspekt-releases/master/latest.json"
 
 ответ = httpx.get(АДРЕС, timeout=20, follow_redirects=True)
@@ -39,7 +41,7 @@ assert isinstance(новость, str), (
     f"notes не строка, а {type(новость).__name__}: копии старше 0.8.1 "
     f"не покажут новость о выпуске"
 )
-assert данные.get("version") == "0.10.0", данные.get("version")
+assert данные.get("version") == __version__, (данные.get("version"), __version__)
 # Ссылка ведёт на «последний релиз», а не на конкретный номер: так она
 # не протухает и не требует правки на каждый выпуск.
 assert "konspekt-releases/releases" in (данные.get("url") or ""), данные.get("url")
