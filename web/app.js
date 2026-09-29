@@ -1199,15 +1199,19 @@ function highlight(text, query) {
     return frag;
   }
 
-  const low = text.toLowerCase();
+  // Сравниваем так же, как поиск: ё как е, й как и. Замена буква на букву,
+  // поэтому места совпадений в исходном тексте не сдвигаются.
+  const flat = (s) => s.toLowerCase().replace(/ё/g, 'е').replace(/й/g, 'и');
+  const low = flat(text);
+  const stems = words.map(flat);
   const marks = [];
-  for (const word of words) {
-    let from = 0;
-    for (;;) {
-      const at = low.indexOf(word, from);
-      if (at < 0) break;
-      marks.push([at, at + word.length]);
-      from = at + word.length;
+  // Подсвечиваем слово целиком, если оно начинается с основы запроса:
+  // поиск ищет «выруч», а человеку надо видеть «выручке», и не кусок
+  // посреди чужого слова.
+  const wordRe = /[\p{L}\p{N}_]+/gu;
+  for (const m of low.matchAll(wordRe)) {
+    if (stems.some((s) => m[0].startsWith(s))) {
+      marks.push([m.index, m.index + m[0].length]);
     }
   }
   if (!marks.length) {

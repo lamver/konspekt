@@ -13,7 +13,8 @@ from pathlib import Path
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 КОРЕНЬ = Path(__file__).resolve().parent.parent
-ПРОВЕРКИ = [КОРЕНЬ / "смысл_test.py", КОРЕНЬ / "смысл_модель_test.py"]
+ПРОВЕРКИ = [КОРЕНЬ / "смысл_test.py", КОРЕНЬ / "смысл_модель_test.py",
+            КОРЕНЬ / "поиск_окно_test.py"]
 
 # (файл, что заменить, на что, описание беды)
 МУТАЦИИ = [
@@ -211,6 +212,31 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
         "    # Без этой строки окно не узнало бы, что поиск стал умнее.\n    MEANING_STATE,\n",
         "",
         "событие о поиске по смыслу не доходит до окна",
+    ),
+    # --- окно
+    (
+        "web/app.js",
+        "    items = items.slice().sort((a, b) => place(a) - place(b));\n",
+        "",
+        "окно сортирует выдачу по дате: лучшая находка тонет среди случайных",
+    ),
+    (
+        "web/app.js",
+        "    if (stems.some((s) => m[0].startsWith(s))) {\n",
+        "    if (stems.some((s) => m[0].includes(s))) {\n",
+        "подсвечивается кусок посреди чужого слова, которого поиск не находил",
+    ),
+    (
+        "web/app.js",
+        "  const flat = (s) => s.toLowerCase().replace(/ё/g, 'е').replace(/й/g, 'и');\n",
+        "  const flat = (s) => s.toLowerCase();\n",
+        "«прием» не подсвечивает «Приём», хотя поиск его нашёл",
+    ),
+    (
+        "web/app.js",
+        "      quote.appendChild(highlight(hit.quotes[0].text, (hit.terms || []).join(' ') || q));\n",
+        "      quote.appendChild(highlight(hit.quotes[0].text, q));\n",
+        "подсветка ищет запрос целиком и не видит найденных форм слова",
     ),
     # --- сама модель
     (
