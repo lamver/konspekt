@@ -6,11 +6,31 @@ on:
       sha256:
         description: Сумма файла
         required: true
+      rescan:
+        # Вердикт VirusTotal запоминается на день скана. Чистый месяц назад
+        # файл может быть красным сегодня: Microsoft обновляет модель, а не
+        # файл. Без повторного скана не отличить «мы что-то сломали» от
+        # «антивирус передумал про всё сразу».
+        description: Заново прогнать файл через антивирусы (yes/no)
+        required: false
+        default: 'no'
 
 jobs:
   who:
     runs-on: ubuntu-latest
     steps:
+      - name: Попросить VirusTotal проверить файл заново
+        if: inputs.rescan == 'yes'
+        env:
+          VT: ${{ secrets.VT_API_KEY }}
+        run: |
+          if [ -z "$VT" ]; then echo "нет ключа VT_API_KEY"; exit 1; fi
+          curl -s -X POST -H "x-apikey: $VT" \
+            "https://www.virustotal.com/api/v3/files/${{ inputs.sha256 }}/analyse"
+          echo
+          echo "ждём повторного разбора"
+          sleep 240
+
       - name: Спросить VirusTotal, какие движки дали тревогу
         env:
           VT: ${{ secrets.VT_API_KEY }}
@@ -20,9 +40,12 @@ jobs:
             "https://www.virustotal.com/api/v3/files/${{ inputs.sha256 }}" \
             -o отчёт.json
           python3 - <<'PY'
+          import datetime
           import json
           данные = json.load(open("отчёт.json", encoding="utf-8"))
           атрибуты = данные["data"]["attributes"]
+          когда = datetime.datetime.utcfromtimestamp(атрибуты["last_analysis_date"])
+          print("разбор от:", когда.isoformat(), "UTC")
           print("итог:", атрибуты["last_analysis_stats"])
           print()
           for движок, вывод in sorted(атрибуты["last_analysis_results"].items()):
