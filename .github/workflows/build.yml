@@ -81,45 +81,25 @@ jobs:
         with:
           subject-path: dist/konspekt-*-setup.exe
 
-      # Есть ли ключ VirusTotal, решаем отдельным шагом. Соблазнительно
-      # написать в условии самого шага `env.VT_API_KEY != ''`, но env,
-      # объявленный в том же шаге, в его собственном `if` не виден:
-      # условие всегда ложно, и скан молча не запускается даже с ключом.
-      # Такую поломку не видно вовсе — шаг просто числится пропущенным.
-      - name: Проверить, есть ли ключ VirusTotal
-        id: vt_key
-        shell: bash
+      # Сборка по кнопке, без тега: страж ей не нужен (выпускать нечего),
+      # но знать, чиста ли сборка, полезно и здесь. Тот же страж, только
+      # его провал не роняет сборку.
+      #
+      # Отдельного шага VirusTotal больше нет. Он заливал тот же файл,
+      # что уже отправил страж, и VirusTotal отвечал 409 «уже есть»: на
+      # 0.11.0 так упала вся сборка при чистом установщике. Значок с
+      # отчётом в описание релиза дописывает tools/отчёт_вирустотал.py
+      # после публикации (workflow «Отчёт VirusTotal»).
+      - name: Проверка антивирусами (без выпуска)
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        continue-on-error: true
+        shell: pwsh
         env:
           VT_API_KEY: ${{ secrets.VT_API_KEY }}
+          PYTHONIOENCODING: utf-8
         run: |
-          if [ -n "$VT_API_KEY" ]; then
-            echo "has_key=yes" >> "$GITHUB_OUTPUT"
-          else
-            echo "has_key=no" >> "$GITHUB_OUTPUT"
-            echo "::notice::VT_API_KEY не задан, скан VirusTotal пропущен."
-            echo "::notice::Ключ бесплатный (virustotal.com), кладётся в секреты как VT_API_KEY."
-          fi
-
-      - name: VirusTotal скан
-        # Без ключа шаг пропускается: отсутствие сканера не повод ронять
-        # весь релиз. Но пропуск теперь не молчаливый — предыдущий шаг
-        # пишет об этом в сводку сборки.
-        #
-        # Отчёт VirusTotal нужен не для галочки: Konspekt пишет микрофон
-        # и перехватывает клавиши, антивирусы принимают его за шпионскую
-        # программу (issue #4 в konspekt-releases), и ссылка на отчёт —
-        # единственный ответ, который что-то стоит.
-        #
-        # Скан идёт и по кнопке, не только на тег: иначе убедиться, что он
-        # вообще работает, можно лишь настоящим выпуском, а узнавать о
-        # поломке в момент релиза поздно. Ровно так и вскрылась прошлая.
-        if: steps.vt_key.outputs.has_key == 'yes'
-        uses: crazy-max/ghaction-virustotal@v4
-        with:
-          vt_api_key: ${{ secrets.VT_API_KEY }}
-          files: dist/konspekt-*-setup.exe
-          # Дописывать отчёт некуда, пока релиза нет: только на теге.
-          update_release_body: ${{ startsWith(github.ref, 'refs/tags/v') }}
+          $exe = Get-Item dist/konspekt-*-setup.exe
+          uv run python tools/страж_выпуска.py $exe.FullName
 
       # Релиз уезжает в публичный lamver/konspekt-releases, а не сюда:
       # Releases приватного репозитория отдаются только по токену, а
