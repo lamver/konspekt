@@ -40,7 +40,9 @@
     }
   },
   "search": {
-    "placeholder": "Buscar reuniones"
+    "placeholder": "Buscar reuniones",
+    "by_meaning": "similar",
+    "by_meaning_tooltip": "Estas palabras no se dijeron, pero el tema es el mismo"
   },
   "empty": {
     "title": "Todavía no hay nada",

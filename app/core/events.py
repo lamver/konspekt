@@ -70,6 +70,8 @@ TRANSCRIPT_SEGMENT = "transcript.segment"
 # Черновик речи, которая ещё идёт: показать и заменить настоящей.
 TRANSCRIPT_DRAFT = "transcript.draft"
 MODEL_DOWNLOAD = "model.download"
+# Поиск по смыслу: качается ли модель, сколько встреч уже посчитано.
+MEANING_STATE = "meaning.state"
 # Импорт готовых записей: список файлов целиком и прогресс по одному.
 IMPORT_CHANGED = "import.changed"
 IMPORT_PROGRESS = "import.progress"

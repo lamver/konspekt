@@ -28,6 +28,7 @@ from ..core.events import (
     IMPORT_PROGRESS,
     MEETINGS_CHANGED,
     MEETING_UPDATED,
+    MEANING_STATE,
     MODEL_DOWNLOAD,
     LLM_DOWNLOAD,
     NEW_VERSION,
@@ -75,6 +76,9 @@ FORWARDED_EVENTS = (
     TRANSCRIPT_DRAFT,
     TRANSCRIPT_SEGMENT,
     MODEL_DOWNLOAD,
+    # Поиск по смыслу: скачана ли модель и сколько встреч посчитано.
+    # Без этой строки окно не узнало бы, что поиск стал умнее.
+    MEANING_STATE,
     LLM_DOWNLOAD,
     IMPORT_CHANGED,
     IMPORT_PROGRESS,

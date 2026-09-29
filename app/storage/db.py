@@ -204,6 +204,42 @@ AFTER UPDATE ON transcript_segments BEGIN
 END;
 """
 
+# Поиск по смыслу.
+#
+# Ищем не по отдельной реплике, а по куску из нескольких соседних: в
+# реплике в среднем 47 знаков, «Вот.» и «Завтра вечер.» смысла сами по
+# себе не несут, а в куске из соседних они складываются в разговор.
+#
+# Вектор лежит сырыми байтами float32, как и у голосов: искать по нему
+# всё равно только перебором, а кусков в архиве полторы тысячи.
+#
+# meaning_state помнит, по какой версии расшифровки посчитаны куски
+# встречи. Реплики дописываются во время записи, пересчитываются при
+# смене языка, а сама модель может смениться с обновлением. Без этой
+# отметки указатель либо пересчитывался бы целиком на каждом запуске,
+# либо тихо отставал от текста.
+#
+# Удаление встречи уносит и её куски (ON DELETE CASCADE): иначе текст
+# удалённой встречи продолжал бы лежать в базе и находиться поиском.
+MEANING_SCHEMA = """
+CREATE TABLE IF NOT EXISTS meaning_chunks (
+    meeting_id  TEXT NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,
+    start_s     REAL NOT NULL DEFAULT 0,
+    who         TEXT NOT NULL DEFAULT '',
+    text        TEXT NOT NULL DEFAULT '',
+    model       TEXT NOT NULL,
+    vector      BLOB NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_meaning_meeting ON meaning_chunks(meeting_id);
+
+CREATE TABLE IF NOT EXISTS meaning_state (
+    meeting_id  TEXT PRIMARY KEY REFERENCES meetings(id) ON DELETE CASCADE,
+    model       TEXT NOT NULL,
+    signature   TEXT NOT NULL
+);
+"""
+
 
 class Store:
     """Потокобезопасная обёртка над SQLite.
@@ -231,6 +267,10 @@ class Store:
         with self._lock:
             was = self._conn.execute("PRAGMA user_version").fetchone()[0]
             self._conn.executescript(SCHEMA)
+            # Таблицы поиска по смыслу без повышения версии схемы: они
+            # только добавляются, и прежняя версия программы поверх такой
+            # базы работает как работала, просто не замечая их.
+            self._conn.executescript(MEANING_SCHEMA)
             if was < 2:
                 self._add_columns(
                     "transcript_segments",
@@ -505,6 +545,121 @@ class Store:
                 (like, limit),
             ).fetchall()
         return [dict(r) for r in rows]
+
+    # --- поиск по смыслу -------------------------------------------------
+
+    def meaning_signature(self, meeting_id: str) -> str:
+        """Отпечаток расшифровки: изменилась ли она с прошлого подсчёта.
+
+        Число реплик, сумма длин и время последней. Дописанная реплика
+        меняет число, правка языка меняет длину. Хеш всего текста был бы
+        точнее, но его пришлось бы считать по всему архиву на каждом
+        запуске, а этого хватает с запасом.
+        """
+        with self._lock:
+            row = self._conn.execute(
+                """SELECT COUNT(*), COALESCE(SUM(LENGTH(text)), 0),
+                          COALESCE(MAX(start_s), 0)
+                   FROM transcript_segments WHERE meeting_id=?""",
+                (meeting_id,),
+            ).fetchone()
+        return f"{row[0]}:{row[1]}:{row[2]:.2f}"
+
+    def meetings_needing_meaning(self, model: str) -> list[str]:
+        """Встречи, чьи куски не посчитаны или посчитаны по старому тексту.
+
+        Сначала свежие: человек ищет обычно то, о чём говорили недавно, и
+        пока архив досчитывается, найтись должна прежде всего вчерашняя
+        встреча, а не прошлогодняя.
+
+        Встречи в записи не пропускаем. Так было в первой версии, и
+        встреча, оставшаяся в «идёт запись» после падения программы,
+        не находилась бы по смыслу никогда. Идущую запись пересчитать
+        лишний раз дёшево: отпечаток изменится, и после «стоп» она
+        посчитается заново целиком.
+        """
+        with self._lock:
+            rows = self._conn.execute(
+                """SELECT m.id, s.model, s.signature FROM meetings m
+                   LEFT JOIN meaning_state s ON s.meeting_id = m.id
+                   ORDER BY m.created_at DESC"""
+            ).fetchall()
+        need = []
+        for r in rows:
+            if r["model"] != model or r["signature"] != self.meaning_signature(r["id"]):
+                need.append(r["id"])
+        return need
+
+    def save_meaning(
+        self, meeting_id: str, model: str, signature: str,
+        chunks: list[dict[str, Any]], vectors: np.ndarray,
+    ) -> None:
+        """Заменить куски встречи целиком, одним махом.
+
+        Одна транзакция: поиск в соседнем потоке не должен увидеть
+        встречу наполовину старой, наполовину новой.
+        """
+        with self._lock:
+            try:
+                self._conn.execute("DELETE FROM meaning_chunks WHERE meeting_id=?", (meeting_id,))
+                self._conn.executemany(
+                    """INSERT INTO meaning_chunks
+                       (meeting_id, start_s, who, text, model, vector)
+                       VALUES (?,?,?,?,?,?)""",
+                    [
+                        (meeting_id, c["start"], c["who"], c["text"], model,
+                         np.asarray(v, dtype=np.float32).tobytes())
+                        for c, v in zip(chunks, vectors)
+                    ],
+                )
+                self._conn.execute(
+                    """INSERT INTO meaning_state (meeting_id, model, signature)
+                       VALUES (?,?,?)
+                       ON CONFLICT(meeting_id) DO UPDATE SET
+                         model=excluded.model, signature=excluded.signature""",
+                    (meeting_id, model, signature),
+                )
+                self._conn.commit()
+            except sqlite3.IntegrityError:
+                # Встречу удалили, пока считали её куски. Не беда: считать
+                # больше нечего.
+                self._conn.rollback()
+
+    def list_meaning(self, model: str) -> tuple[list[dict[str, Any]], np.ndarray]:
+        """Все куски указателя и их векторы одной матрицей."""
+        with self._lock:
+            rows = self._conn.execute(
+                """SELECT c.meeting_id, c.start_s, c.who, c.text, c.vector,
+                          m.title, m.created_at
+                   FROM meaning_chunks c JOIN meetings m ON m.id = c.meeting_id
+                   WHERE c.model=?""",
+                (model,),
+            ).fetchall()
+        items = [
+            {"meeting_id": r["meeting_id"], "start_s": r["start_s"],
+             "who": r["who"], "text": r["text"],
+             "title": r["title"], "created_at": r["created_at"]}
+            for r in rows
+        ]
+        if not rows:
+            return items, np.zeros((0, 0), dtype=np.float32)
+        vectors = np.vstack([np.frombuffer(r["vector"], dtype=np.float32) for r in rows])
+        return items, vectors
+
+    def meaning_progress(self, model: str) -> tuple[int, int]:
+        """Сколько встреч с текстом уже посчитано и сколько всего."""
+        with self._lock:
+            total = self._conn.execute(
+                """SELECT COUNT(DISTINCT meeting_id) FROM transcript_segments"""
+            ).fetchone()[0]
+            done = self._conn.execute(
+                """SELECT COUNT(*) FROM meaning_state s
+                   WHERE s.model=? AND EXISTS (
+                     SELECT 1 FROM transcript_segments t
+                     WHERE t.meeting_id = s.meeting_id)""",
+                (model,),
+            ).fetchone()[0]
+        return done, total
 
     def vacuum(self) -> int:
         """Сжать файл базы и вернуть, сколько байт освободилось.

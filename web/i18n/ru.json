@@ -40,7 +40,9 @@
     }
   },
   "search": {
-    "placeholder": "Поиск по встречам"
+    "placeholder": "Поиск по встречам",
+    "by_meaning": "по смыслу",
+    "by_meaning_tooltip": "Здесь нет этих слов, но говорили о том же"
   },
   "empty": {
     "title": "Пока пусто",

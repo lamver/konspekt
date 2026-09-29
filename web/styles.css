@@ -710,6 +710,16 @@ body { display: flex; flex-direction: column; }
   padding: 0 1px;
 }
 .meeting-item__more { color: var(--ink-3); opacity: .75; }
+/* Пометка «по смыслу»: цитата без искомого слова должна объяснять
+   себя сама, иначе человек решит, что поиск ошибся. */
+.meeting-item__by-meaning {
+  margin-right: 5px;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 10px;
+}
 .meeting-item__quote:hover { color: var(--ink-2); }
 
 .field__label {

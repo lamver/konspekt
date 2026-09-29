@@ -362,6 +362,12 @@ window.__konspekt_event = function (payload) {
     case 'model.download':
       onModelProgress(payload);
       break;
+    case 'meaning.state':
+      // Указатель по смыслу досчитался, пока в строке поиска уже стоит
+      // запрос: переспрашиваем, иначе человек увидит только старую
+      // выдачу и решит, что поиск по смыслу не работает.
+      if (!payload.indexing && state.filter.trim().length >= 2) scheduleSearch();
+      break;
     case 'app.new_version':
       showUpdateNote(payload);
       break;
@@ -1024,6 +1030,16 @@ function renderMeetingList() {
       quote = document.createElement('div');
       quote.className = 'meeting-item__quote';
       quote.title = t('meeting.quote_tooltip');
+      if (hit.by_meaning) {
+        // Встреча нашлась по смыслу, а не по словам: искомого слова в
+        // цитате может не быть вовсе. Без пометки это выглядит как
+        // ошибка поиска, а не как его находка.
+        const tag = document.createElement('span');
+        tag.className = 'meeting-item__by-meaning';
+        tag.textContent = t('search.by_meaning');
+        tag.title = t('search.by_meaning_tooltip');
+        quote.appendChild(tag);
+      }
       quote.appendChild(highlight(hit.quotes[0].text, q));
       if (hit.hits > 1) {
         const more = document.createElement('span');

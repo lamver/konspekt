@@ -40,7 +40,9 @@
     }
   },
   "search": {
-    "placeholder": "Pretraga sastanaka"
+    "placeholder": "Pretraga sastanaka",
+    "by_meaning": "po smislu",
+    "by_meaning_tooltip": "Ove reči nisu izgovorene, ali tema je ista"
   },
   "empty": {
     "title": "Ovde je još uvek prazno",

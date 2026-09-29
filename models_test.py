@@ -21,6 +21,10 @@ MODELS = {
                       ["v3_ctc.int8.onnx", "v3_ctc.yaml", "v3_vocab.txt", "config.json"]),
     "wespeaker": ("Wespeaker/wespeaker-voxceleb-resnet34-LM",
                   ["voxceleb_resnet34_LM.onnx"]),
+    # Поиск по смыслу: битые веса не уронят программу, а тихо испортят
+    # выдачу, поэтому размер сверяем так же строго, как у распознавания.
+    "e5-small": ("Xenova/multilingual-e5-small",
+                 ["onnx/model_quantized.onnx", "tokenizer.json"]),
     "voxlingua": ("beginning-ai/speechbrain-lang-id-voxlingua107-ecapa-onnx",
                   ["model.onnx"]),
     # Whisper лежит на диске в двух размерах: рабочий small и запасной

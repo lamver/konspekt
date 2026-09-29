@@ -176,6 +176,28 @@ def проверить() -> int:
     except Exception as беда:
         _проверить(False, f"словари интерфейса не читаются: {беда}")
 
+    # Поиск по смыслу. Нарезке текста нужна библиотека tokenizers со
+    # своей нативной частью: не попади она в сборку, программа запустится
+    # как ни в чём не бывало, поиск по словам будет работать, а по смыслу
+    # молча не найдёт ничего. Проверяем не импорт, а саму нарезку: для
+    # неё нужен работающий нативный код, а не только файл с питоном.
+    try:
+        from tokenizers import Tokenizer
+        from tokenizers.models import WordLevel
+        from tokenizers.pre_tokenizers import Whitespace
+
+        from .search import meaning as _смысл  # noqa: F401
+        from .search.model import MeaningModel as _Модель  # noqa: F401
+
+        т = Tokenizer(WordLevel({"[UNK]": 0, "оплата": 1, "картой": 2}, unk_token="[UNK]"))
+        т.pre_tokenizer = Whitespace()
+        _проверить(
+            т.encode("оплата картой").ids == [1, 2],
+            "поиск по смыслу на месте: нарезка текста работает",
+        )
+    except Exception as беда:
+        _проверить(False, f"поиск по смыслу не собрался: {беда}")
+
     if БЕДЫ:
         СТРОКИ.append(f"Самопроверка не прошла, бед: {len(БЕДЫ)}")
     else:

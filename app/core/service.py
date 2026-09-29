@@ -53,6 +53,12 @@ from ..asr.enroll import (
     VoiceEnrollment,
 )
 from ..asr.voices import VoiceRoster
+from ..search import meaning as meaning_mod
+from ..search.model import MODEL_DIR_NAME as MEANING_DIR_NAME
+from ..search.model import MODEL_FILES as MEANING_FILES
+from ..search.model import MODEL_REPO as MEANING_REPO
+from ..search.model import MODEL_TOTAL_BYTES as MEANING_TOTAL_BYTES
+from ..search.model import MeaningModel
 from ..audio import AudioCapture, NullCapture, WasapiCapture
 from ..audio import devices as audio_devices
 from ..audio.buffers import WavWriter, float_to_int16
@@ -69,6 +75,7 @@ from ..core.events import (
     IMPORT_PROGRESS,
     MEETINGS_CHANGED,
     MEETING_UPDATED,
+    MEANING_STATE,
     MODEL_DOWNLOAD,
     NEW_VERSION,
     RECOGNITION_BACKFILL,
@@ -178,6 +185,16 @@ class AppService:
             MODEL_REPO, MODEL_FILES, paths.models_dir() / MODEL_DIR_NAME
         )
         self._убрать_прошлую_модель()
+        # Поиск по смыслу. Модель своя, 135 МБ, и качается отдельно от
+        # распознавания: без неё поиск по словам работает как прежде.
+        self.meaning_model = MeaningModel(paths.models_dir() / MEANING_DIR_NAME)
+        self.meaning = meaning_mod.MeaningIndex(
+            self.store, self.meaning_model, who=self._кто_сказал,
+            on_done=lambda: bus.emit(MEANING_STATE, self.meaning_status()),
+        )
+        self.meaning_downloader = ModelDownloader(
+            MEANING_REPO, MEANING_FILES, paths.models_dir() / MEANING_DIR_NAME
+        )
         self.active_meeting_id: str | None = None
         # Модель для саммари и чата. Сервер поднимается только когда
         # человек действительно что-то спросит.
@@ -221,6 +238,9 @@ class AppService:
         # тогда, когда человек только осматривается, чем когда он уже
         # бросил файл и ждёт результата.
         self._prefetch_asr_model()
+        # Смысл готовим следом за распознаванием и тоже фоном: модель
+        # качается один раз, а указатель досчитывает только изменившееся.
+        self._prepare_meaning()
         # Диктовка: своя клавиша, свой микрофон, чужое окно. Поднимается
         # последней и только если человек её включил: она перехватывает
         # клавиши глобально, а такое незачем делать без спроса.
@@ -408,6 +428,68 @@ class AppService:
         # чинится до того, как понадобится расшифровка.
         threading.Thread(target=run, name="asr-prefetch", daemon=True).start()
         log.info("Готовим модель распознавания в фоне")
+
+    def _prepare_meaning(self) -> None:
+        """Скачать модель смысла, если её нет, и поднять пересчёт указателя.
+
+        Качаем без спроса, как и модель распознавания: поиск по смыслу
+        это часть обычного поиска, а не отдельная функция, которую
+        человек должен найти и включить. Отказаться можно тем же
+        KONSPEKT_NO_PREFETCH, что и у распознавания: проверкам сеть не
+        нужна.
+        """
+        if os.environ.get("KONSPEKT_NO_PREFETCH") == "1":
+            # Если модель уже на диске, указатель поднимаем и без сети.
+            if self.meaning_model.is_downloaded():
+                self.meaning.start()
+            return
+
+        def run() -> None:
+            if not self.meaning_model.is_downloaded():
+                try:
+                    self._download_meaning()
+                except Exception:
+                    # Не вышло — не беда: поиск по словам работает, а
+                    # скачать попробуем при следующем запуске.
+                    log.exception("Модель поиска по смыслу не скачалась")
+                    return
+            self.meaning.start()
+            bus.emit(MEANING_STATE, self.meaning_status())
+
+        threading.Thread(target=run, name="meaning-prefetch", daemon=True).start()
+
+    def _download_meaning(self) -> None:
+        shown = -1
+
+        def progress(name: str, done: int, total: int) -> None:
+            nonlocal shown
+            percent = done * 100 // MEANING_TOTAL_BYTES
+            if percent != shown:
+                shown = percent
+                bus.emit(MEANING_STATE, {**self.meaning_status(), "percent": percent})
+
+        log.info("Качаем модель поиска по смыслу")
+        try:
+            self.meaning_downloader.run_blocking(progress)
+        except DownloadBusy:
+            log.info("Модель смысла качает другой экземпляр программы")
+            raise
+        log.info("Модель поиска по смыслу скачана")
+
+    def meaning_status(self) -> dict[str, Any]:
+        """Готов ли поиск по смыслу: окну нужно это, чтобы не обещать зря."""
+        return {
+            **self.meaning.status(),
+            "downloading": self.meaning_downloader.is_running
+                           or (not self.meaning_model.is_downloaded()
+                               and self.meaning_downloader.downloaded_bytes() > 0),
+            "bytes": self.meaning_downloader.downloaded_bytes(),
+            "total_bytes": MEANING_TOTAL_BYTES,
+        }
+
+    def _кто_сказал(self, seg: TranscriptSegment) -> str:
+        """Подпись говорящего у цитаты: та же, что у поиска по словам."""
+        return seg.voice_label or ("Я" if seg.speaker == Speaker.ME else "Собеседник")
 
     def _build_transcriber(self) -> Transcriber:
         """Движок распознавания по настройкам.
@@ -1182,6 +1264,9 @@ class AppService:
         # его было бы уже нечем.
         self._delete_audio(meeting_id)
         self.store.delete_meeting(meeting_id)
+        # Куски встречи ушли из базы вместе с ней, а матрица в памяти
+        # ещё помнит их: без пересчёта удалённое продолжало бы находиться.
+        self.meaning.forget(meeting_id)
         bus.emit(MEETINGS_CHANGED)
 
     def _save_audio_chunks(self, meeting_id: str) -> None:
@@ -1387,9 +1472,6 @@ class AppService:
         отдаём несколько лучших цитат и общее число совпадений.
         """
         rows = self.store.search(query)
-        if not rows:
-            return []
-
         by_meeting: dict[str, dict[str, Any]] = {}
         for row in rows:
             item = by_meeting.setdefault(row["meeting_id"], {
@@ -1411,7 +1493,14 @@ class AppService:
 
         found = list(by_meeting.values())
         found.sort(key=lambda m: (-m["hits"], -(m["created_at"] or 0)))
-        return found
+        # Смысл добавляется после слов и не мешает им: сломайся модель,
+        # человек получит ровно то, что получал до её появления.
+        try:
+            by_meaning = self.meaning.search(query)
+        except Exception:
+            log.exception("Поиск по смыслу не удался, отдаём найденное словами")
+            by_meaning = []
+        return meaning_mod.merge(found, by_meaning)
 
     def storage_usage(self) -> dict[str, Any]:
         """Сколько занимают записи, база и модели.
@@ -1574,6 +1663,9 @@ class AppService:
         bus.emit(RECORDING_STOPPED,
                  {"meeting_id": meeting_id, "backfill": bool(missed)})
         bus.emit(MEETINGS_CHANGED)
+        # Новую встречу должно быть видно и поиску по смыслу, а не только
+        # поиску по словам, который узнаёт о репликах сам, триггером.
+        self.meaning.refresh()
         # Встреча кончилась, карта свободна: сторож снова слушает, не
         # начался ли следующий разговор. Иначе слежка работала бы ровно
         # до первой записи за запуск программы.
@@ -2063,6 +2155,8 @@ class AppService:
         )
         bus.emit(MEETINGS_CHANGED)
         bus.emit(MEETING_UPDATED, {"meeting_id": meeting_id})
+        # Загруженную запись тоже должно быть видно поиску по смыслу.
+        self.meaning.refresh()
 
     def _on_import_change(self, task: Any) -> None:
         bus.emit(IMPORT_PROGRESS, {"task": task.to_dict()})
@@ -2494,6 +2588,9 @@ class AppService:
         self.importer.stop()
         # Перепроверка версии больше не нужна: программа закрывается.
         self._version_checker.stop()
+        # Пересчёт указателя пишет в базу, а её мы сейчас закроем.
+        self.meaning.stop()
+        self.meaning_downloader.cancel()
         settings_mod.save(self.settings)
         self.store.close()
 

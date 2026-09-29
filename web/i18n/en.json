@@ -40,7 +40,9 @@
     }
   },
   "search": {
-    "placeholder": "Search meetings"
+    "placeholder": "Search meetings",
+    "by_meaning": "similar",
+    "by_meaning_tooltip": "These words weren't said, but the topic is the same"
   },
   "empty": {
     "title": "Nothing here yet",
