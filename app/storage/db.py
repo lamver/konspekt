@@ -546,6 +546,57 @@ class Store:
             ).fetchall()
         return [dict(r) for r in rows]
 
+    def search_stems(self, stems: list[str], limit: int = 400) -> list[dict[str, Any]]:
+        """Реплики, где есть хотя бы одна из основ, по началу слова.
+
+        В отличие от search() здесь достаточно одного слова: человек
+        пишет «выручка за август что там по продажам», а в разговоре
+        сказано «перспективы по продажам, по выручке». Какие реплики
+        лучше, решает ранжирование: там считается, сколько основ
+        сошлось. Отсюда отдаём с запасом, потому что по одному общему
+        слову находится много, а нужные могут быть не первыми по BM25.
+        """
+        stems = [s for s in (re.sub(r"[^\w]", "", s) for s in stems) if s]
+        if not stems:
+            return []
+        if not getattr(self, "search_ready", False):
+            return self._search_stems_slow(stems, limit)
+        match = " OR ".join(f'"{s}"*' for s in stems)
+        try:
+            with self._lock:
+                rows = self._conn.execute(
+                    """SELECT s.meeting_id, s.text, s.start_s, s.voice_label,
+                              s.speaker, m.title, m.created_at,
+                              bm25(segments_fts) AS rank
+                       FROM segments_fts f
+                       JOIN transcript_segments s ON s.rowid = f.rowid
+                       JOIN meetings m ON m.id = s.meeting_id
+                       WHERE segments_fts MATCH ?
+                       ORDER BY rank
+                       LIMIT ?""",
+                    (match, limit),
+                ).fetchall()
+        except sqlite3.Error:
+            log.warning("Поиск по основам через индекс не сработал", exc_info=True)
+            return self._search_stems_slow(stems, limit)
+        return [dict(r) for r in rows]
+
+    def _search_stems_slow(self, stems: list[str], limit: int) -> list[dict[str, Any]]:
+        """То же перебором, когда индекса нет."""
+        условие = " OR ".join("lower(s.text) LIKE ?" for _ in stems)
+        with self._lock:
+            rows = self._conn.execute(
+                f"""SELECT s.meeting_id, s.text, s.start_s, s.voice_label,
+                           s.speaker, m.title, m.created_at, 0.0 AS rank
+                    FROM transcript_segments s
+                    JOIN meetings m ON m.id = s.meeting_id
+                    WHERE {условие}
+                    ORDER BY m.created_at DESC
+                    LIMIT ?""",
+                (*(f"%{s}%" for s in stems), limit),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
     # --- поиск по смыслу -------------------------------------------------
 
     def meaning_signature(self, meeting_id: str) -> str:

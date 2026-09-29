@@ -9,10 +9,10 @@
    фоном, свежие встречи первыми, и только то, что изменилось.
 3. Запрос тоже становится вектором. Близость с каждым куском — одно
    умножение матрицы, на полутора тысячах кусков это миллисекунды.
-4. Выдача общая. Совпадения по словам идут первыми: если человек написал
-   слово, которое было сказано, это самый точный ответ. Смысл добавляет
-   встречи, где слова другие, а тема та же, и только если близость выше
-   порога: иначе на запрос «когда релиз» приехали бы встречи про погоду.
+4. Выдачу из слов и смысла складывает ranking.py: смысл поднимает
+   встречи, где слова запроса есть, и сам приводит только те, что
+   заметно выделяются из архива. Иначе на «когда релиз» приехали бы
+   встречи про погоду.
 
 Всё это работает без сети и без сервера: модель лежит у человека.
 """
@@ -48,9 +48,6 @@ MIN_CHUNK_CHARS = 60
 # шум сливается с толпой (у «кто за что отвечает» лучшее всего 3.1).
 MIN_SCORE = 0.85
 MIN_STANDOUT = 3.0
-# Сколько встреч добавлять по смыслу. Больше в список не влезает и не
-# читается: нужны лучшие, а не все хоть чуть-чуть похожие.
-MAX_MEETINGS = 8
 
 
 def chunk_segments(segments: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -218,7 +215,11 @@ class MeaningIndex:
             return self._cache
 
     def search(self, query: str) -> list[dict[str, Any]]:
-        """Куски, близкие к запросу по смыслу, лучшие первыми.
+        """Куски, заметно близкие к запросу по смыслу, лучшие первыми.
+
+        Отдаём и слабые находки: они не приводят встречу сами, но
+        поднимают встречу, найденную по словам (см. ranking.rank).
+        Сильные помечены `strong`.
 
         Пустой список, а не ошибка, если модели нет или указатель пуст:
         поиск по словам работает и без него, и ронять его из-за смысла
@@ -236,7 +237,7 @@ class MeaningIndex:
             log.exception("Не удалось посчитать смысл запроса")
             return []
         scores = vectors @ q
-        return pick(items, scores)
+        return candidates(items, scores)
 
 
 def pick(items: list[dict[str, Any]], scores: np.ndarray) -> list[dict[str, Any]]:
@@ -264,43 +265,33 @@ def pick(items: list[dict[str, Any]], scores: np.ndarray) -> list[dict[str, Any]
     return found
 
 
-def merge(
-    by_words: list[dict[str, Any]], by_meaning: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    """Сложить выдачу по словам и по смыслу в один список встреч.
+# Слабее этого кусок не нужен даже для прибавки: это толпа.
+WEAK_STANDOUT = 2.0
+# Сколько кусков отдавать на прибавку. Их отбирает выделение, а не
+# число; предел только на случай странного архива, где выделяются все.
+MAX_CANDIDATES = 300
 
-    Встречи, найденные словами, идут первыми и в своём порядке: точное
-    совпадение надёжнее похожего. Если такая встреча нашлась и по смыслу,
-    второй раз её не показываем. Встречи, найденные только по смыслу,
-    идут следом, самые близкие первыми, и помечены: человек должен
-    понимать, почему в цитате нет его слова.
+
+def candidates(items: list[dict[str, Any]], scores: np.ndarray) -> list[dict[str, Any]]:
+    """Куски, выделяющиеся из архива, с пометкой, какие из них сильные.
+
+    Сильный кусок проходит оба порога pick() и может привести встречу
+    без единого общего слова. Слабый только поднимает встречу, где слова
+    запроса и так есть.
     """
-    result = list(by_words)
-    seen = {m["meeting_id"] for m in result}
-    added: dict[str, dict[str, Any]] = {}
-    for hit in by_meaning:
-        mid = hit["meeting_id"]
-        if mid in seen:
-            continue
-        item = added.get(mid)
-        if item is None:
-            if len(added) >= MAX_MEETINGS:
-                continue
-            item = added[mid] = {
-                "meeting_id": mid,
-                "title": hit["title"],
-                "created_at": hit["created_at"],
-                "hits": 0,
-                "quotes": [],
-                "by_meaning": True,
-                "score": hit["score"],
-            }
-        item["hits"] += 1
-        if len(item["quotes"]) < 3:
-            item["quotes"].append({
-                "text": hit["text"],
-                "start": hit["start_s"],
-                "who": hit["who"],
-            })
-    result.extend(sorted(added.values(), key=lambda m: -m["score"]))
-    return result
+    if len(scores) == 0:
+        return []
+    spread = float(scores.std())
+    mean = float(scores.mean())
+    # pick() берёт лучшие куски подряд, пока не упрётся в порог, поэтому
+    # сильные — ровно столько первых по близости, сколько он отобрал.
+    сильных = len(pick(items, scores))
+    found = []
+    for место, i in enumerate(np.argsort(-scores)[:MAX_CANDIDATES]):
+        score = float(scores[i])
+        standout = (score - mean) / spread if spread > 1e-6 else MIN_STANDOUT
+        if standout < WEAK_STANDOUT and место >= сильных:
+            break
+        found.append({**items[i], "score": score, "standout": standout,
+                      "strong": место < сильных})
+    return found

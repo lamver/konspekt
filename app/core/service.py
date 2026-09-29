@@ -54,6 +54,7 @@ from ..asr.enroll import (
 )
 from ..asr.voices import VoiceRoster
 from ..search import meaning as meaning_mod
+from ..search import ranking
 from ..search.model import MODEL_DIR_NAME as MEANING_DIR_NAME
 from ..search.model import MODEL_FILES as MEANING_FILES
 from ..search.model import MODEL_REPO as MEANING_REPO
@@ -1465,42 +1466,31 @@ class AppService:
         return {"folders": removed, "bytes": freed}
 
     def search(self, query: str) -> list[dict[str, Any]]:
-        """Поиск по расшифровкам, сгруппированный по встречам.
+        """Поиск по расшифровкам: по словам и по смыслу, одним списком.
 
-        Плоский список реплик неудобен: одна встреча забивает выдачу
-        десятком совпадений, и остальные не видно. Поэтому на встречу
-        отдаём несколько лучших цитат и общее число совпадений.
+        Раньше встреча находилась, только если в одной реплике были все
+        слова запроса, включая «за» и «что». На «выручка за август что
+        там по продажам» не находилось ничего, хотя разговор о выручке и
+        продажах был. Теперь хватает одного значимого слова, а порядок
+        решает, сколько слов сошлось и насколько встреча близка по
+        смыслу (app/search/ranking.py).
+
+        На встречу отдаём несколько лучших цитат: одна встреча не должна
+        забивать выдачу десятком совпадений.
         """
-        rows = self.store.search(query)
-        by_meeting: dict[str, dict[str, Any]] = {}
-        for row in rows:
-            item = by_meeting.setdefault(row["meeting_id"], {
-                "meeting_id": row["meeting_id"],
-                "title": row["title"],
-                "created_at": row["created_at"],
-                "hits": 0,
-                "quotes": [],
-            })
-            item["hits"] += 1
-            # Три цитаты на встречу: больше не помещается в список и не
-            # читается, а понять, та ли это встреча, хватает и одной.
-            if len(item["quotes"]) < 3:
-                item["quotes"].append({
-                    "text": row["text"],
-                    "start": row["start_s"],
-                    "who": row["voice_label"] or ("Я" if row["speaker"] == "me" else "Собеседник"),
-                })
-
-        found = list(by_meeting.values())
-        found.sort(key=lambda m: (-m["hits"], -(m["created_at"] or 0)))
-        # Смысл добавляется после слов и не мешает им: сломайся модель,
-        # человек получит ровно то, что получал до её появления.
+        осн = ranking.основы(query)
+        строки = self.store.search_stems(осн) if осн else []
+        for строка in строки:
+            строка["who"] = строка["voice_label"] or (
+                "Я" if строка["speaker"] == "me" else "Собеседник")
+        # Смысл только добавляет: сломайся модель, человек получит то,
+        # что нашлось словами.
         try:
             by_meaning = self.meaning.search(query)
         except Exception:
             log.exception("Поиск по смыслу не удался, отдаём найденное словами")
             by_meaning = []
-        return meaning_mod.merge(found, by_meaning)
+        return ranking.rank(осн, строки, by_meaning)
 
     def storage_usage(self) -> dict[str, Any]:
         """Сколько занимают записи, база и модели.

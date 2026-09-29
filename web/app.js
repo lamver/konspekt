@@ -994,11 +994,20 @@ function renderMeetingList() {
   // Заголовок и заметки ищем на месте, это мгновенно. Расшифровки ищет
   // база: их тысячи строк, и держать их во фронте незачем.
   const found = state.search.query === q ? state.search.byMeeting : null;
-  const items = q
+  let items = q
     ? state.meetings.filter((m) => (m.title || '').toLowerCase().includes(q)
         || (m.notes || '').toLowerCase().includes(q)
         || (found && found.has(m.id)))
     : state.meetings;
+  if (found) {
+    // Поиск отдаёт встречи лучшими первыми: где сошлось больше слов
+    // запроса и что ближе по смыслу. Список по дате прятал бы лучшую
+    // находку посреди двадцати случайных. Встречи, найденные только по
+    // названию или заметкам, идут следом, в прежнем порядке по дате.
+    const order = new Map([...found.keys()].map((id, i) => [id, i]));
+    const place = (m) => (order.has(m.id) ? order.get(m.id) : order.size);
+    items = items.slice().sort((a, b) => place(a) - place(b));
+  }
 
   ui.list.innerHTML = '';
   for (const m of items) {
@@ -1040,7 +1049,7 @@ function renderMeetingList() {
         tag.title = t('search.by_meaning_tooltip');
         quote.appendChild(tag);
       }
-      quote.appendChild(highlight(hit.quotes[0].text, q));
+      quote.appendChild(highlight(hit.quotes[0].text, (hit.terms || []).join(' ') || q));
       if (hit.hits > 1) {
         const more = document.createElement('span');
         more.className = 'meeting-item__more';
