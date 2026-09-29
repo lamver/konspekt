@@ -58,6 +58,22 @@ jobs:
           if ($exe.Length -gt 70MB) { throw "Установщик слишком большой: $($exe.Length/1MB) МБ" }
           echo "Установщик собран: $($exe.Name), $($exe.Length/1MB) МБ"
 
+      # Страж: установщик с тревогой антивируса к людям не уходит.
+      # 0.10.1 ушла с тревогой Microsoft Defender, потому что скан шёл
+      # после публикации и только дописывал результат в описание. Сборка
+      # не воспроизводима до байта, и те же исходники то чисты, то нет;
+      # если страж упал, перезапустите сборку — это тот же код.
+      - name: Страж выпуска — проверка антивирусами до публикации
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          VT_API_KEY: ${{ secrets.VT_API_KEY }}
+          PYTHONIOENCODING: utf-8
+        run: |
+          $exe = Get-Item dist/konspekt-*-setup.exe
+          uv run python tools/страж_выпуска.py $exe.FullName
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Подписать происхождение сборки
         if: startsWith(github.ref, 'refs/tags/v')
         continue-on-error: true
