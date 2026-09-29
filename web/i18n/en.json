@@ -159,7 +159,8 @@
       "notes": "Notes",
       "look": "Appearance",
       "data": "Data",
-      "about": "About"
+      "about": "About",
+      "license": "License"
     }
   },
   "audio": {
@@ -258,7 +259,12 @@
     "theme_light": "Light",
     "theme_dark": "Dark",
     "theme_system": "Match system",
-    "language": "Interface language"
+    "language": "Interface language",
+    "zoom": "Zoom",
+    "zoom_in": "Larger",
+    "zoom_out": "Smaller",
+    "zoom_reset": "Back to 100%",
+    "zoom_hint": "Or Ctrl and the mouse wheel, Ctrl + plus, Ctrl + minus. Ctrl + 0 resets it."
   },
   "data": {
     "disk_usage": "What's stored on disk",
@@ -419,5 +425,36 @@
     "short": "Copy",
     "done_answer": "Answer copied",
     "done_quote": "Line copied"
+  },
+  "license": {
+    "bar_text": "Konspekt is unlicensed. Buy a license to keep it growing.",
+    "buy": "Buy a license",
+    "have_key": "I have a key",
+    "hide_until_restart": "Hide until restart",
+    "owned_title": "License active",
+    "owned_hint": "Thank you for supporting Konspekt. The key is checked on this computer, without internet.",
+    "missing_title": "No license",
+    "missing_hint": "Everything works without one. A license is a one-time purchase, updates are free. The key arrives by email after payment.",
+    "key_label": "Key from the email",
+    "key_placeholder": "Paste the whole key, it starts with KSPK1.",
+    "activate": "Activate",
+    "activated": "Done, the license is active. Thank you!",
+    "remove": "Remove the key from this computer",
+    "remove_confirm_title": "Remove the key?",
+    "remove_confirm_text": "The “Buy a license” bar will come back. The key stays in your email, you can paste it again here or on another computer.",
+    "buy_failed": "Could not open the browser. Purchase page: konspekt.aisearch.ru",
+    "issued_to": "Issued to: {who}",
+    "seats": "seats: {n}",
+    "valid_until": "valid until {date}",
+    "number": "No. {id}",
+    "error": {
+      "empty": "Paste the key from the email.",
+      "format": "This doesn't look like a Konspekt key. Copy the whole key from the email, from KSPK1 to the end.",
+      "signature": "The key didn't match: it got damaged while copying or wasn't issued by us. Copy it from the email again.",
+      "version": "This key is for a newer version of Konspekt. Please update.",
+      "product": "This key is for a different program.",
+      "expired": "The key expired on {date}.",
+      "bridge": "The program didn't respond. Please try again."
+    }
   }
 }

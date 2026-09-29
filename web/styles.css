@@ -1618,3 +1618,94 @@ body.is-resizing * { user-select: none !important; }
 @keyframes draft-caret {
   to { visibility: hidden; }
 }
+
+/* --- Масштаб интерфейса ------------------------------------------------ */
+
+/* Весь интерфейс масштабируется одним свойством zoom на корне: поля,
+   шрифты, отступы и колонка растут вместе, а раскладка по высоте окна
+   (100% у html и body) остаётся верной. Проверено в Edge: при zoom 1.5
+   страница по-прежнему ровно заполняет окно, без обрезанного низа. */
+.zoom-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.zoom-row__step { min-width: 32px; font-size: 14px; line-height: 1; }
+.zoom-row__value {
+  min-width: 56px;
+  padding: 5px 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.zoom-row__value:hover { border-color: var(--line); }
+
+/* --- Лицензия ---------------------------------------------------------- */
+
+/* Плашка под заголовком. Спокойная, в цвет бумаги: напоминание, а не
+   тревога. Красная полоса выглядела бы ошибкой программы. */
+.license-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  min-height: 30px;
+  padding: 4px 10px 4px 12px;
+  background: var(--accent-soft);
+  border-bottom: 1px solid var(--line);
+  font-size: 11.5px;
+  color: var(--ink-2);
+}
+.license-bar__text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.license-bar__buy {
+  flex-shrink: 0;
+  padding: 3px 10px;
+  border: none;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.license-bar__buy:hover { background: var(--accent-hover); }
+.license-bar .btn-link { flex-shrink: 0; font-size: 11.5px; }
+.license-bar__hide {
+  color: var(--ink-3);
+  text-decoration: none;
+  font-size: 15px;
+  line-height: 1;
+  padding: 0 2px;
+}
+
+.license-key {
+  width: 100%;
+  resize: vertical;
+  padding: 7px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  word-break: break-all;
+  user-select: text;
+}
+.license-key:focus { outline: none; border-color: var(--accent); }
+
+.license-who { margin: 0; font-size: 12px; color: var(--ink); user-select: text; }
+.license-result--bad { color: var(--rec); }
+.license-result--good { color: var(--accent); }

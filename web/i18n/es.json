@@ -159,7 +159,8 @@
       "notes": "Notas",
       "look": "Apariencia",
       "data": "Datos",
-      "about": "Acerca de"
+      "about": "Acerca de",
+      "license": "Licencia"
     }
   },
   "audio": {
@@ -258,7 +259,12 @@
     "theme_light": "Claro",
     "theme_dark": "Oscuro",
     "theme_system": "Como el sistema",
-    "language": "Idioma de la interfaz"
+    "language": "Idioma de la interfaz",
+    "zoom": "Tamaño",
+    "zoom_in": "Más grande",
+    "zoom_out": "Más pequeño",
+    "zoom_reset": "Volver al 100%",
+    "zoom_hint": "O Ctrl y la rueda del ratón, Ctrl + más, Ctrl + menos. Ctrl + 0 lo deja como estaba."
   },
   "data": {
     "disk_usage": "Qué hay en el disco",
@@ -419,5 +425,36 @@
     "short": "Copiar",
     "done_answer": "Respuesta copiada",
     "done_quote": "Frase copiada"
+  },
+  "license": {
+    "bar_text": "Konspekt sin licencia. Cómprala para que el programa siga creciendo.",
+    "buy": "Comprar licencia",
+    "have_key": "Tengo una clave",
+    "hide_until_restart": "Ocultar hasta reiniciar",
+    "owned_title": "Licencia activa",
+    "owned_hint": "Gracias por apoyar Konspekt. La clave se comprueba en este ordenador, sin internet.",
+    "missing_title": "Sin licencia",
+    "missing_hint": "Todo funciona sin ella. La licencia se compra una vez y las actualizaciones son gratis. La clave llega por correo tras el pago.",
+    "key_label": "Clave del correo",
+    "key_placeholder": "Pega la clave completa, empieza por KSPK1.",
+    "activate": "Activar",
+    "activated": "Listo, la licencia está activa. ¡Gracias!",
+    "remove": "Quitar la clave de este ordenador",
+    "remove_confirm_title": "¿Quitar la clave?",
+    "remove_confirm_text": "Volverá la barra «Comprar licencia». La clave sigue en tu correo y puedes pegarla de nuevo aquí o en otro ordenador.",
+    "buy_failed": "No se pudo abrir el navegador. Página de compra: konspekt.aisearch.ru",
+    "issued_to": "A nombre de: {who}",
+    "seats": "puestos: {n}",
+    "valid_until": "válida hasta {date}",
+    "number": "N.º {id}",
+    "error": {
+      "empty": "Pega la clave del correo.",
+      "format": "Esto no parece una clave de Konspekt. Copia la clave completa del correo, desde KSPK1 hasta el final.",
+      "signature": "La clave no es válida: se dañó al copiarla o no la emitimos nosotros. Cópiala otra vez del correo.",
+      "version": "La clave es para una versión más nueva de Konspekt. Actualiza el programa.",
+      "product": "Esta clave es de otro programa.",
+      "expired": "La clave caducó el {date}.",
+      "bridge": "El programa no respondió. Inténtalo de nuevo."
+    }
   }
 }

@@ -118,6 +118,12 @@ TRANSCRIPT_BUDGET = 24000
 # В чате места меньше: туда же идёт саммари и вся переписка.
 CHAT_BUDGET = 20000
 
+# Пределы масштаба интерфейса. Мельче 70% буквы уже не читаются, крупнее
+# 200% в окно при самом себе не влезает список встреч с заметками.
+# Те же числа в web/app.js (ZOOM_MIN, ZOOM_MAX).
+UI_ZOOM_MIN = 0.7
+UI_ZOOM_MAX = 2.0
+
 
 # Каким шагом резать дорожку старой встречи для досчёта. Тот же размер,
 # каким идёт разбор загруженного файла: он уже подобран так, чтобы кусок
@@ -2510,6 +2516,81 @@ class AppService:
     def _msg(self, key: str, **vars: object) -> str:
         """Перевести пользовательское сообщение на текущий язык интерфейса."""
         return _t(key, self.settings.language, **vars)
+
+    def set_ui_zoom(self, zoom: float) -> float:
+        """Запомнить масштаб интерфейса.
+
+        Границы и здесь: файл настроек правят руками, а масштаб 0.1
+        делает окно нечитаемым, и вернуть его обратно уже нечем.
+        """
+        try:
+            value = float(zoom)
+        except (TypeError, ValueError):
+            value = 1.0
+        if value != value:  # NaN из битого файла
+            value = 1.0
+        value = round(max(UI_ZOOM_MIN, min(UI_ZOOM_MAX, value)), 2)
+        self.settings.ui_zoom = value
+        settings_mod.save(self.settings)
+        return value
+
+    # --- лицензия ----------------------------------------------------------
+
+    def license_state(self) -> dict[str, Any]:
+        """Есть ли лицензия и кому выдана. Проверяется подписью, без сети."""
+        from . import license as license_mod
+
+        key = self.settings.license_key
+        if not key:
+            return {"licensed": False, "buy_url": license_mod.BUY_URL}
+        try:
+            lic = license_mod.parse(key)
+        except license_mod.LicenseError as err:
+            # Ключ был, но больше не подходит: истёк срок или файл
+            # настроек правили руками. Не стираем: вдруг человек
+            # захочет посмотреть, что было вставлено.
+            log.warning("Сохранённый ключ лицензии не подошёл: %s", err.code)
+            return {"licensed": False, "error": err.code, "buy_url": license_mod.BUY_URL}
+        return {"licensed": True, "license": lic.to_dict(), "buy_url": license_mod.BUY_URL}
+
+    def activate_license(self, key: str) -> dict[str, Any]:
+        """Проверить вставленный ключ и, если подошёл, запомнить."""
+        from . import license as license_mod
+
+        try:
+            lic = license_mod.parse(key)
+        except license_mod.LicenseError as err:
+            # Неподошедший ключ не записываем: иначе испорченная вставка
+            # затёрла бы рабочий ключ, и плашка вернулась бы.
+            log.info("Ключ лицензии не принят: %s", err.code)
+            return {"ok": False, "error": err.code, "detail": err.detail}
+        self.settings.license_key = license_mod.clean(key)
+        settings_mod.save(self.settings)
+        log.info("Лицензия принята, номер %s", lic.id or "без номера")
+        return {"ok": True, **self.license_state()}
+
+    def remove_license(self) -> dict[str, Any]:
+        """Убрать ключ с этого компьютера, например перед переносом на другой."""
+        self.settings.license_key = ""
+        settings_mod.save(self.settings)
+        log.info("Ключ лицензии убран")
+        return self.license_state()
+
+    def open_buy_page(self) -> bool:
+        """Открыть страницу покупки в браузере человека.
+
+        Своим окном не открываем: оплата в чужом для человека окне без
+        адресной строки выглядит как ловушка, и правильно выглядит.
+        """
+        import webbrowser
+
+        from . import license as license_mod
+
+        try:
+            return bool(webbrowser.open(license_mod.BUY_URL))
+        except Exception:
+            log.exception("Не удалось открыть страницу покупки")
+            return False
 
     def set_sidebar_width(self, width: int) -> int:
         """Запомнить ширину боковой колонки.

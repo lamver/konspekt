@@ -50,6 +50,17 @@
     </div>
   </header>
 
+  <!-- Нет лицензии: просим купить. Узкая полоса под заголовком, а не
+       окно поверх работы: программа остаётся рабочей целиком, плашка
+       только напоминает. Прячется до следующего запуска, насовсем
+       исчезает после ввода ключа. -->
+  <div class="license-bar" id="license-bar" hidden>
+    <span class="license-bar__text" data-i18n="license.bar_text">Konspekt без лицензии. Купите её, чтобы программа развивалась дальше.</span>
+    <button class="license-bar__buy" type="button" id="license-bar-buy" data-i18n="license.buy">Купить лицензию</button>
+    <button class="btn-link" type="button" id="license-bar-key" data-i18n="license.have_key">У меня есть ключ</button>
+    <button class="btn-link license-bar__hide" type="button" id="license-bar-hide" data-i18n-title="license.hide_until_restart" title="Скрыть до перезапуска">×</button>
+  </div>
+
   <main class="layout">
     <!-- Список встреч -->
     <aside class="sidebar" id="sidebar">
@@ -294,6 +305,7 @@
         <button type="button" class="prefs__tab" data-tab="notes" data-i18n="prefs.tab.notes">Заметки</button>
         <button type="button" class="prefs__tab" data-tab="look" data-i18n="prefs.tab.look">Оформление</button>
         <button type="button" class="prefs__tab" data-tab="data" data-i18n="prefs.tab.data">Данные</button>
+        <button type="button" class="prefs__tab" data-tab="license" data-i18n="prefs.tab.license">Лицензия</button>
         <button type="button" class="prefs__tab" data-tab="about" data-i18n="prefs.tab.about">О программе</button>
       </nav>
 
@@ -527,6 +539,49 @@
                 <button type="button" data-lang="sr">Srpski</button>
               </div>
             </label>
+          </div>
+
+          <div class="card">
+            <div class="field">
+              <span class="field__label" data-i18n="look.zoom">Масштаб</span>
+              <div class="zoom-row">
+                <button type="button" class="btn-secondary zoom-row__step" id="zoom-out" data-i18n-title="look.zoom_out" title="Мельче">−</button>
+                <button type="button" class="zoom-row__value" id="zoom-value" data-i18n-title="look.zoom_reset" title="Вернуть 100%">100%</button>
+                <button type="button" class="btn-secondary zoom-row__step" id="zoom-in" data-i18n-title="look.zoom_in" title="Крупнее">+</button>
+              </div>
+            </div>
+            <p class="hint" data-i18n="look.zoom_hint">Или Ctrl и колесо мыши, Ctrl + плюс, Ctrl + минус. Ctrl + 0 возвращает как было.</p>
+          </div>
+        </section>
+
+        <!-- Лицензия -->
+        <section class="prefs__page" data-page="license" hidden>
+          <div class="card" id="license-owned" hidden>
+            <p class="card__title" data-i18n="license.owned_title">Лицензия активна</p>
+            <p class="license-who" id="license-who"></p>
+            <p class="hint" data-i18n="license.owned_hint">Спасибо, что поддерживаете Konspekt. Ключ проверяется на этом компьютере, без интернета.</p>
+            <div class="voice-enroll__row">
+              <button class="btn-ghost" type="button" id="license-remove" data-i18n="license.remove">Убрать ключ с этого компьютера</button>
+            </div>
+          </div>
+
+          <div class="card" id="license-missing">
+            <p class="card__title" data-i18n="license.missing_title">Лицензии нет</p>
+            <p class="hint" data-i18n="license.missing_hint">Всё работает и без неё. Лицензия покупается один раз, обновления бесплатны. После оплаты ключ придёт на почту.</p>
+            <div class="voice-enroll__row">
+              <button class="btn-primary" type="button" id="license-buy" data-i18n="license.buy">Купить лицензию</button>
+            </div>
+          </div>
+
+          <div class="card" id="license-enter">
+            <label class="field">
+              <span class="field__label" data-i18n="license.key_label">Ключ из письма</span>
+              <textarea class="license-key" id="license-key" rows="3" spellcheck="false" data-i18n-placeholder="license.key_placeholder" placeholder="KSPK1.…"></textarea>
+            </label>
+            <div class="voice-enroll__row">
+              <button class="btn-secondary" type="button" id="license-activate" data-i18n="license.activate">Активировать</button>
+              <span class="hint" id="license-result"></span>
+            </div>
           </div>
         </section>
 

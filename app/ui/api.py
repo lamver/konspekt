@@ -428,6 +428,26 @@ class Api:
         """Запомнить ширину боковой колонки после перетаскивания."""
         return self._service.set_sidebar_width(width)
 
+    def set_ui_zoom(self, zoom: float) -> float:
+        """Запомнить масштаб интерфейса. Применяет его сам фронт."""
+        return self._service.set_ui_zoom(zoom)
+
+    def license_state(self) -> dict[str, Any]:
+        """Есть ли лицензия: от этого зависит плашка «Купить»."""
+        return self._service.license_state()
+
+    def activate_license(self, key: str) -> dict[str, Any]:
+        """Проверить и запомнить вставленный ключ."""
+        return self._service.activate_license(key)
+
+    def remove_license(self) -> dict[str, Any]:
+        """Убрать ключ с этого компьютера."""
+        return self._service.remove_license()
+
+    def open_buy_page(self) -> bool:
+        """Открыть страницу покупки в браузере."""
+        return self._service.open_buy_page()
+
     def app_version(self) -> str:
         """Версия сборки.
 

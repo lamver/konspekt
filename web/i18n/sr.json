@@ -159,7 +159,8 @@
       "notes": "Beleške",
       "look": "Izgled",
       "data": "Podaci",
-      "about": "O aplikaciji"
+      "about": "O aplikaciji",
+      "license": "Licenca"
     }
   },
   "audio": {
@@ -258,7 +259,12 @@
     "theme_light": "Svetla",
     "theme_dark": "Tamna",
     "theme_system": "Kao u sistemu",
-    "language": "Jezik interfejsa"
+    "language": "Jezik interfejsa",
+    "zoom": "Veličina",
+    "zoom_in": "Veće",
+    "zoom_out": "Manje",
+    "zoom_reset": "Vrati na 100%",
+    "zoom_hint": "Ili Ctrl i točkić miša, Ctrl + plus, Ctrl + minus. Ctrl + 0 vraća kako je bilo."
   },
   "data": {
     "disk_usage": "Šta se čuva na disku",
@@ -419,5 +425,36 @@
     "short": "Kopiraj",
     "done_answer": "Odgovor je kopiran",
     "done_quote": "Replika je kopirana"
+  },
+  "license": {
+    "bar_text": "Konspekt nema licencu. Kupite je da bi se program i dalje razvijao.",
+    "buy": "Kupi licencu",
+    "have_key": "Imam ključ",
+    "hide_until_restart": "Sakrij do ponovnog pokretanja",
+    "owned_title": "Licenca je aktivna",
+    "owned_hint": "Hvala što podržavate Konspekt. Ključ se proverava na ovom računaru, bez interneta.",
+    "missing_title": "Nema licence",
+    "missing_hint": "Sve radi i bez nje. Licenca se kupuje jednom, ažuriranja su besplatna. Ključ stiže na mejl posle plaćanja.",
+    "key_label": "Ključ iz mejla",
+    "key_placeholder": "Nalepite ceo ključ, počinje sa KSPK1.",
+    "activate": "Aktiviraj",
+    "activated": "Gotovo, licenca je aktivna. Hvala!",
+    "remove": "Ukloni ključ sa ovog računara",
+    "remove_confirm_title": "Ukloniti ključ?",
+    "remove_confirm_text": "Traka „Kupi licencu“ će se vratiti. Ključ ostaje u mejlu i možete ga ponovo nalepiti ovde ili na drugom računaru.",
+    "buy_failed": "Pregledač nije mogao da se otvori. Stranica za kupovinu: konspekt.aisearch.ru",
+    "issued_to": "Izdata: {who}",
+    "seats": "mesta: {n}",
+    "valid_until": "važi do {date}",
+    "number": "br. {id}",
+    "error": {
+      "empty": "Nalepite ključ iz mejla.",
+      "format": "Ovo ne liči na Konspekt ključ. Kopirajte ceo ključ iz mejla, od KSPK1 do kraja.",
+      "signature": "Ključ ne odgovara: oštećen je pri kopiranju ili ga nismo mi izdali. Kopirajte ga ponovo iz mejla.",
+      "version": "Ključ je za noviju verziju programa Konspekt. Ažurirajte program.",
+      "product": "Ovo je ključ za drugi program.",
+      "expired": "Ključ je istekao {date}.",
+      "bridge": "Program nije odgovorio. Pokušajte ponovo."
+    }
   }
 }

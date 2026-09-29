@@ -2367,6 +2367,7 @@ const PREFS_TITLES = {
   notes: () => t('prefs.tab.notes'),
   look: () => t('prefs.tab.look'),
   data: () => t('prefs.tab.data'),
+  license: () => t('prefs.tab.license'),
   about: () => t('prefs.tab.about'),
 };
 
@@ -2384,6 +2385,7 @@ function showPrefsTab(tab) {
   }
   ui.prefsTitle.textContent = PREFS_TITLES[tab]();
   if (tab === 'about') loadAbout();
+  if (tab === 'license') refreshLicense();
   if (tab === 'data') loadUsage();
   if (tab === 'speech') loadAsrSettings();
   if (tab === 'dictation') loadDictation();
@@ -3085,6 +3087,14 @@ function bindUi() {
     llmHint: el('llm-hint'),
     llmCheck: el('llm-check'),
     llmCheckResult: el('llm-check-result'),
+    zoomValue: el('zoom-value'),
+    licenseBar: el('license-bar'),
+    licenseOwned: el('license-owned'),
+    licenseMissing: el('license-missing'),
+    licenseWho: el('license-who'),
+    licenseKey: el('license-key'),
+    licenseResult: el('license-result'),
+    licenseActivate: el('license-activate'),
   });
 
   el('btn-new').addEventListener('click', createMeeting);
@@ -3126,6 +3136,18 @@ function bindUi() {
     btn.addEventListener('click', () => showPrefsTab(btn.dataset.tab));
   }
   el('theme-switch').addEventListener('click', onThemeClick);
+  el('zoom-out').addEventListener('click', () => stepZoom(-1));
+  el('zoom-in').addEventListener('click', () => stepZoom(1));
+  el('zoom-value').addEventListener('click', () => setZoom(1));
+  el('license-bar-buy').addEventListener('click', openBuyPage);
+  el('license-buy').addEventListener('click', openBuyPage);
+  el('license-bar-key').addEventListener('click', openLicenseTab);
+  el('license-bar-hide').addEventListener('click', () => {
+    state.licenseBarHidden = true;
+    renderLicense();
+  });
+  ui.licenseActivate.addEventListener('click', activateLicense);
+  el('license-remove').addEventListener('click', removeLicense);
   el('language-switch').addEventListener('click', onLanguageClick);
   el('audio-save').addEventListener('click', saveAudioSheet);
   el('enroll-start').addEventListener('click', onEnrollClick);
@@ -3234,9 +3256,25 @@ function bindUi() {
     });
   });
 
+  // Масштаб колесом с Ctrl, как в браузере. preventDefault обязателен:
+  // иначе движок увеличит страницу ещё и сам, своим масштабом, который
+  // мы не запоминаем и который не сбрасывается нашей кнопкой.
+  window.addEventListener('wheel', (e) => {
+    if (!e.ctrlKey) return;
+    e.preventDefault();
+    stepZoom(e.deltaY < 0 ? 1 : -1);
+  }, { passive: false });
+
   // Горячие клавиши внутри окна.
   window.addEventListener('keydown', (e) => {
     const mod = e.ctrlKey || e.metaKey;
+    const шагМасштаба = zoomKeyStep(e);
+    if (шагМасштаба !== null) {
+      e.preventDefault();
+      if (шагМасштаба === 0) setZoom(1);
+      else stepZoom(шагМасштаба);
+      return;
+    }
     if (mod && e.key === 'n') { e.preventDefault(); createMeeting(); }
     if (mod && e.key === 'r') { e.preventDefault(); toggleRecording(); }
     if (mod && e.key === 's') { e.preventDefault(); flushNotes(); }
@@ -3285,7 +3323,10 @@ function setupSidebarGrip() {
     const move = (e) => {
       // Считаем от левого края колонки, а не от смещения курсора:
       // так граница не убегает от мыши на упорах.
-      setSidebarWidth(e.clientX - ui.sidebar.getBoundingClientRect().left);
+      // Мышь и рамка колонки в пикселях экрана, а ширина задаётся в
+      // пикселях страницы. При масштабе 150% без деления граница
+      // убегала бы от курсора в полтора раза.
+      setSidebarWidth((e.clientX - ui.sidebar.getBoundingClientRect().left) / currentZoom());
     };
 
     const up = () => {
@@ -3316,6 +3357,164 @@ function currentSidebarWidth() {
   return parseInt(raw, 10) || 240;
 }
 
+/* --- Масштаб интерфейса ------------------------------------------------ */
+
+// Те же пределы, что в app/core/service.py (UI_ZOOM_MIN, UI_ZOOM_MAX).
+const ZOOM_MIN = 0.7;
+const ZOOM_MAX = 2.0;
+// Ступени, а не шаг в 10%: так делают браузеры, и после пяти нажатий
+// «плюс» и пяти «минус» человек возвращается ровно туда, откуда начал.
+const ZOOM_STEPS = [0.7, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2];
+
+let zoomSaveTimer = null;
+
+function currentZoom() {
+  return state.zoom || 1;
+}
+
+function clampZoom(z) {
+  const n = Number(z);
+  if (!Number.isFinite(n)) return 1;
+  return Math.round(Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, n)) * 100) / 100;
+}
+
+/**
+ * Применить масштаб ко всему окну.
+ *
+ * Свойство zoom на корне, а не transform: scale. Трансформация только
+ * рисует крупнее, а место под страницу остаётся прежним, и при 150% низ
+ * окна с кнопками уехал бы за край. zoom пересчитывает саму раскладку,
+ * поэтому страница по-прежнему ровно заполняет окно.
+ */
+function applyZoom(z) {
+  const value = clampZoom(z);
+  state.zoom = value;
+  document.documentElement.style.zoom = value === 1 ? '' : String(value);
+  if (ui.zoomValue) ui.zoomValue.textContent = `${Math.round(value * 100)}%`;
+  return value;
+}
+
+/** Сменить масштаб и запомнить. Запись откладываем: колесо крутят быстро. */
+function setZoom(z) {
+  const value = applyZoom(z);
+  clearTimeout(zoomSaveTimer);
+  zoomSaveTimer = setTimeout(() => api.set_ui_zoom(value), 400);
+  return value;
+}
+
+/** На ступень крупнее (+1) или мельче (-1). */
+function stepZoom(direction) {
+  const now = currentZoom();
+  let next = now;
+  if (direction > 0) {
+    next = ZOOM_STEPS.find((s) => s > now + 0.001);
+    if (next === undefined) next = ZOOM_MAX;
+  } else {
+    const smaller = ZOOM_STEPS.filter((s) => s < now - 0.001);
+    next = smaller.length ? smaller[smaller.length - 1] : ZOOM_MIN;
+  }
+  return setZoom(next);
+}
+
+/**
+ * Какая клавиша масштаба нажата: 1 крупнее, -1 мельче, 0 сброс, null не она.
+ *
+ * Плюс на основной клавиатуре без Shift даёт «=», а на английской и
+ * русской раскладке это одна и та же клавиша, поэтому смотрим и на code.
+ */
+function zoomKeyStep(e) {
+  if (!(e.ctrlKey || e.metaKey) || e.altKey) return null;
+  const key = e.key;
+  const code = e.code || '';
+  if (key === '+' || key === '=' || code === 'Equal' || code === 'NumpadAdd') return 1;
+  if (key === '-' || key === '_' || code === 'Minus' || code === 'NumpadSubtract') return -1;
+  if (key === '0' || code === 'Digit0' || code === 'Numpad0') return 0;
+  return null;
+}
+
+/* --- Лицензия ------------------------------------------------------------ */
+
+/** Спросить у программы, есть ли лицензия, и перерисовать плашку и раздел. */
+async function refreshLicense() {
+  const s = await api.license_state();
+  // Мост не ответил: плашку не показываем. Лучше лишний раз не
+  // попросить денег, чем попросить у того, кто уже заплатил.
+  state.license = s || { licensed: true };
+  renderLicense();
+}
+
+function renderLicense() {
+  const s = state.license;
+  const licensed = !s || !!s.licensed;
+  if (ui.licenseBar) ui.licenseBar.hidden = licensed || !!state.licenseBarHidden;
+  if (ui.licenseOwned) ui.licenseOwned.hidden = !licensed;
+  if (ui.licenseMissing) ui.licenseMissing.hidden = licensed;
+  if (ui.licenseWho) {
+    const lic = (s && s.license) || {};
+    const who = [lic.to, lic.email].filter(Boolean).join(', ');
+    const parts = [];
+    if (who) parts.push(t('license.issued_to', { who }));
+    if (lic.seats > 1) parts.push(t('license.seats', { n: lic.seats }));
+    if (lic.expires) parts.push(t('license.valid_until', { date: lic.expires }));
+    if (lic.id) parts.push(t('license.number', { id: lic.id }));
+    ui.licenseWho.textContent = parts.join(' · ');
+  }
+}
+
+function showLicenseResult(text, good) {
+  if (!ui.licenseResult) return;
+  ui.licenseResult.textContent = text;
+  ui.licenseResult.classList.toggle('license-result--good', !!good);
+  ui.licenseResult.classList.toggle('license-result--bad', !good);
+}
+
+async function activateLicense() {
+  const key = (ui.licenseKey.value || '').trim();
+  if (!key) {
+    showLicenseResult(t('license.error.empty'), false);
+    ui.licenseKey.focus();
+    return;
+  }
+  ui.licenseActivate.disabled = true;
+  try {
+    const res = await api.activate_license(key);
+    if (res && res.ok) {
+      ui.licenseKey.value = '';
+      showLicenseResult(t('license.activated'), true);
+      state.license = res;
+      renderLicense();
+      return;
+    }
+    const code = (res && res.error) || 'bridge';
+    const text = tЕслиЕсть(`license.error.${code}`, { date: (res && res.detail) || '' });
+    showLicenseResult(text || t('license.error.format'), false);
+  } finally {
+    ui.licenseActivate.disabled = false;
+  }
+}
+
+async function removeLicense() {
+  const ok = await confirmDialog(t('license.remove_confirm_title'), t('license.remove_confirm_text'));
+  if (!ok) return;
+  const s = await api.remove_license();
+  state.license = s || { licensed: false };
+  state.licenseBarHidden = false;
+  showLicenseResult('', true);
+  renderLicense();
+}
+
+async function openBuyPage() {
+  const ok = await api.open_buy_page();
+  if (!ok) showToast(t('license.buy_failed'));
+}
+
+/** Из плашки прямо к полю для ключа. */
+async function openLicenseTab() {
+  await openAudioSheet();
+  showPrefsTab('license');
+  if (ui.licenseKey) ui.licenseKey.focus();
+}
+
 async function init() {
   bindUi();
   setupDrag();
@@ -3334,6 +3533,7 @@ async function init() {
     if (settings.window && settings.window.sidebar_width) {
       setSidebarWidth(settings.window.sidebar_width);
     }
+    applyZoom(settings.ui_zoom || 1);
   } else {
     await setLanguage('ru', { persist: false });
   }
@@ -3343,6 +3543,7 @@ async function init() {
   window.__konspekt_i18n_ready = true;
 
   await loadMeetings();
+  refreshLicense();
   // Разбор файлов мог продолжаться, пока окно было скрыто в трее.
   await refreshImports();
   // Обновление могло скачаться до того, как окно открыли: тогда события
