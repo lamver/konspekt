@@ -80,25 +80,28 @@ jobs:
         env:
           VT: ${{ secrets.VT_API_KEY }}
         shell: bash
+        # Имена переменных в bash латиницей: кириллицу он не считает
+        # буквами, и «файл=...» принимает за команду. Первая версия так и
+        # упала с кодом 127, все три пробы разом.
         run: |
           if [ -z "$VT" ]; then echo "нет ключа VT_API_KEY"; exit 1; fi
-          файл=$(ls dist/konspekt-*-setup.exe)
-          адрес=$(curl -s -H "x-apikey: $VT" https://www.virustotal.com/api/v3/files/upload_url \
+          file=$(ls dist/konspekt-*-setup.exe)
+          url=$(curl -s -H "x-apikey: $VT" https://www.virustotal.com/api/v3/files/upload_url \
             | python -c "import json,sys; print(json.load(sys.stdin)['data'])")
-          разбор=$(curl -s -H "x-apikey: $VT" -F "file=@$файл" "$адрес" \
+          analysis=$(curl -s -H "x-apikey: $VT" -F "file=@$file" "$url" \
             | python -c "import json,sys; print(json.load(sys.stdin)['data']['id'])")
           for i in $(seq 1 60); do
             sleep 15
-            состояние=$(curl -s -H "x-apikey: $VT" "https://www.virustotal.com/api/v3/analyses/$разбор" \
+            status=$(curl -s -H "x-apikey: $VT" "https://www.virustotal.com/api/v3/analyses/$analysis" \
               | python -c "import json,sys; print(json.load(sys.stdin)['data']['attributes']['status'])")
-            echo "разбор: $состояние"
-            [ "$состояние" = "completed" ] && break
+            echo "разбор: $status"
+            [ "$status" = "completed" ] && break
           done
           curl -s -H "x-apikey: $VT" \
-            "https://www.virustotal.com/api/v3/files/${{ steps.sum.outputs.sha }}" -o отчёт.json
+            "https://www.virustotal.com/api/v3/files/${{ steps.sum.outputs.sha }}" -o report.json
           python - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
           import json
-          а = json.load(open("отчёт.json", encoding="utf-8"))["data"]["attributes"]
+          а = json.load(open("report.json", encoding="utf-8"))["data"]["attributes"]
           итог = а["last_analysis_stats"]
           тревог = итог.get("malicious", 0) + итог.get("suspicious", 0)
           print(f"ТРЕВОГ: {тревог} из {sum(итог.values())}")
