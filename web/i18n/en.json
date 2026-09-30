@@ -258,7 +258,18 @@
     "hint_local": "Notes are generated on this computer. Nothing goes over the network, but the first response waits for the model to load.",
     "hint_remote": "The recording is sent to the server you specified. Faster and smarter, but no longer private.",
     "hint_off": "Notes and answers are off. The recording, transcript, and your own notes still work.",
-    "hint_local_not_ready": " The model hasn't been downloaded yet: 1.7 GB will download on the first request."
+    "hint_local_not_ready": " The model hasn't been downloaded yet: 1.7 GB will download on the first request.",
+    "model_choice": "Model",
+    "tier_fast": "Fast",
+    "tier_fast_about": "Answers in seconds and runs on any computer. Mixes up deadlines and tasks in long meetings.",
+    "tier_smart": "Smart",
+    "tier_smart_about": "Gets deadlines, tasks and owners right. Takes about twice as long as Fast.",
+    "tier_strong": "Strong",
+    "tier_strong_about": "Best with long meetings and hard questions. Needs a powerful computer.",
+    "tier_meta": "{size}, needs {ram} GB of RAM or more",
+    "tier_ready": "downloaded",
+    "tier_not_ready": "downloads on first question",
+    "tier_low_ram": "This computer has {have} GB of RAM: it will be slow or may not start."
   },
   "look": {
     "theme": "Theme",

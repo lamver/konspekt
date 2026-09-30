@@ -1006,12 +1006,79 @@ function renderLlmSettings(status) {
   ui.llmModel.value = status.model || '';
   ui.llmAuto.checked = Boolean(status.auto_summary);
 
+  renderLlmTiers(status);
+
   let hint = LLM_HINTS[status.backend] ? LLM_HINTS[status.backend]() : '';
   if (status.backend === 'local' && !status.model_ready) {
     hint += t('notes_settings.hint_local_not_ready');
   }
   ui.llmHint.textContent = hint;
   ui.llmCheckResult.textContent = '';
+}
+
+const LLM_TIERS = ['fast', 'smart', 'strong'];
+
+/** Размер модели для человека: «1,8 ГБ». */
+function fmtGb(bytes) {
+  const gb = (bytes || 0) / 1e9;
+  const locale = i18n.lang === 'en' ? 'en-US' : i18n.lang === 'es' ? 'es-ES' : i18n.lang === 'sr' ? 'sr-Latn-RS' : 'ru-RU';
+  return gb.toLocaleString(locale, { maximumFractionDigits: 1 }) + (i18n.lang === 'ru' ? ' ГБ' : ' GB');
+}
+
+/**
+ * Карточки своих моделей.
+ *
+ * Показываем, только когда заметки пишет своя модель: у своего сервера
+ * модель задаётся строкой, и три карточки там только сбивали бы.
+ */
+function renderLlmTiers(status) {
+  if (!ui.llmTiers) return;
+  const models = status.local_models || [];
+  ui.llmTiers.hidden = status.backend !== 'local' || !models.length;
+  ui.llmTiers.innerHTML = '';
+  for (const m of models) {
+    if (!LLM_TIERS.includes(m.code)) continue;
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'llm-tier' + (m.code === status.local_model ? ' is-current' : '');
+    card.dataset.tier = m.code;
+    card.setAttribute('role', 'radio');
+    card.setAttribute('aria-checked', String(m.code === status.local_model));
+
+    const head = document.createElement('span');
+    head.className = 'llm-tier__head';
+    const name = document.createElement('span');
+    name.className = 'llm-tier__name';
+    name.textContent = t(`notes_settings.tier_${m.code}`);
+    const st = document.createElement('span');
+    st.className = 'llm-tier__state';
+    st.textContent = m.downloaded ? t('notes_settings.tier_ready') : t('notes_settings.tier_not_ready');
+    head.append(name, st);
+
+    const about = document.createElement('span');
+    about.className = 'llm-tier__about';
+    about.textContent = t(`notes_settings.tier_${m.code}_about`);
+    const meta = document.createElement('span');
+    meta.className = 'llm-tier__meta';
+    meta.textContent = t('notes_settings.tier_meta', { size: fmtGb(m.bytes), ram: m.ram_gb });
+    card.append(head, about, meta);
+
+    // Памяти меньше, чем нужно: не прячем, а предупреждаем. Решать
+    // человеку, может, он согласен ждать.
+    if (status.ram_gb && status.ram_gb + 0.5 < m.ram_gb) {
+      const warn = document.createElement('span');
+      warn.className = 'llm-tier__warn';
+      warn.textContent = t('notes_settings.tier_low_ram', { have: Math.round(status.ram_gb) });
+      card.appendChild(warn);
+    }
+    card.addEventListener('click', () => chooseLlmTier(m.code));
+    ui.llmTiers.appendChild(card);
+  }
+}
+
+async function chooseLlmTier(code) {
+  if (!LLM_TIERS.includes(code) || (state.llm && state.llm.local_model === code)) return;
+  renderLlmSettings(await api.save_llm_settings({ local_model: code }));
 }
 
 async function refreshLlmStatus() {
@@ -3176,6 +3243,7 @@ function bindUi() {
     chatClear: el('chat-clear'),
     llmBackend: el('llm-backend'),
     llmRemote: el('llm-remote'),
+    llmTiers: el('llm-tiers'),
     llmUrl: el('llm-url'),
     llmKey: el('llm-key'),
     llmModel: el('llm-model'),

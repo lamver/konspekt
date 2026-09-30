@@ -44,7 +44,7 @@ class FakeDownloader:
             if on_progress:
                 on_progress("model.gguf", done, 1000)
             time.sleep(0.05)
-        (self.dest / "model.gguf").write_bytes(b"x")
+        (self.dest / getattr(self, "name", local_mod.MODEL_FILE)).write_bytes(b"x")
         self._busy = False
 
     def downloaded_bytes(self) -> int:
@@ -64,7 +64,7 @@ def main() -> int:
 
         cfg = LlmSettings(backend="local")
         manager = LlmManager(lambda: cfg)
-        dest = root / "llm" / "qwen3-1.7b"
+        dest = root / "llm" / local_mod.MODEL_DIR_NAME
         fake = FakeDownloader(dest)
         manager.downloader = fake
 
@@ -86,7 +86,7 @@ def main() -> int:
         print("[ok] готовая модель второй раз не качается")
 
         # Одновременные запросы: саммари и чат могут прийти вместе.
-        (dest / "model.gguf").unlink()
+        (dest / local_mod.MODEL_FILE).unlink()
         threads = [threading.Thread(target=manager.ensure_model) for _ in range(4)]
         for t in threads:
             t.start()
@@ -97,11 +97,37 @@ def main() -> int:
         print("[ok] одновременные запросы качают модель один раз")
 
         # Облачный бэкенд не должен тянуть локальные веса.
-        (dest / "model.gguf").unlink()
+        (dest / local_mod.MODEL_FILE).unlink()
         cfg.backend = "remote"
         manager.ensure_model()
         assert fake.calls == 2, "облачный бэкенд полез качать локальную модель"
         print("[ok] под облаком локальные веса не качаются")
+
+        # --- выбор модели ---------------------------------------------------
+        #
+        # Выбрали умную, а быстрая уже лежит: отвечать должна умная, и
+        # качать надо её, а не считать, что модель уже есть.
+        cfg.backend = "local"
+        (dest / local_mod.MODEL_FILE).write_bytes(b"x")
+        cfg.local_model = "smart"
+        умная = local_mod.LOCAL_MODELS["smart"]
+        fake_smart = FakeDownloader(root / "llm" / умная["dir"])
+        fake_smart.name = умная["file"]
+        manager.downloader = fake_smart
+        assert manager.status()["model_ready"] is False, \
+            "выбрана умная, а статус «готово» по лежащей быстрой"
+        manager.ensure_model()
+        assert fake_smart.calls == 1, "выбранная умная модель не качается"
+        assert local_mod.find_model("smart") is not None, "умная модель не легла на место"
+        st = manager.status()
+        assert st["local_model"] == "smart" and st["model_ready"], st
+        скачано = {m["code"]: m["downloaded"] for m in st["local_models"]}
+        assert скачано == {"fast": True, "smart": True, "strong": False}, скачано
+        print("[ok] выбранная модель качается своя, а не подменяется уже лежащей")
+
+        cfg.local_model = "что-то странное"
+        assert manager.tier == "fast", "незнакомая модель не откатилась к быстрой"
+        print("[ok] незнакомый выбор модели откатывается к быстрой")
 
     print("\nДокачка модели работает.")
     return 0

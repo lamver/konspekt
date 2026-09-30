@@ -106,11 +106,41 @@ from ..core.models import (
 )
 from ..llm import LlmError, LlmManager, chat_messages, summary_messages
 from ..llm import context as chat_context
+from ..llm.local import tier_or_default
 from ..llm.chunking import fits, split_transcript
 from ..llm.prompts import chunk_messages, merge_messages
 from ..storage import Store
 
 log = logging.getLogger(__name__)
+
+
+def total_ram_gb() -> float:
+    """Сколько памяти у компьютера, в гигабайтах. 0 — не удалось узнать.
+
+    Нужна, чтобы честно предупредить: мощная модель на восьми гигабайтах
+    не поднимется или загонит компьютер в подкачку.
+    """
+    try:
+        if os.name == "nt":
+            import ctypes
+
+            class _Mem(ctypes.Structure):
+                _fields_ = [
+                    ("dwLength", ctypes.c_ulong), ("dwMemoryLoad", ctypes.c_ulong),
+                    ("ullTotalPhys", ctypes.c_ulonglong), ("ullAvailPhys", ctypes.c_ulonglong),
+                    ("ullTotalPageFile", ctypes.c_ulonglong), ("ullAvailPageFile", ctypes.c_ulonglong),
+                    ("ullTotalVirtual", ctypes.c_ulonglong), ("ullAvailVirtual", ctypes.c_ulonglong),
+                    ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
+                ]
+
+            m = _Mem()
+            m.dwLength = ctypes.sizeof(_Mem)
+            if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(m)):
+                return round(m.ullTotalPhys / (1 << 30), 1)
+            return 0.0
+        return round(os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") / (1 << 30), 1)
+    except Exception:
+        return 0.0
 
 # Сколько токенов отдаём под расшифровку. Окно модели 32k, но в нём
 # живёт ещё и ответ, и промпт, и заметки человека. Цифры взяты с
@@ -2176,7 +2206,7 @@ class AppService:
     # --- саммари и чат ----------------------------------------------------
 
     def llm_status(self) -> dict[str, Any]:
-        return self.llm.status()
+        return {**self.llm.status(), "ram_gb": total_ram_gb()}
 
     def download_llm(self) -> dict[str, Any]:
         """Скачать веса модели в фоне, отчитываясь в UI."""
@@ -2238,11 +2268,17 @@ class AppService:
         """
         cfg = self.settings.llm
         backend_was = cfg.backend
+        tier_was = cfg.local_model
         for key, value in fields.items():
             if hasattr(cfg, key):
                 setattr(cfg, key, value)
+        # Незнакомую модель не записываем: фронт другой версии или ручная
+        # правка не должны оставить программу без модели.
+        cfg.local_model = tier_or_default(cfg.local_model)
         settings_mod.save(self.settings)
-        if cfg.backend != backend_was:
+        if cfg.backend != backend_was or cfg.local_model != tier_was:
+            # Сервер держит в памяти прежнюю модель: гасим, следующий
+            # вопрос поднимет выбранную.
             self.llm.shutdown()
         return self.llm_status()
 

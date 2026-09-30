@@ -1774,3 +1774,35 @@ body.is-resizing * { user-select: none !important; }
 .license-who { margin: 0; font-size: 12px; color: var(--ink); user-select: text; }
 .license-result--bad { color: var(--rec); }
 .license-result--good { color: var(--accent); }
+
+/* --- Выбор своей модели ------------------------------------------------- */
+
+/* Три карточки столбцом: название, чем хороша, вес и память. Выбранная
+   подсвечена рамкой; недоступная по памяти не прячется, а честно
+   предупреждает, что будет медленно. */
+.llm-tiers { display: flex; flex-direction: column; gap: 6px; margin: 10px 0 4px; }
+.llm-tiers[hidden] { display: none; }
+.llm-tier {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.llm-tier:hover { border-color: var(--ink-3); }
+.llm-tier.is-current { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.llm-tier__head { display: flex; gap: 8px; align-items: baseline; width: 100%; }
+.llm-tier__name { font-size: 12.5px; font-weight: 600; }
+.llm-tier__state { margin-left: auto; font-size: 11px; color: var(--ink-3); }
+.llm-tier__about { font-size: 11.5px; color: var(--ink-2); line-height: 1.45; }
+.llm-tier__meta { font-size: 11px; color: var(--ink-3); }
+.llm-tier__warn { font-size: 11px; color: var(--rec); }
+

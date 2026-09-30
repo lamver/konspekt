@@ -18,14 +18,12 @@ import threading
 from ..asr.download import ModelDownloader
 from .client import LlmClient, LlmError
 from .local import (
-    MODEL_DIR_NAME,
-    MODEL_FILE,
-    MODEL_REPO,
-    MODEL_TOTAL_BYTES,
+    LOCAL_MODELS,
     LocalServer,
     default_binary,
     find_model,
     llm_dir,
+    tier_or_default,
 )
 
 log = logging.getLogger(__name__)
@@ -50,10 +48,10 @@ class LlmManager:
         self._server: LocalServer | None = None
         self._lock = threading.RLock()
         # Веса приезжают по требованию: полтора гигабайта в установщике
-        # ради человека, который выберет облако, никому не нужны.
-        self.downloader = ModelDownloader(
-            MODEL_REPO, (MODEL_FILE,), llm_dir() / MODEL_DIR_NAME
-        )
+        # ради человека, который выберет облако, никому не нужны. Свой
+        # загрузчик на каждую модель: смена выбора посреди загрузки не
+        # должна подменить файл, который уже наполовину скачан.
+        self._downloaders: dict[str, ModelDownloader] = {}
         # Саммари и чат могут попроситься одновременно: качать один файл
         # в два потока значит получить склейку вместо модели.
         self._download_lock = threading.RLock()
@@ -68,20 +66,48 @@ class LlmManager:
     def enabled(self) -> bool:
         return self.backend != "null"
 
+    @property
+    def tier(self) -> str:
+        """Какая из своих моделей выбрана: fast, smart или strong."""
+        return tier_or_default(getattr(self._settings(), "local_model", None))
+
+    @property
+    def downloader(self) -> ModelDownloader:
+        """Загрузчик выбранной модели."""
+        tier = self.tier
+        if tier not in self._downloaders:
+            о = LOCAL_MODELS[tier]
+            self._downloaders[tier] = ModelDownloader(
+                о["repo"], (о["file"],), llm_dir() / о["dir"]
+            )
+        return self._downloaders[tier]
+
+    @downloader.setter
+    def downloader(self, value) -> None:
+        # Для проверок: подменить загрузчик выбранной модели.
+        self._downloaders[self.tier] = value
+
     def status(self) -> dict:
         """Что показать в настройках, не поднимая сервер."""
         cfg = self._settings()
-        model = find_model()
+        tier = self.tier
+        model = find_model(tier)
         return {
             "backend": self.backend,
             "enabled": self.enabled,
+            "local_model": tier,
+            "local_models": [
+                {"code": код, "bytes": о["bytes"], "ram_gb": о["ram_gb"],
+                 "downloaded": find_model(код) is not None}
+                for код, о in LOCAL_MODELS.items()
+            ],
             "model_file": model.name if model else "",
             "model_ready": model is not None,
             "engine_ready": default_binary().exists(),
             "server_running": self._server is not None and self._server.is_running,
-            "downloading": self.downloader.is_running,
+            "downloading": any(d.is_running for d in self._downloaders.values()),
             "bytes": self.downloader.downloaded_bytes(),
-            "total_bytes": MODEL_TOTAL_BYTES,
+            "total_bytes": LOCAL_MODELS[tier]["bytes"],
             "base_url": cfg.base_url,
             "model": cfg.model,
             "template": cfg.template,
@@ -112,7 +138,7 @@ class LlmManager:
 
     def _local_url(self) -> str:
         with self._lock:
-            model = find_model()
+            model = find_model(self.tier)
             if model is None:
                 raise LlmError(
                     "Локальная модель не скачана. Скачайте её в настройках."
@@ -121,6 +147,11 @@ class LlmManager:
                 raise LlmError(
                     "Не найден движок llama.cpp. Переустановите приложение."
                 )
+            if self._server is not None and self._server.model_path != model:
+                # Человек выбрал другую модель: сервер с прежней гасим,
+                # иначе отвечала бы старая, а памяти ушло бы вдвое.
+                self._server.stop()
+                self._server = None
             if self._server is None:
                 self._server = LocalServer(model)
             try:
@@ -139,7 +170,7 @@ class LlmManager:
         on_done=None,
     ) -> None:
         """Скачать веса в фоне. Уже скачанные не трогаем."""
-        if find_model() is not None or self.downloader.is_running:
+        if find_model(self.tier) is not None or self.downloader.is_running:
             return
         self.downloader.start(on_progress, on_done)
 
@@ -153,10 +184,10 @@ class LlmManager:
         его в настройки за отдельной кнопкой значит ломать работу на
         ровном месте: качаем прямо здесь и говорим, сколько осталось.
         """
-        if self.backend != "local" or find_model() is not None:
+        if self.backend != "local" or find_model(self.tier) is not None:
             return
         with self._download_lock:
-            if find_model() is not None:
+            if find_model(self.tier) is not None:
                 return
             self.downloader.run_blocking(on_progress)
 

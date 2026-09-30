@@ -182,6 +182,9 @@ class LlmSettings:
     template: str = ""           # "" | one_on_one | sales | standup | interview
     # Делать саммари сразу после остановки записи.
     auto_summary: bool = True
+    # Какая своя модель пишет заметки и отвечает: fast, smart или strong
+    # (см. LOCAL_MODELS в llm/local.py).
+    local_model: str = "fast"
 
 
 @dataclass

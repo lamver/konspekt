@@ -51,10 +51,58 @@ CONTEXT_SIZE = 32768
 # несколько минут и хорошо понимает русский. Класть её в дистрибутив
 # нельзя, установщик раздулся бы вдесятеро, поэтому она приезжает при
 # первом обращении, как и веса распознавания.
-MODEL_REPO = "Qwen/Qwen3-1.7B-GGUF"
-MODEL_FILE = "Qwen3-1.7B-Q8_0.gguf"
-MODEL_DIR_NAME = "qwen3-1.7b"
-MODEL_TOTAL_BYTES = 1_834_426_016
+#
+# Моделей три, человек выбирает в настройках. Проверено 30.09 на копии
+# живой базы (планёрка на 884 реплики): 1.7B путает сроки и задачи и
+# иногда пересказывает посторонний кусок вместо ответа, 4B называет и
+# сроки, и исполнителей верно, но думает вдвое дольше. 8B для тех, у
+# кого памяти с запасом.
+#
+# Квантование у 4B и 8B Q4_K_M, у 1.7B Q8_0: маленькая модель от
+# сжатия до 4 бит глупеет заметно, большая почти нет, а весит вдвое
+# меньше. «ram_gb» — сколько памяти должно быть у компьютера, с учётом
+# окна контекста в 32 тысячи токенов и самой программы.
+LOCAL_MODELS: dict[str, dict] = {
+    "fast": {
+        "repo": "Qwen/Qwen3-1.7B-GGUF",
+        "file": "Qwen3-1.7B-Q8_0.gguf",
+        "dir": "qwen3-1.7b",
+        "bytes": 1_834_426_016,
+        "ram_gb": 8,
+    },
+    "smart": {
+        "repo": "Qwen/Qwen3-4B-GGUF",
+        "file": "Qwen3-4B-Q4_K_M.gguf",
+        "dir": "qwen3-4b",
+        "bytes": 2_497_280_256,
+        "ram_gb": 12,
+    },
+    "strong": {
+        "repo": "Qwen/Qwen3-8B-GGUF",
+        "file": "Qwen3-8B-Q4_K_M.gguf",
+        "dir": "qwen3-8b",
+        "bytes": 5_027_783_488,
+        "ram_gb": 16,
+    },
+}
+# Быстрая по умолчанию: она уже скачана у всех, кто пользовался
+# заметками, и работает на любом компьютере.
+DEFAULT_TIER = "fast"
+
+MODEL_REPO = LOCAL_MODELS[DEFAULT_TIER]["repo"]
+MODEL_FILE = LOCAL_MODELS[DEFAULT_TIER]["file"]
+MODEL_DIR_NAME = LOCAL_MODELS[DEFAULT_TIER]["dir"]
+MODEL_TOTAL_BYTES = LOCAL_MODELS[DEFAULT_TIER]["bytes"]
+
+
+def tier_or_default(tier: str | None) -> str:
+    """Незнакомый уровень (ручная правка файла, старая версия) — быстрая."""
+    return tier if tier in LOCAL_MODELS else DEFAULT_TIER
+
+
+def tier_path(tier: str) -> Path:
+    о = LOCAL_MODELS[tier_or_default(tier)]
+    return llm_dir() / о["dir"] / о["file"]
 
 
 class LocalServer:
@@ -74,6 +122,10 @@ class LocalServer:
     @property
     def is_running(self) -> bool:
         return self._proc is not None and self._proc.poll() is None
+
+    @property
+    def model_path(self) -> Path:
+        return self._model
 
     @property
     def base_url(self) -> str:
@@ -294,8 +346,16 @@ def default_binary() -> Path:
     return engine_dir() / name
 
 
-def find_model() -> Path | None:
-    """Найти скачанную модель. Берём первый .gguf, какой лежит."""
+def find_model(tier: str | None = None) -> Path | None:
+    """Найти скачанную модель.
+
+    С уровнем — ровно ту, что выбрана: иначе человек выбрал бы умную, а
+    отвечала бы по-прежнему быстрая, потому что она уже лежит на диске.
+    Без уровня — первую, какая есть (для проверок и старых установок).
+    """
+    if tier is not None:
+        путь = tier_path(tier)
+        return путь if путь.exists() else None
     root = llm_dir()
     if not root.exists():
         return None

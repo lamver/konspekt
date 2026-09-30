@@ -258,7 +258,18 @@
     "hint_local": "Las notas se generan en este ordenador. Nada sale a la red, pero la primera respuesta espera a que el modelo se cargue.",
     "hint_remote": "La grabación se envía al servidor indicado. Más rápido y más inteligente, pero deja de ser privado.",
     "hint_off": "Las notas y respuestas están desactivadas. La grabación, la transcripción y tus propias notas siguen funcionando.",
-    "hint_local_not_ready": " El modelo todavía no se ha descargado: 1,7 GB se descargarán en la primera solicitud."
+    "hint_local_not_ready": " El modelo todavía no se ha descargado: 1,7 GB se descargarán en la primera solicitud.",
+    "model_choice": "Modelo",
+    "tier_fast": "Rápido",
+    "tier_fast_about": "Responde en segundos y funciona en cualquier ordenador. En reuniones largas confunde plazos y tareas.",
+    "tier_smart": "Inteligente",
+    "tier_smart_about": "Acierta con plazos, tareas y responsables. Tarda aproximadamente el doble que el rápido.",
+    "tier_strong": "Potente",
+    "tier_strong_about": "El mejor con reuniones largas y preguntas difíciles. Necesita un ordenador potente.",
+    "tier_meta": "{size}, necesita {ram} GB de RAM o más",
+    "tier_ready": "descargado",
+    "tier_not_ready": "se descarga con la primera pregunta",
+    "tier_low_ram": "Este ordenador tiene {have} GB de RAM: irá lento o puede no arrancar."
   },
   "look": {
     "theme": "Tema",

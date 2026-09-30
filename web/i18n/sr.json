@@ -258,7 +258,18 @@
     "hint_local": "Beleške se izrađuju na ovom računaru. Ništa ne ide na mrežu, ali prvi odgovor čeka da se model učita.",
     "hint_remote": "Snimak se šalje na navedeni server. Brže i pametnije, ali više nije privatno.",
     "hint_off": "Beleške i odgovori su isključeni. Snimak, transkript i vaše beleške i dalje rade.",
-    "hint_local_not_ready": " Model još nije preuzet: 1,7 GB će stići pri prvom zahtevu."
+    "hint_local_not_ready": " Model još nije preuzet: 1,7 GB će stići pri prvom zahtevu.",
+    "model_choice": "Model",
+    "tier_fast": "Brzi",
+    "tier_fast_about": "Odgovara za nekoliko sekundi i radi na svakom računaru. Na dugim sastancima meša rokove i zadatke.",
+    "tier_smart": "Pametni",
+    "tier_smart_about": "Tačno navodi rokove, zadatke i izvršioce. Razmišlja otprilike duplo duže od brzog.",
+    "tier_strong": "Snažni",
+    "tier_strong_about": "Najbolji za duge sastanke i teška pitanja. Potreban je jak računar.",
+    "tier_meta": "{size}, potrebno je {ram} GB memorije ili više",
+    "tier_ready": "preuzet",
+    "tier_not_ready": "preuzima se pri prvom pitanju",
+    "tier_low_ram": "Ovaj računar ima {have} GB memorije: biće sporo ili se neće pokrenuti."
   },
   "look": {
     "theme": "Tema",

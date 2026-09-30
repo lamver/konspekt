@@ -510,6 +510,12 @@
             </label>
             <p class="hint" id="llm-hint"></p>
 
+            <!-- Какая своя модель пишет заметки. Умнее значит медленнее и
+                 тяжелее, и это решение человека, а не наше: у кого-то
+                 восемь гигабайт памяти, у кого-то тридцать два. -->
+            <div class="llm-tiers" id="llm-tiers" role="radiogroup" hidden
+              data-i18n-aria-label="notes_settings.model_choice"></div>
+
             <div class="llm-remote" id="llm-remote" hidden>
               <label class="field">
                 <span class="field__label" data-i18n="notes_settings.server_url">Адрес сервера</span>
