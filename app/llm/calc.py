@@ -1,0 +1,99 @@
+"""Счёт в чате без модели.
+
+Маленькая модель не считает, а угадывает. Проверено на «Умной» (Qwen3-4B)
+30 сентября: после «1+2 → 3» на «-9» она пять раз из пяти отвечала «-10»,
+на «+9» — 18, на «*4» — 5. С рассуждением думает до 40 секунд и всё равно
+понимает «-9» как число. Калькулятор же отвечает верно и сразу.
+
+Сюда попадает только вопрос без единой буквы, из цифр и знаков действий.
+Всё остальное идёт в модель как раньше.
+"""
+
+from __future__ import annotations
+
+import ast
+import math
+import operator
+import re
+
+# Пустой вопрос, «?» или одни скобки калькулятору не отдаём.
+_ЗНАКИ = re.compile(r"^[\d\s+\-*/×÷:^().,%]+$")
+_ДЕЙСТВИЯ = "+-*/×÷:^"
+# Больше этого числа знаков в ответе — уже не счёт в чате, а попытка
+# повесить программу вроде 9**9**9.
+_ПРЕДЕЛ = 1e15
+
+_ОПЕРАЦИИ = {
+    ast.Add: operator.add,
+    ast.Sub: operator.sub,
+    ast.Mult: operator.mul,
+    ast.Div: operator.truediv,
+    ast.Pow: operator.pow,
+    ast.Mod: operator.mod,
+}
+
+
+class _Нельзя(Exception):
+    pass
+
+
+def _вычислить(узел: ast.AST) -> float:
+    if isinstance(узел, ast.Expression):
+        return _вычислить(узел.body)
+    if isinstance(узел, ast.Constant) and isinstance(узел.value, (int, float)):
+        return float(узел.value)
+    if isinstance(узел, ast.UnaryOp) and isinstance(узел.op, (ast.UAdd, ast.USub)):
+        v = _вычислить(узел.operand)
+        return -v if isinstance(узел.op, ast.USub) else v
+    if isinstance(узел, ast.BinOp) and type(узел.op) in _ОПЕРАЦИИ:
+        a, b = _вычислить(узел.left), _вычислить(узел.right)
+        # Считаем в дробных: 9^9^9 на них даёт OverflowError мгновенно, а
+        # на целых Python честно считал бы число в сотни миллионов цифр.
+        r = _ОПЕРАЦИИ[type(узел.op)](a, b)
+        if isinstance(r, complex) or not math.isfinite(r) or abs(r) > _ПРЕДЕЛ:
+            raise _Нельзя
+        return r
+    raise _Нельзя
+
+
+def _число(текст: str) -> float | None:
+    """Прошлый ответ как число: «3», «-6», «2,5». Иначе None."""
+    t = текст.strip().replace(" ", "").replace("\u00a0", "").replace(",", ".")
+    if re.fullmatch(r"[-−]?\d+(?:\.\d+)?", t):
+        return float(t.replace("−", "-"))
+    return None
+
+
+def показать(x: float) -> str:
+    """Число по-русски: целое без хвоста, дробное с запятой."""
+    if abs(x - round(x)) < 1e-9:
+        return str(int(round(x)))
+    return f"{x:.10g}".replace(".", ",")
+
+
+def ответ(вопрос: str, прошлый_ответ: str = "") -> str | None:
+    """Посчитать вопрос-пример. None — это не пример, пусть отвечает модель.
+
+    Вопрос, начатый со знака действия («-9», «*4»), продолжает прошлый
+    счёт, если прошлый ответ был числом: так человек и считает в чате.
+    """
+    в = (вопрос or "").strip().rstrip("=").strip()
+    if not в or not _ЗНАКИ.match(в) or not re.search(r"\d", в):
+        return None
+    if в[0] in _ДЕЙСТВИЯ:
+        прошлое = _число(прошлый_ответ)
+        if прошлое is not None:
+            в = f"({показать(прошлое).replace(',', '.')}){в}"
+    # Нет ни одного действия между числами («2024», «-9» без прошлого
+    # счёта): это не пример, отвечать эхом незачем.
+    if not any(ч in _ДЕЙСТВИЯ for ч in в.lstrip("+-−( ")):
+        return None
+    выражение = (в.replace("×", "*").replace("÷", "/").replace(":", "/")
+                 .replace("^", "**").replace(",", "."))
+    try:
+        дерево = ast.parse(выражение, mode="eval")
+        return показать(_вычислить(дерево))
+    except ZeroDivisionError:
+        return "На ноль делить нельзя."
+    except (SyntaxError, _Нельзя, ValueError, OverflowError, RecursionError):
+        return None

@@ -113,7 +113,7 @@ from . import personal
 from ..llm.local import tier_or_default
 from ..llm.chunking import fits, split_transcript
 from ..llm.prompts import chunk_messages, merge_messages
-from ..llm import lenses
+from ..llm import calc, lenses
 from . import analysis as analysis_mod
 from ..storage import Store
 
@@ -2646,6 +2646,23 @@ class AppService:
             ][:-1]
 
             ctx = self._chat_context(meeting_id, question, history)
+            if not ctx.attach:
+                # Пример без букв считаем сами: модель тут угадывает
+                # (см. llm/calc.py), а калькулятор верен и мгновенен.
+                прошлый = next((h["content"] for h in reversed(history)
+                                if h["role"] == "assistant"), "")
+                посчитано = calc.ответ(question, прошлый)
+                if посчитано is not None:
+                    bus.emit(CHAT_CHUNK, {"meeting_id": meeting_id,
+                                          "message_id": answer_id, "text": посчитано})
+                    self.store.update_chat_message(answer_id, посчитано)
+                    bus.emit(CHAT_MESSAGE, {
+                        "meeting_id": meeting_id,
+                        "message": {"id": answer_id, "meeting_id": meeting_id,
+                                    "role": "assistant", "text": посчитано},
+                        "done": True,
+                    })
+                    return
             messages = chat_messages(
                 title=meeting.title,
                 transcript=ctx.transcript,
