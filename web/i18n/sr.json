@@ -103,7 +103,13 @@
     },
     "downloading_model_title": "Preuzimamo model za beleške",
     "copy": "Kopiraj",
-    "copy_plain": "Običan tekst"
+    "copy_plain": "Običan tekst",
+    "copy_more": "Kako kopirati",
+    "copy_markdown": "Sa formatiranjem",
+    "copy_markdown_hint": "Za Telegram, trekere, Notion",
+    "copy_plain_hint": "Za poštu i polja bez formatiranja",
+    "collapse": "Skupi beleške",
+    "expand": "Raširi beleške"
   },
   "chat": {
     "title": "Pitanja o sastanku",

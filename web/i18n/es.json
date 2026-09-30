@@ -103,7 +103,13 @@
     },
     "downloading_model_title": "Descargando el modelo de notas",
     "copy": "Copiar",
-    "copy_plain": "Texto simple"
+    "copy_plain": "Texto simple",
+    "copy_more": "Opciones de copia",
+    "copy_markdown": "Con formato",
+    "copy_markdown_hint": "Para Telegram, gestores de tareas, Notion",
+    "copy_plain_hint": "Para correo y campos sin formato",
+    "collapse": "Contraer notas",
+    "expand": "Expandir notas"
   },
   "chat": {
     "title": "Preguntas sobre la reunión",

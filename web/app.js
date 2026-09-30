@@ -528,11 +528,89 @@ function renderSummary(text) {
   // Копировать нечего, пока заметок нет. Живая кнопка, которая молча
   // кладёт в буфер пустоту, хуже спрятанной: человек решит, что
   // скопировал, и вставит пустоту в чат команды.
-  const копии = [ui.summaryCopy, ui.summaryCopyPlain];
-  for (const кнопка of копии) {
-    if (кнопка) кнопка.hidden = !has;
-  }
+  if (ui.summaryCopyGroup) ui.summaryCopyGroup.hidden = !has;
+  if (!has) closeCopyMenu();
   setSummaryStatus('');
+}
+
+/* --- Копирование заметок: одна кнопка и меню ----------------------------- */
+
+// Какой вид копирования главная кнопка берёт без вопросов. Запоминается
+// тот, которым копировали в последний раз: человек, вставляющий заметки
+// в почту, не должен каждый раз лезть в меню.
+const COPY_MODES = ['markdown', 'plain'];
+
+function copyMode() {
+  return COPY_MODES.includes(state.copyMode) ? state.copyMode : 'markdown';
+}
+
+/** Подписать главную кнопку так, чтобы было видно, что именно она скопирует. */
+function syncCopyButton() {
+  if (!ui.summaryCopy) return;
+  const mode = copyMode();
+  ui.summaryCopy.textContent = t('summary.copy');
+  ui.summaryCopy.title = mode === 'plain'
+    ? t('summary.copy_plain_hint')
+    : t('summary.copy_markdown_hint');
+  for (const item of [ui.summaryCopyMd, ui.summaryCopyPlain]) {
+    if (item) item.classList.toggle('is-current', item.dataset.copyMode === mode);
+  }
+}
+
+/** Скопировать заметки в выбранном виде и запомнить выбор. */
+function copySummary(mode) {
+  const текст = state.current ? state.current.summary : '';
+  const вид = COPY_MODES.includes(mode) ? mode : copyMode();
+  if (вид !== state.copyMode) {
+    state.copyMode = вид;
+    syncCopyButton();
+    if (api.set_copy_mode) api.set_copy_mode(вид);
+  }
+  closeCopyMenu();
+  if (вид === 'plain') return копировать(markdownToPlain(текст), 'copy.done_plain');
+  return копировать(текст, 'copy.done');
+}
+
+function openCopyMenu() {
+  if (!ui.summaryCopyMenu) return;
+  ui.summaryCopyMenu.hidden = false;
+  ui.summaryCopyMore.setAttribute('aria-expanded', 'true');
+  syncCopyButton();
+}
+
+function closeCopyMenu() {
+  if (!ui.summaryCopyMenu || ui.summaryCopyMenu.hidden) return;
+  ui.summaryCopyMenu.hidden = true;
+  if (ui.summaryCopyMore) ui.summaryCopyMore.setAttribute('aria-expanded', 'false');
+}
+
+function toggleCopyMenu() {
+  if (!ui.summaryCopyMenu) return;
+  if (ui.summaryCopyMenu.hidden) openCopyMenu();
+  else closeCopyMenu();
+}
+
+/* --- Сворачивание заметок ------------------------------------------------ */
+
+/**
+ * Свернуть или развернуть заметки над перепиской.
+ *
+ * Прочитанное саммари занимает половину окна, а место нужно разговору
+ * с моделью. Положение одно на все встречи и хранится в настройках:
+ * localStorage в webview между запусками очищается.
+ */
+function applySummaryCollapsed(collapsed) {
+  state.summaryCollapsed = Boolean(collapsed);
+  if (ui.summary) ui.summary.classList.toggle('is-collapsed', state.summaryCollapsed);
+  if (ui.summaryToggle) {
+    ui.summaryToggle.setAttribute('aria-expanded', String(!state.summaryCollapsed));
+    ui.summaryToggle.title = t(state.summaryCollapsed ? 'summary.expand' : 'summary.collapse');
+  }
+}
+
+function toggleSummaryCollapsed() {
+  applySummaryCollapsed(!state.summaryCollapsed);
+  if (api.set_summary_collapsed) api.set_summary_collapsed(state.summaryCollapsed);
 }
 
 /**
@@ -669,6 +747,9 @@ async function startSummary() {
   ui.summaryEmpty.hidden = true;
   setBusy(true, state.currentId);
   setSummaryStatus(t('summary.reading'));
+  // Свёрнутые заметки при пересборке разворачиваем: иначе человек нажал
+  // кнопку и не видит, что что-то происходит.
+  if (state.summaryCollapsed) toggleSummaryCollapsed();
   const res = await api.generate_summary(state.currentId);
   if (!res || !res.ok) {
     setBusy(false);
@@ -887,10 +968,19 @@ async function sendQuestion() {
   }
 }
 
-/** Поле ввода растёт под текст, но не больше трети экрана. */
+/**
+ * Поле ввода растёт под текст.
+ *
+ * Раньше поле было в одну строку и упиралось в 120 пикселей: длинный
+ * вопрос с контекстом приходилось писать вслепую, прокручивая крошечное
+ * окошко. Теперь с самого начала две строки, а потолок — пятая часть
+ * окна, чтобы переписка над полем не пропадала совсем.
+ */
 function resizeChatInput() {
+  const потолок = Math.max(120, Math.round((window.innerHeight || 600) * 0.2 / currentZoom()));
   ui.chatText.style.height = 'auto';
-  ui.chatText.style.height = Math.min(ui.chatText.scrollHeight, 120) + 'px';
+  ui.chatText.style.height = Math.min(ui.chatText.scrollHeight + 2, потолок) + 'px';
+  ui.chatText.style.overflowY = ui.chatText.scrollHeight + 2 > потолок ? 'auto' : 'hidden';
 }
 
 async function clearChat() {
@@ -3072,6 +3162,12 @@ function bindUi() {
     summaryStop: el('summary-stop'),
     summaryCopy: el('summary-copy'),
     summaryCopyPlain: el('summary-copy-plain'),
+    summaryCopyMd: el('summary-copy-md'),
+    summaryCopyMore: el('summary-copy-more'),
+    summaryCopyMenu: el('summary-copy-menu'),
+    summaryCopyGroup: el('summary-copy-group'),
+    summary: el('summary'),
+    summaryToggle: el('summary-toggle'),
     chatList: el('chat-list'),
     chatHint: el('chat-hint'),
     chatText: el('chat-text'),
@@ -3178,20 +3274,30 @@ function bindUi() {
 
   ui.summaryRun.addEventListener('click', runSummary);
   ui.summaryStop.addEventListener('click', () => api.stop_generation());
-  // Копируем сырую разметку, а не то, что нарисовано: в трекере и
-  // мессенджере она развернётся в списки и заголовки. Вторая кнопка —
-  // для полей, которые разметку не понимают.
+  // Главная кнопка копирует тем видом, что выбран последним; стрелка
+  // открывает выбор. Сырую разметку берём, а не нарисованное: в трекере
+  // и мессенджере она развернётся в списки и заголовки.
   if (ui.summaryCopy) {
-    ui.summaryCopy.addEventListener('click', () => {
-      const текст = state.current ? state.current.summary : '';
-      копировать(текст, 'copy.done');
+    ui.summaryCopy.addEventListener('click', () => copySummary());
+  }
+  if (ui.summaryCopyMore) {
+    ui.summaryCopyMore.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleCopyMenu();
     });
   }
-  if (ui.summaryCopyPlain) {
-    ui.summaryCopyPlain.addEventListener('click', () => {
-      const текст = state.current ? state.current.summary : '';
-      копировать(markdownToPlain(текст), 'copy.done_plain');
-    });
+  for (const item of [ui.summaryCopyMd, ui.summaryCopyPlain]) {
+    if (item) item.addEventListener('click', () => copySummary(item.dataset.copyMode));
+  }
+  // Меню закрывается щелчком мимо и клавишей Esc, как любое меню.
+  document.addEventListener('click', (e) => {
+    if (ui.summaryCopyGroup && !ui.summaryCopyGroup.contains(e.target)) closeCopyMenu();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeCopyMenu();
+  });
+  if (ui.summaryToggle) {
+    ui.summaryToggle.addEventListener('click', toggleSummaryCollapsed);
   }
   ui.chatSend.addEventListener('click', sendQuestion);
   if (ui.chatMic) ui.chatMic.addEventListener('click', toggleFieldDictation);
@@ -3534,6 +3640,9 @@ async function init() {
       setSidebarWidth(settings.window.sidebar_width);
     }
     applyZoom(settings.ui_zoom || 1);
+    state.copyMode = settings.copy_mode || 'markdown';
+    syncCopyButton();
+    applySummaryCollapsed(Boolean(settings.summary_collapsed));
   } else {
     await setLanguage('ru', { persist: false });
   }

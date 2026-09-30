@@ -179,17 +179,40 @@
                  заметки нужны постоянно, а вопросы приходят по ходу. -->
             <div class="summary" id="summary">
               <div class="summary__head">
+                <!-- Заметки сворачиваются: когда идёт разговор с моделью,
+                     им нужно место, а саммари уже прочитано. Положение
+                     запоминается, иначе сворачивать пришлось бы на каждой
+                     встрече заново. -->
+                <button class="summary__toggle" id="summary-toggle" aria-expanded="true"
+                  data-i18n-title="summary.collapse" title="Свернуть заметки">
+                  <svg viewBox="0 0 16 16" width="12" height="12"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
                 <!-- Вкладка уже называется «Саммари», поэтому здесь
                      держим не второе такое же слово, а ход разбора. -->
                 <span class="summary__title" id="summary-title"></span>
                 <div class="summary__actions">
                   <!-- Копирование заметок: ради этого человек и разбирал
-                       встречу. Раньше оставалось только перепечатывать
-                       руками или возить мышью по всему тексту. Две
-                       кнопки, потому что разметка в поле, которое её не
-                       понимает, выглядит мусором (задача №26). -->
-                  <button class="btn-small" id="summary-copy" data-i18n="summary.copy">Копировать</button>
-                  <button class="btn-small" id="summary-copy-plain" data-i18n="summary.copy_plain">Без разметки</button>
+                       встречу (задача №26). Одна кнопка со стрелкой, а не
+                       две рядом: две одинаковые кнопки читались как
+                       загадка «чем они отличаются». Главная кнопка берёт
+                       тот вид, которым копировали в прошлый раз. -->
+                  <div class="split" id="summary-copy-group">
+                    <button class="btn-small split__main" id="summary-copy" data-i18n="summary.copy">Копировать</button>
+                    <button class="btn-small split__arrow" id="summary-copy-more" aria-haspopup="menu" aria-expanded="false"
+                      data-i18n-title="summary.copy_more" title="Как скопировать">
+                      <svg viewBox="0 0 16 16" width="10" height="10"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </button>
+                    <div class="split__menu" id="summary-copy-menu" role="menu" hidden>
+                      <button class="split__item" id="summary-copy-md" role="menuitem" data-copy-mode="markdown">
+                        <span class="split__name" data-i18n="summary.copy_markdown">С разметкой</span>
+                        <span class="split__hint" data-i18n="summary.copy_markdown_hint">Для Телеграма, трекера, Notion</span>
+                      </button>
+                      <button class="split__item" id="summary-copy-plain" role="menuitem" data-copy-mode="plain">
+                        <span class="split__name" data-i18n="summary.copy_plain">Простым текстом</span>
+                        <span class="split__hint" data-i18n="summary.copy_plain_hint">Для почты и полей без разметки</span>
+                      </button>
+                    </div>
+                  </div>
                   <button class="btn-small" id="summary-run" data-i18n="summary.run">Сделать заметки</button>
                   <button class="btn-small" id="summary-stop" data-i18n="summary.stop" hidden>Остановить</button>
                 </div>
@@ -213,7 +236,7 @@
                 о чём договорились, что осталось нерешённым.
               </div>
               <div class="chat__input">
-                <textarea id="chat-text" rows="1" data-i18n-placeholder="chat.placeholder" placeholder="Спросить о встрече…"
+                <textarea id="chat-text" rows="2" data-i18n-placeholder="chat.placeholder" placeholder="Спросить о встрече…"
                   spellcheck="false"></textarea>
                 <!-- Вопрос к встрече быстрее сказать, чем напечатать,
                      особенно длинный. Текст попадает в поле, а не уходит

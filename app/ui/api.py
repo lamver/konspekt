@@ -432,6 +432,14 @@ class Api:
         """Запомнить масштаб интерфейса. Применяет его сам фронт."""
         return self._service.set_ui_zoom(zoom)
 
+    def set_copy_mode(self, mode: str) -> str:
+        """Запомнить, каким видом копировать заметки по главной кнопке."""
+        return self._service.set_copy_mode(mode)
+
+    def set_summary_collapsed(self, collapsed: bool) -> bool:
+        """Запомнить, свёрнуты ли заметки над перепиской."""
+        return self._service.set_summary_collapsed(collapsed)
+
     def license_state(self) -> dict[str, Any]:
         """Есть ли лицензия: от этого зависит плашка «Купить»."""
         return self._service.license_state()

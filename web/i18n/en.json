@@ -103,7 +103,13 @@
     },
     "downloading_model_title": "Downloading the notes model",
     "copy": "Copy",
-    "copy_plain": "Plain text"
+    "copy_plain": "Plain text",
+    "copy_more": "Copy options",
+    "copy_markdown": "With formatting",
+    "copy_markdown_hint": "For Telegram, trackers, Notion",
+    "copy_plain_hint": "For email and fields without formatting",
+    "collapse": "Collapse notes",
+    "expand": "Expand notes"
   },
   "chat": {
     "title": "Ask about the meeting",

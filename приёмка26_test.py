@@ -110,7 +110,11 @@ def приёмка(окно):
         # то её пропажа выглядит как «окно не поднялось», и приёмка
         # молча пропускает настоящую поломку.
         for _ in range(60):
-            if окно.evaluate_js("typeof ui !== 'undefined' && !!ui.chatText"):
+            # И словарь тоже: без него первый тост показывает ключ
+            # «copy.done» вместо слов, и приёмка падала через раз.
+            if окно.evaluate_js(
+                "typeof ui !== 'undefined' && !!ui.chatText && !!window.__konspekt_i18n_ready"
+            ):
                 break
             time.sleep(0.2)
         else:

@@ -980,11 +980,77 @@ body { display: flex; flex-direction: column; }
   background: var(--paper-2);
 }
 .summary__title {
+  flex: 1;
+  min-width: 0;
   font-family: var(--font-serif);
   font-size: 12.5px;
   color: var(--ink-2);
 }
 .summary__actions { display: flex; gap: 6px; }
+
+/* Стрелка сворачивания: поворачивается, а не меняется на другую иконку,
+   так видно, что это одна и та же кнопка в двух положениях. */
+.summary__toggle {
+  flex: none;
+  width: 22px; height: 22px;
+  display: flex; align-items: center; justify-content: center;
+  border: none;
+  border-radius: 5px;
+  background: none;
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: transform .15s ease, color .12s, background .12s;
+}
+.summary__toggle:hover { color: var(--ink); background: var(--paper-3); }
+.summary.is-collapsed .summary__toggle { transform: rotate(-90deg); }
+.summary.is-collapsed .summary__body,
+.summary.is-collapsed .placeholder--tight { display: none; }
+.summary.is-collapsed .summary__head { border-bottom: none; }
+
+/* Кнопка со стрелкой: главная часть копирует сразу, стрелка открывает
+   выбор вида. Две половины сливаются в одну кнопку. */
+.split { position: relative; display: inline-flex; }
+.split__main { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.split__arrow {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  border-left: none;
+  padding-left: 6px;
+  padding-right: 6px;
+  display: flex; align-items: center;
+}
+.split__menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  min-width: 230px;
+  padding: 4px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .14);
+}
+.split__item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding: 6px 9px;
+  border: none;
+  border-radius: 5px;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.split__item:hover { background: var(--paper-3); }
+.split__name { font-size: 12.5px; }
+.split__hint { font-size: 11px; color: var(--ink-3); }
+.split__item.is-current .split__name { color: var(--accent); }
 
 .summary__body {
   overflow-y: auto;
@@ -1119,7 +1185,6 @@ body { display: flex; flex-direction: column; }
   border-radius: 8px;
   padding: 7px 10px;
   outline: none;
-  max-height: 120px;
 }
 .chat__input textarea:focus { border-color: var(--accent); }
 

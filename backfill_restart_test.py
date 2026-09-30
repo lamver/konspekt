@@ -18,6 +18,7 @@
 from __future__ import annotations
 
 import os
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -172,7 +173,21 @@ def main() -> int:
     p.kill()
     p.wait(timeout=30)
 
-    остаток = Store(str(tmp / "konspekt.db"))
+    # Убитый процесс уходит не мгновенно: Windows ещё какое-то время
+    # держит его дескрипторы файлов (а бывает, и антивирус, проверяющий
+    # только что закрытую базу). Открыв базу в эту долю секунды, мы
+    # получали «disk I/O error» на WAL и падали, хотя сама база цела.
+    # Человек перезапускает программу через секунды, а не через
+    # миллисекунды, поэтому немного подождать — честно.
+    остаток = None
+    for _ in range(50):
+        try:
+            остаток = Store(str(tmp / "konspekt.db"))
+            break
+        except sqlite3.OperationalError:
+            time.sleep(0.2)
+    if остаток is None:
+        остаток = Store(str(tmp / "konspekt.db"))
     # getattr, а не прямой вызов: на коде до этой правки хранилища пропусков
     # нет вовсе, и тест должен показать это провалом проверки по существу,
     # а не падением с AttributeError.

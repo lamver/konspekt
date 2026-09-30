@@ -156,7 +156,8 @@ vm.runInContext('i18n.dict = globalThis.__словарь;', Object.assign(
 песочница.__узел = узел;
 vm.runInContext(
   "for (const и of ['summaryBody','summaryEmpty','summaryRun','summaryStop',"
-  + "'summaryCopy','summaryCopyPlain','summaryTitle','toast','toastText'])"
+  + "'summaryCopy','summaryCopyPlain','summaryCopyMd','summaryCopyMore',"
+  + "'summaryCopyMenu','summaryCopyGroup','summaryTitle','toast','toastText'])"
   + " ui[и] = globalThis.__узел();",
   песочница
 );
@@ -235,7 +236,7 @@ setTimeout(() => {
 
     // --- Кнопки прячутся, пока заметок нет ------------------------------
     vm.runInContext('__renderSummary("");', песочница);
-    const скрыта = vm.runInContext('ui.summaryCopy.hidden', песочница);
+    const скрыта = vm.runInContext('ui.summaryCopyGroup.hidden', песочница);
     if (!скрыта) {
       throw new Error(
         'кнопка «копировать» живая, когда заметок ещё нет: человек нажмёт '
@@ -243,7 +244,7 @@ setTimeout(() => {
       );
     }
     vm.runInContext('__renderSummary("# Есть заметки");', песочница);
-    const видна = vm.runInContext('!ui.summaryCopy.hidden', песочница);
+    const видна = vm.runInContext('!ui.summaryCopyGroup.hidden', песочница);
     if (!видна) {
       throw new Error('заметки есть, а кнопка «копировать» так и не появилась');
     }
@@ -335,7 +336,36 @@ setTimeout(() => {
       }
       console.log('[ok] пустая реплика цитатой не становится');
 
-      console.log('\nЗаметки, ответы и реплики можно забрать из программы.');
+      // --- Одна кнопка помнит выбранный вид ------------------------------
+      //
+      // Жалоба со снимка экрана: две кнопки «Копировать» и «Без разметки»
+      // рядом непонятны. Теперь одна кнопка со стрелкой, и главная часть
+      // копирует тем видом, который выбрали в меню последним.
+      const записи = [];
+      песочница.pywebview = { api: { set_copy_mode: (в) => { записи.push(в); return в; } } };
+      песочница.state.current = { summary: ЗАМЕТКИ };
+      буфер.length = 0;
+      vm.runInContext('state.copyMode = "markdown"; copySummary("plain");', песочница);
+      setTimeout(() => {
+        if (!буфер[0] || /[*#]/.test(буфер[0])) {
+          throw new Error('пункт «Простым текстом» скопировал разметку: ' + JSON.stringify(буфер[0]));
+        }
+        if (записи[0] !== 'plain') {
+          throw new Error('выбор «Простым текстом» не запомнили: ' + JSON.stringify(записи));
+        }
+        буфер.length = 0;
+        vm.runInContext('copySummary();', песочница);
+        setTimeout(() => {
+          if (!буфер[0] || /[*#]/.test(буфер[0])) {
+            throw new Error(
+              'главная кнопка забыла выбранный вид и снова копирует с разметкой: '
+              + JSON.stringify(буфер[0])
+            );
+          }
+          console.log('[ok] главная кнопка копирует последним выбранным видом');
+          console.log('\nЗаметки, ответы и реплики можно забрать из программы.');
+        }, 0);
+      }, 0);
     }, 0);
   }, 0);
 }, 0);

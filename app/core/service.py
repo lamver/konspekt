@@ -2534,6 +2534,23 @@ class AppService:
         settings_mod.save(self.settings)
         return value
 
+    def set_copy_mode(self, mode: str) -> str:
+        """Запомнить вид копирования заметок по главной кнопке.
+
+        Незнакомое значение не записываем как есть: фронт другой версии
+        или ручная правка файла не должны оставить кнопку без вида.
+        """
+        value = mode if mode in ("markdown", "plain") else "markdown"
+        self.settings.copy_mode = value
+        settings_mod.save(self.settings)
+        return value
+
+    def set_summary_collapsed(self, collapsed: bool) -> bool:
+        """Запомнить, свёрнуты ли заметки над перепиской."""
+        self.settings.summary_collapsed = bool(collapsed)
+        settings_mod.save(self.settings)
+        return self.settings.summary_collapsed
+
     # --- лицензия ----------------------------------------------------------
 
     def license_state(self) -> dict[str, Any]:
