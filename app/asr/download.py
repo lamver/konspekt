@@ -24,6 +24,38 @@ from typing import Callable
 log = logging.getLogger(__name__)
 
 HF_BASE = "https://huggingface.co/{repo}/resolve/main/{name}"
+# Свой CDN с теми же файлами в той же раскладке (docs/модели_cdn.md).
+# Идёт первым: Hugging Face в России могут заблокировать, а у кого-то
+# его уже режет провайдер или корпоративный прокси. Пустая строка —
+# CDN ещё не готов, качаем только с Hugging Face.
+CDN_BASE = ""
+# Для проверок и для тех, кто держит веса у себя в сети: подставить
+# свою основу, не пересобирая программу.
+ENV_BASE = "KONSPEKT_MODELS_BASE"
+
+
+def mirrors() -> list[str]:
+    """Откуда качать, по порядку. Шаблоны с {repo} и {name}.
+
+    Считается при каждой загрузке, а не при импорте: проверки и
+    переменная окружения подменяют адрес на ходу.
+    """
+    итог: list[str] = []
+    for основа in (os.environ.get(ENV_BASE, ""), CDN_BASE):
+        основа = (основа or "").strip().rstrip("/")
+        if основа:
+            шаблон = основа if "{repo}" in основа else основа + "/{repo}/{name}"
+            if шаблон not in итог:
+                итог.append(шаблон)
+    итог.append(HF_BASE)
+    return итог
+
+
+class MirrorFailed(RuntimeError):
+    """Источник отказал насовсем: файла нет или доступ закрыт.
+
+    Ждать и повторять тут бессмысленно, надо сразу идти к следующему.
+    """
 CHUNK = 1 << 16  # 64 КБ
 # Слабый интернет рвёт соединение посреди файла. Каждый обрыв это ещё
 # одна попытка с того места, где встали, а не потеря всей загрузки.
@@ -200,47 +232,60 @@ class ModelDownloader:
         """
         part = target.with_suffix(target.suffix + ".part")
         last_error: Exception | None = None
-        # Считаем именно безрезультатные попытки подряд. Если файл растёт,
-        # канал живой и обрывы ничего не значат: на большой модели их
-        # бывает три десятка, и обрывать загрузку по общему числу попыток
-        # значило бы не докачать её никогда.
-        впустую = 0
-        for attempt in range(1, RETRIES + 1):
-            if target.exists():
-                # Файл появился, пока мы качали. Так бывает, если его
-                # положил другой экземпляр программы или человек скопировал
-                # руками из соседней установки. Качать второй раз то же
-                # самое незачем, и без этой проверки загрузка продолжалась
-                # часами при готовом файле на диске.
-                log.info("Файл %s уже на месте, качать не надо", name)
-                part.unlink(missing_ok=True)
-                return
-            before = part.stat().st_size if part.exists() else 0
-            try:
-                self._fetch(name, target, on_progress)
-                return
-            except DownloadCancelled:
-                raise
-            except Exception as exc:
-                last_error = exc
-                after = part.stat().st_size if part.exists() else 0
-                впустую = впустую + 1 if after <= before else 0
-                log.warning(
-                    "Обрыв на %s (попытка %d из %d, на диске %d из %d байт): %s",
-                    name, attempt, RETRIES, after, before, exc,
-                )
-                if впустую >= 3:
-                    # Три попытки подряд без единого нового байта: дело не
-                    # в канале, а в чём-то постоянном.
+        источники = mirrors()
+        for номер, шаблон in enumerate(источники):
+            # Считаем именно безрезультатные попытки подряд. Если файл
+            # растёт, канал живой и обрывы ничего не значат: на большой
+            # модели их бывает три десятка, и обрывать загрузку по общему
+            # числу попыток значило бы не докачать её никогда.
+            впустую = 0
+            for attempt in range(1, RETRIES + 1):
+                if target.exists():
+                    # Файл появился, пока мы качали. Так бывает, если его
+                    # положил другой экземпляр программы или человек
+                    # скопировал руками из соседней установки. Качать
+                    # второй раз то же самое незачем, и без этой проверки
+                    # загрузка продолжалась часами при готовом файле.
+                    log.info("Файл %s уже на месте, качать не надо", name)
+                    part.unlink(missing_ok=True)
+                    return
+                before = part.stat().st_size if part.exists() else 0
+                try:
+                    self._fetch(name, target, on_progress, шаблон)
+                    return
+                except DownloadCancelled:
+                    raise
+                except MirrorFailed as exc:
+                    last_error = exc
+                    log.warning("Источник %d не отдаёт %s: %s", номер + 1, name, exc)
                     break
-                if self._cancel.wait(RETRY_PAUSE):
-                    raise DownloadCancelled(name) from exc
+                except Exception as exc:
+                    last_error = exc
+                    after = part.stat().st_size if part.exists() else 0
+                    впустую = впустую + 1 if after <= before else 0
+                    log.warning(
+                        "Обрыв на %s (источник %d, попытка %d из %d, на диске %d из %d байт): %s",
+                        name, номер + 1, attempt, RETRIES, after, before, exc,
+                    )
+                    if впустую >= 3:
+                        # Три попытки подряд без единого нового байта: дело
+                        # не в канале, а в этом источнике. Пробуем следующий,
+                        # а недокачанный кусок оставляем: файл тот же, и
+                        # следующий источник продолжит с этого места.
+                        break
+                    if self._cancel.wait(RETRY_PAUSE):
+                        raise DownloadCancelled(name) from exc
+            if номер + 1 < len(источники):
+                log.info("Качаем %s со следующего источника", name)
         raise RuntimeError(f"Не удалось скачать {name}: {last_error}")
 
-    def _fetch(self, name: str, target: Path, on_progress: ProgressCallback | None) -> None:
+    def _fetch(
+        self, name: str, target: Path, on_progress: ProgressCallback | None,
+        шаблон: str | None = None,
+    ) -> None:
         part = target.with_suffix(target.suffix + ".part")
         done = part.stat().st_size if part.exists() else 0
-        url = HF_BASE.format(repo=self.repo, name=name)
+        url = (шаблон or HF_BASE).format(repo=self.repo, name=name)
 
         request = urllib.request.Request(url, headers={"User-Agent": "konspekt"})
         if done:
@@ -248,7 +293,15 @@ class ModelDownloader:
             request.add_header("Range", f"bytes={done}-")
             log.info("Продолжаем качать %s с %d байт", name, done)
 
-        with urllib.request.urlopen(request, timeout=60) as response:
+        try:
+            response_cm = urllib.request.urlopen(request, timeout=60)
+        except urllib.error.HTTPError as exc:
+            if exc.code in (401, 403, 404, 410, 451):
+                # Файла здесь нет или доступ закрыт (451 — «недоступно по
+                # юридическим причинам», так отвечают при блокировке).
+                raise MirrorFailed(f"{exc.code} {exc.reason}") from exc
+            raise
+        with response_cm as response:
             if done and response.status != 206:
                 # Сервер не понял Range, начинаем файл заново.
                 log.info("Докачка не поддержана, качаем %s целиком", name)
