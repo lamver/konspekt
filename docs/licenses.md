@@ -8,7 +8,8 @@
 |---|---|---|---|---|
 | `ai-sage/GigaAM-v3` | русская речь, оригинал | MIT | да | указать копирайт |
 | `istupakov/gigaam-v3-onnx` | наш ONNX-вариант | MIT | да | указать копирайт |
-| `openai/whisper-small` | остальные языки | MIT | да | указать копирайт |
+| `openai/whisper-small` | остальные языки | Apache 2.0 | да | указать копирайт |
+| `onnx-community/whisper-small` | наш ONNX-вариант | Apache 2.0 (от исходных весов) | да | указать копирайт |
 | `speechbrain/lang-id-voxlingua107-ecapa` | определение языка | Apache 2.0 | да | указать копирайт |
 | `beginning-ai/…voxlingua…onnx` | наш ONNX-вариант | Apache 2.0 | да | указать копирайт |
 | `Wespeaker/wespeaker-voxceleb-resnet34-LM` | отпечаток голоса | **CC BY 4.0** | да | **обязательное указание авторства** |

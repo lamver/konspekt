@@ -21,8 +21,14 @@ GigaAM v3 (распознавание русской речи)
 
 Whisper small (распознавание остальных языков)
   Автор: OpenAI
-  Лицензия: MIT
+  Лицензия весов: Apache License 2.0
   https://huggingface.co/openai/whisper-small
+  (код Whisper в github.com/openai/whisper — под MIT)
+
+  Вариант в формате ONNX
+  Автор: ONNX Community (Xenova)
+  Лицензия: Apache License 2.0, как у исходных весов
+  https://huggingface.co/onnx-community/whisper-small
 
 VoxLingua107 ECAPA (определение языка по звуку)
   Автор: SpeechBrain, Tanel Alumäe
