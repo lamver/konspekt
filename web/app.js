@@ -511,43 +511,154 @@ function plural(n, one, few, many) {
 /* --- Саммари и чат ------------------------------------------------------ */
 
 /**
- * Разметка саммари.
+ * Разметка ответов модели и заметок.
  *
- * Модель отвечает markdown, но тащить ради этого библиотеку в билд
- * незачем: нам нужны только жирный текст, списки и абзацы. Всё остальное
- * показываем как есть.
+ * Своя, без библиотеки: тащить парсер в сборку ради ответов модели
+ * незачем, а свой разбор знает только то, что можно безопасно показать.
+ * Каждый кусок текста сначала экранируется, HTML из ответа модели не
+ * исполняется никогда: в ответ может попасть что угодно из расшифровки.
+ *
+ * Умеет: блоки кода ``` (и недописанный блок, пока ответ печатается),
+ * `код` в строке, **жирный**, *курсив*, ~~зачёркнутый~~, заголовки,
+ * списки с точками и с номерами, цитаты, таблицы, черту ---. Ссылки
+ * показываются текстом с адресом в подсказке: переход по ссылке увёл бы
+ * само окно программы с экрана встречи.
  */
 function renderMarkdown(text) {
-  const esc = (s) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  // Строчная разметка. Код вынимаем первым: внутри него звёздочки и
+  // подчёркивания — часть кода, а не жирный текст.
+  const inline = (raw) => {
+    const коды = [];
+    let s = String(raw).replace(/`([^`\n]+)`/g, (m, код) => {
+      коды.push(`<code>${esc(код)}</code>`);
+      return `\u0000${коды.length - 1}\u0000`;
+    });
+    s = esc(s)
+      .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (m, надпись, адрес) => `<span class="md-link" title="${адрес}">${надпись}</span>`)
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/__(.+?)__/g, '<strong>$1</strong>')
+      .replace(/(^|[^*\w])\*(?!\s)([^*\n]+?)\*(?!\w)/g, '$1<em>$2</em>')
+      .replace(/(^|[^_\wа-яё])_(?!\s)([^_\n]+?)_(?![\wа-яё])/gi, '$1<em>$2</em>')
+      .replace(/~~(.+?)~~/g, '<del>$1</del>');
+    return s.replace(/\u0000(\d+)\u0000/g, (m, i) => коды[Number(i)]);
+  };
+
+  const строки = String(text || '').replace(/\r\n?/g, '\n').split('\n');
   const out = [];
-  let list = null;
+  let список = null; // { tag: 'ul'|'ol', items: [] }
+  let цитата = null;
 
-  for (const raw of String(text || '').split('\n')) {
+  const закрытьСписок = () => {
+    if (!список) return;
+    out.push(`<${список.tag}>${список.items.map((x) => `<li>${x}</li>`).join('')}</${список.tag}>`);
+    список = null;
+  };
+  const закрытьЦитату = () => {
+    if (!цитата) return;
+    out.push(`<blockquote>${цитата.map((x) => `<p>${x}</p>`).join('')}</blockquote>`);
+    цитата = null;
+  };
+  const закрытьВсё = () => { закрытьСписок(); закрытьЦитату(); };
+  const ячейки = (строка) => строка.trim().replace(/^\||\|$/g, '').split('|').map((x) => x.trim());
+
+  for (let i = 0; i < строки.length; i += 1) {
+    const raw = строки[i];
     const line = raw.trim();
-    if (!line) { if (list) { out.push(`<ul>${list.join('')}</ul>`); list = null; } continue; }
 
-    const bold = esc(line).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-    const item = bold.match(/^[-*•]\s+(.*)$/);
-    if (item) {
-      (list = list || []).push(`<li>${item[1]}</li>`);
+    // Блок кода. Пока ответ печатается, закрывающих ``` ещё нет: всё до
+    // конца показываем кодом, а не сплошной кашей из строк.
+    const ограда = line.match(/^```\s*([\w+#.-]*)/);
+    if (ограда) {
+      закрытьВсё();
+      const язык = ограда[1] || '';
+      const код = [];
+      i += 1;
+      while (i < строки.length && !/^\s*```\s*$/.test(строки[i])) {
+        код.push(строки[i]);
+        i += 1;
+      }
+      const подпись = язык ? `<span class="md-code__lang">${esc(язык)}</span>` : '';
+      out.push(`<pre class="md-code">${подпись}<code>${esc(код.join('\n'))}</code></pre>`);
       continue;
     }
-    if (list) { out.push(`<ul>${list.join('')}</ul>`); list = null; }
-    // Заголовок решётками. Модели пишут их сплошь и рядом, а мы их не
-    // разбирали: человек видел «# Итоги встречи» дословно, вместе со
-    // знаком. Мелочь, но она выдаёт, что заметки показаны как есть, а
-    // не разобраны.
-    const решётки = bold.match(/^(#{1,6})\s+(.*)$/);
-    if (решётки) {
-      out.push(`<h4>${решётки[2]}</h4>`);
+
+    if (!line) { закрытьВсё(); continue; }
+
+    // Таблица: строка с | и следом разделитель |---|---|.
+    if (line.includes('|') && i + 1 < строки.length && /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/.test(строки[i + 1])) {
+      закрытьВсё();
+      const шапка = ячейки(line);
+      const тело = [];
+      i += 2;
+      while (i < строки.length && строки[i].includes('|') && строки[i].trim()) {
+        тело.push(ячейки(строки[i]));
+        i += 1;
+      }
+      i -= 1;
+      out.push(`<div class="md-table"><table><thead><tr>${шапка.map((x) => `<th>${inline(x)}</th>`).join('')}</tr></thead>`
+        + `<tbody>${тело.map((r) => `<tr>${r.map((x) => `<td>${inline(x)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`);
       continue;
     }
+
+    if (/^(-{3,}|\*{3,}|_{3,})$/.test(line)) { закрытьВсё(); out.push('<hr>'); continue; }
+
+    const цит = line.match(/^>\s?(.*)$/);
+    if (цит) {
+      закрытьСписок();
+      (цитата = цитата || []).push(inline(цит[1]));
+      continue;
+    }
+    закрытьЦитату();
+
+    const точка = line.match(/^[-*•+]\s+(.*)$/);
+    const номер = line.match(/^(\d+)[.)]\s+(.*)$/);
+    if (точка || номер) {
+      const tag = номер ? 'ol' : 'ul';
+      if (список && список.tag !== tag) закрытьСписок();
+      список = список || { tag, items: [] };
+      список.items.push(inline(номер ? номер[2] : точка[1]));
+      continue;
+    }
+    закрытьСписок();
+
+    // Заголовок решётками. Модели пишут их сплошь и рядом: человек видел
+    // «# Итоги встречи» дословно, вместе со знаком.
+    const решётки = line.match(/^#{1,6}\s+(.*)$/);
+    if (решётки) { out.push(`<h4>${inline(решётки[1])}</h4>`); continue; }
+
+    const html = inline(line);
     // Строка целиком жирная — это заголовок раздела.
-    if (/^<strong>[^<]*<\/strong>$/.test(bold)) out.push(`<h4>${bold}</h4>`);
-    else out.push(`<p>${bold}</p>`);
+    if (/^<strong>[^<]*<\/strong>$/.test(html)) out.push(`<h4>${html}</h4>`);
+    else out.push(`<p>${html}</p>`);
   }
-  if (list) out.push(`<ul>${list.join('')}</ul>`);
+  закрытьВсё();
   return out.join('');
+}
+
+/**
+ * Кнопка «копировать» у каждого блока кода в ответе.
+ *
+ * Код из ответа почти всегда несут в редактор. Копировать весь ответ
+ * вместе с пояснениями и ```php, а потом вычищать лишнее — ровно та
+ * работа, от которой программа должна избавлять.
+ */
+function добавитьКопиюКода(node) {
+  if (!node) return;
+  for (const блок of node.querySelectorAll('pre.md-code')) {
+    const кнопка = document.createElement('button');
+    кнопка.type = 'button';
+    кнопка.className = 'md-code__copy';
+    кнопка.textContent = t('copy.short');
+    кнопка.title = t('copy.code');
+    кнопка.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const код = блок.querySelector('code');
+      копировать(код ? код.textContent : '', 'copy.done_code');
+    });
+    блок.appendChild(кнопка);
+  }
 }
 
 function renderSummary(text) {
@@ -1149,6 +1260,7 @@ function setBubbleText(node, text) {
   if (text.trim()) {
     node.classList.remove('is-waiting');
     node.innerHTML = renderMarkdown(text);
+    добавитьКопиюКода(node);
     // Ответ чата — такой же итог работы, как заметки: его несут в чат
     // команды или в задачу. Выделять мышью длинный ответ неудобно,
     // поэтому даём кнопку (задача №26). Сырой текст держим на узле:

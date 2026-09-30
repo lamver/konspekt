@@ -449,7 +449,9 @@
     "short": "Copy",
     "done_answer": "Answer copied",
     "done_quote": "Line copied",
-    "done_masked": "Notes copied without personal data"
+    "done_masked": "Notes copied without personal data",
+    "code": "Copy code",
+    "done_code": "Code copied"
   },
   "license": {
     "bar_text": "Konspekt is unlicensed. Buy a license to keep it growing.",

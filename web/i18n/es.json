@@ -449,7 +449,9 @@
     "short": "Copiar",
     "done_answer": "Respuesta copiada",
     "done_quote": "Frase copiada",
-    "done_masked": "Notas copiadas sin datos personales"
+    "done_masked": "Notas copiadas sin datos personales",
+    "code": "Copiar código",
+    "done_code": "Código copiado"
   },
   "license": {
     "bar_text": "Konspekt sin licencia. Cómprala para que el programa siga creciendo.",

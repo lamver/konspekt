@@ -449,7 +449,9 @@
     "short": "Kopiraj",
     "done_answer": "Odgovor je kopiran",
     "done_quote": "Replika je kopirana",
-    "done_masked": "Beleške kopirane bez ličnih podataka"
+    "done_masked": "Beleške kopirane bez ličnih podataka",
+    "code": "Kopiraj kod",
+    "done_code": "Kod je kopiran"
   },
   "license": {
     "bar_text": "Konspekt nema licencu. Kupite je da bi se program i dalje razvijao.",
