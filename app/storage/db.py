@@ -676,6 +676,24 @@ class Store:
                 # больше нечего.
                 self._conn.rollback()
 
+    def meeting_meaning(self, meeting_id: str, model: str) -> tuple[list[float], np.ndarray]:
+        """Начала кусков одной встречи и их векторы, по порядку.
+
+        Для чата: отрывки к вопросу ищутся внутри одной встречи, и
+        грузить ради этого весь архив незачем.
+        """
+        with self._lock:
+            rows = self._conn.execute(
+                """SELECT start_s, vector FROM meaning_chunks
+                   WHERE meeting_id=? AND model=? ORDER BY start_s""",
+                (meeting_id, model),
+            ).fetchall()
+        if not rows:
+            return [], np.zeros((0, 0), dtype=np.float32)
+        starts = [float(r["start_s"]) for r in rows]
+        vectors = np.vstack([np.frombuffer(r["vector"], dtype=np.float32) for r in rows])
+        return starts, vectors
+
     def list_meaning(self, model: str) -> tuple[list[dict[str, Any]], np.ndarray]:
         """Все куски указателя и их векторы одной матрицей."""
         with self._lock:

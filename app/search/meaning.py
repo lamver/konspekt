@@ -70,6 +70,12 @@ def chunk_segments(segments: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "start": float(current[0]["start"]),
                 "who": current[0].get("who", ""),
                 "text": text,
+                # Реплики куска по отдельности: чату нужно, кто что
+                # сказал, а в склеенном тексте говорящих не видно.
+                "lines": [
+                    (s.get("who", ""), s["text"].strip())
+                    for s in current if s["text"].strip()
+                ],
             })
 
     for seg in segments:

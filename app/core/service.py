@@ -105,7 +105,8 @@ from ..core.models import (
     now,
 )
 from ..llm import LlmError, LlmManager, chat_messages, summary_messages
-from ..llm.chunking import estimate_tokens, fits, split_transcript
+from ..llm import context as chat_context
+from ..llm.chunking import fits, split_transcript
 from ..llm.prompts import chunk_messages, merge_messages
 from ..storage import Store
 
@@ -115,8 +116,23 @@ log = logging.getLogger(__name__)
 # живёт ещё и ответ, и промпт, и заметки человека. Цифры взяты с
 # запасом: отказ сервера хуже, чем лишняя часть при разборе.
 TRANSCRIPT_BUDGET = 24000
-# В чате места меньше: туда же идёт саммари и вся переписка.
-CHAT_BUDGET = 20000
+# Как спрашивать свою модель в чате. Два открытия на копии живой базы.
+#
+# Qwen3 сначала «думает» вслух и только потом отвечает: в чате это
+# десять секунд тишины на «1+6». Без раздумий ответ приходит сразу.
+#
+# С прежней температурой 0.3 и без штрафа за повтор модель на длинном
+# тексте повторяла вопрос эхом: «кто что взял на себя?» → «Кто что взял
+# на себя?». С параметрами, которые советуют сами авторы Qwen3 для
+# режима без раздумий, она отвечает по существу. Только для своей
+# модели: чужой сервер незнакомые поля может и отвергнуть.
+CHAT_LOCAL_OPTIONS = {
+    "temperature": 0.7,
+    "top_p": 0.8,
+    "top_k": 20,
+    "presence_penalty": 1.5,
+    "chat_template_kwargs": {"enable_thinking": False},
+}
 
 # Пределы масштаба интерфейса. Мельче 70% буквы уже не читаются, крупнее
 # 200% в окно при самом себе не влезает список встреч с заметками.
@@ -2359,23 +2375,33 @@ class AppService:
             template=self.settings.llm.template or meeting.template,
         )
 
-    def _chat_transcript(self, meeting_id: str, summary: str) -> str:
-        """Расшифровка для чата, урезанная под окно контекста.
+    def _chat_context(
+        self, meeting_id: str, question: str, history: list[dict[str, Any]],
+    ) -> chat_context.ChatContext:
+        """Что из встречи показать модели в ответ на вопрос.
 
-        В чате места меньше, чем в саммари: туда же идут заметки и вся
-        переписка. Если встреча не влезает, берём её конец: обычно
-        спрашивают про договорённости, а они звучат ближе к концу.
-        Начало при этом не теряется совсем, потому что саммари уже
-        лежит в том же запросе.
+        Не вся расшифровка, а отрывки к вопросу (см. llm/context.py).
+        Векторы кусков берём из указателя поиска по смыслу: они там уже
+        посчитаны. Нет модели смысла — ищем по словам.
         """
-        text = self.transcript_text(meeting_id)
-        budget = CHAT_BUDGET - estimate_tokens(summary or "")
-        if fits(text, budget):
-            return text
-        parts = split_transcript(text, budget)
-        log.info("Расшифровка не влезла в чат, берём последнюю часть из %d", len(parts))
-        return ("(начало встречи опущено, оно есть в заметках выше)\n\n"
-                + parts[-1])
+        segments = [
+            {"text": s.text, "start": s.start, "who": self._кто_сказал(s)}
+            for s in self.store.list_segments(meeting_id)
+            if s.text.strip() and not s.doubtful
+        ]
+        vectors = None
+        embed = None
+        if self.meaning_model.is_downloaded():
+            vectors = self.store.meeting_meaning(meeting_id, self.meaning_model.name)
+            embed = self.meaning_model.query
+        ctx = chat_context.build(segments, question, history, vectors, embed)
+        log.info(
+            "Чат: %s, %d знаков встречи, %d сообщений переписки",
+            ("без встречи" if not ctx.attach
+             else "вся встреча" if ctx.whole else f"отрывков {len(ctx.starts)}"),
+            len(ctx.transcript), len(ctx.history),
+        )
+        return ctx
 
     def stop_generation(self) -> dict[str, Any]:
         """Прервать генерацию: ответ уже не нужен или пошёл не туда."""
@@ -2428,20 +2454,23 @@ class AppService:
                                       "error": self._msg("python.chat.meeting_not_found")})
                 return
 
-            # История без нашей пустой заготовки под ответ: модель не
-            # должна видеть пустую реплику ассистента в конце.
+            # История без нашей пустой заготовки под ответ и без только
+            # что заданного вопроса: он пойдёт отдельно, последним.
             history = [
                 {"role": m.role, "content": m.text}
                 for m in self.store.list_chat_messages(meeting_id)
                 if m.id != answer_id and m.text.strip()
             ][:-1]
 
+            ctx = self._chat_context(meeting_id, question, history)
             messages = chat_messages(
                 title=meeting.title,
-                transcript=self._chat_transcript(meeting_id, meeting.summary),
-                history=history,
+                transcript=ctx.transcript,
+                history=ctx.history,
                 question=question,
                 summary=meeting.summary,
+                whole=ctx.whole,
+                attach=ctx.attach,
             )
 
             def on_chunk(piece: str) -> None:
@@ -2450,7 +2479,8 @@ class AppService:
 
             self._ensure_llm_model()
             text = self.llm.client().stream(
-                messages, on_chunk=on_chunk, should_stop=lambda: self._llm_cancel
+                messages, on_chunk=on_chunk, should_stop=lambda: self._llm_cancel,
+                **(CHAT_LOCAL_OPTIONS if self.llm.backend == "local" else {}),
             )
             self.store.update_chat_message(answer_id, text.strip())
             bus.emit(CHAT_MESSAGE, {
