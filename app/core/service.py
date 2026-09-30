@@ -106,6 +106,7 @@ from ..core.models import (
 )
 from ..llm import LlmError, LlmManager, chat_messages, summary_messages
 from ..llm import context as chat_context
+from . import personal
 from ..llm.local import tier_or_default
 from ..llm.chunking import fits, split_transcript
 from ..llm.prompts import chunk_messages, merge_messages
@@ -2365,7 +2366,8 @@ class AppService:
                 )
 
             text = client.stream(
-                messages, on_chunk=on_chunk, should_stop=lambda: self._llm_cancel
+                self._for_model(messages), on_chunk=on_chunk,
+                should_stop=lambda: self._llm_cancel,
             )
             # Пустой результат не затирает прежнее саммари: человек мог
             # прервать генерацию, и терять готовый текст обиднее всего.
@@ -2400,7 +2402,7 @@ class AppService:
                 "meeting_id": meeting_id,
                 "text": f"Встреча длинная, разбираем часть {i} из {len(parts)}…",
             })
-            drafts.append(client.complete(chunk_messages(part), max_tokens=700))
+            drafts.append(client.complete(self._for_model(chunk_messages(part)), max_tokens=700))
 
         bus.emit(SUMMARY_STATUS, {"meeting_id": meeting_id,
                                   "text": "Сводим части вместе…"})
@@ -2515,7 +2517,8 @@ class AppService:
 
             self._ensure_llm_model()
             text = self.llm.client().stream(
-                messages, on_chunk=on_chunk, should_stop=lambda: self._llm_cancel,
+                self._for_model(messages), on_chunk=on_chunk,
+                should_stop=lambda: self._llm_cancel,
                 **(CHAT_LOCAL_OPTIONS if self.llm.backend == "local" else {}),
             )
             self.store.update_chat_message(answer_id, text.strip())
@@ -2600,13 +2603,38 @@ class AppService:
         settings_mod.save(self.settings)
         return value
 
+    def find_personal(self, texts: list[str]) -> list[list[dict[str, Any]]]:
+        """Личные данные в каждом тексте, по порядку (см. core/personal.py)."""
+        return [
+            [н.to_dict() for н in personal.find(т if isinstance(т, str) else "")]
+            for т in (texts or [])[:5000]
+        ]
+
+    def mask_personal(self, text: str) -> str:
+        return personal.mask(text if isinstance(text, str) else "")
+
+    def _for_model(self, messages: list[dict[str, str]]) -> list[dict[str, str]]:
+        """Сообщения перед отправкой в модель.
+
+        Своя модель на этом компьютере видит всё: текст никуда не уходит.
+        Свой сервер — это уже чужой компьютер, и номера карт, телефоны и
+        паспорта туда уходить не должны, если человек не разрешил.
+
+        Скрываем на готовых сообщениях, а не на расшифровке: в запрос
+        попадают ещё заметки человека, переписка и прежнее саммари, и
+        любое из них может нести тот же номер карты.
+        """
+        if self.llm.backend != "remote" or not self.settings.llm.mask_personal_remote:
+            return messages
+        return [{**m, "content": personal.mask(m.get("content") or "")} for m in messages]
+
     def set_copy_mode(self, mode: str) -> str:
         """Запомнить вид копирования заметок по главной кнопке.
 
         Незнакомое значение не записываем как есть: фронт другой версии
         или ручная правка файла не должны оставить кнопку без вида.
         """
-        value = mode if mode in ("markdown", "plain") else "markdown"
+        value = mode if mode in ("markdown", "plain", "masked") else "markdown"
         self.settings.copy_mode = value
         settings_mod.save(self.settings)
         return value

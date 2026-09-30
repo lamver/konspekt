@@ -112,6 +112,7 @@ class LlmManager:
             "model": cfg.model,
             "template": cfg.template,
             "auto_summary": cfg.auto_summary,
+            "mask_personal_remote": getattr(cfg, "mask_personal_remote", True),
             "has_key": bool(cfg.api_key),
         }
 

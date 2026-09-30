@@ -538,7 +538,7 @@ function renderSummary(text) {
 // Какой вид копирования главная кнопка берёт без вопросов. Запоминается
 // тот, которым копировали в последний раз: человек, вставляющий заметки
 // в почту, не должен каждый раз лезть в меню.
-const COPY_MODES = ['markdown', 'plain'];
+const COPY_MODES = ['markdown', 'plain', 'masked'];
 
 function copyMode() {
   return COPY_MODES.includes(state.copyMode) ? state.copyMode : 'markdown';
@@ -549,10 +549,8 @@ function syncCopyButton() {
   if (!ui.summaryCopy) return;
   const mode = copyMode();
   ui.summaryCopy.textContent = t('summary.copy');
-  ui.summaryCopy.title = mode === 'plain'
-    ? t('summary.copy_plain_hint')
-    : t('summary.copy_markdown_hint');
-  for (const item of [ui.summaryCopyMd, ui.summaryCopyPlain]) {
+  ui.summaryCopy.title = t(`summary.copy_${mode === 'markdown' ? 'markdown' : mode}_hint`);
+  for (const item of [ui.summaryCopyMd, ui.summaryCopyPlain, ui.summaryCopyMasked]) {
     if (item) item.classList.toggle('is-current', item.dataset.copyMode === mode);
   }
 }
@@ -568,7 +566,30 @@ function copySummary(mode) {
   }
   closeCopyMenu();
   if (вид === 'plain') return копировать(markdownToPlain(текст), 'copy.done_plain');
+  if (вид === 'masked') return копироватьБезЛичного(текст);
   return копировать(текст, 'copy.done');
+}
+
+/**
+ * Скопировать заметки, заменив номера карт, телефоны и паспорта пометками.
+ *
+ * Скрывает программа, а не окно: правила с контрольными суммами живут в
+ * одном месте (core/personal.py), и чат, и копирование видят одно и то же.
+ * Не вышло скрыть — не копируем вовсе: положить в буфер нескрытый текст
+ * под видом скрытого хуже, чем честно отказать.
+ */
+async function копироватьБезЛичного(текст) {
+  let скрытый = null;
+  try {
+    скрытый = await api.mask_personal(текст || '');
+  } catch (e) {
+    скрытый = null;
+  }
+  if (typeof скрытый !== 'string') {
+    showToast(t('copy.failed'));
+    return false;
+  }
+  return копировать(скрытый, 'copy.done_masked');
 }
 
 function openCopyMenu() {
@@ -1005,6 +1026,7 @@ function renderLlmSettings(status) {
   ui.llmUrl.value = status.base_url || '';
   ui.llmModel.value = status.model || '';
   ui.llmAuto.checked = Boolean(status.auto_summary);
+  if (ui.llmMask) ui.llmMask.checked = status.mask_personal_remote !== false;
 
   renderLlmTiers(status);
 
@@ -1096,6 +1118,7 @@ async function saveLlmSettings() {
     // Пустое поле ключа значит «не менять»: мы его обратно не показываем,
     // и затирать сохранённый ключ пустотой нельзя.
     if (ui.llmKey.value) fields.api_key = ui.llmKey.value;
+    if (ui.llmMask) fields.mask_personal_remote = ui.llmMask.checked;
   }
   renderLlmSettings(await api.save_llm_settings(fields));
 }
@@ -1534,7 +1557,77 @@ function renderTranscript(segments) {
   drafts.clear();
   ui.transcript.innerHTML = '';
   for (const seg of segments) appendSegment(seg, false);
+  // Подсветка принадлежала прошлой встрече.
+  resetPersonal();
   updateTranscriptEmpty();
+}
+
+/* --- Личные данные в расшифровке ----------------------------------------- */
+
+/** Сбросить подсветку и вернуть кнопку в исходный вид. */
+function resetPersonal() {
+  state.personalShown = false;
+  if (ui.personalBar) ui.personalBar.hidden = !ui.transcript.querySelector('.turn');
+  if (ui.personalFind) ui.personalFind.textContent = t('personal.find');
+  if (ui.personalResult) {
+    ui.personalResult.textContent = '';
+    ui.personalResult.classList.remove('is-found');
+  }
+}
+
+/** Убрать подсветку, вернув репликам голый текст. */
+function clearPersonalMarks() {
+  for (const body of ui.transcript.querySelectorAll('.turn__text')) {
+    if (body.querySelector('mark.personal')) body.textContent = body.textContent;
+  }
+}
+
+/**
+ * Найти и подсветить личные данные в расшифровке.
+ *
+ * Ищет программа (core/personal.py), окно только подсвечивает. Текст
+ * реплики собирается заново из кусков через textContent: вставлять
+ * расшифровку как HTML нельзя, в ней может оказаться что угодно.
+ */
+async function togglePersonal() {
+  if (state.personalShown) {
+    clearPersonalMarks();
+    resetPersonal();
+    return;
+  }
+  const тела = Array.from(ui.transcript.querySelectorAll('.turn__text'));
+  const тексты = тела.map((b) => b.textContent || '');
+  const найдено = (await api.find_personal(тексты)) || [];
+  const счёт = {};
+  тела.forEach((тело, i) => {
+    const находки = найдено[i] || [];
+    if (!находки.length) return;
+    const текст = тексты[i];
+    тело.textContent = '';
+    let прошлый = 0;
+    for (const н of находки) {
+      if (н.start < прошлый) continue;
+      тело.appendChild(document.createTextNode(текст.slice(прошлый, н.start)));
+      const метка = document.createElement('mark');
+      метка.className = 'personal';
+      метка.dataset.kind = н.kind;
+      метка.title = t(`personal.kind_${н.kind}`);
+      метка.textContent = текст.slice(н.start, н.end);
+      тело.appendChild(метка);
+      прошлый = н.end;
+      счёт[н.kind] = (счёт[н.kind] || 0) + 1;
+    }
+    тело.appendChild(document.createTextNode(текст.slice(прошлый)));
+  });
+  state.personalShown = true;
+  ui.personalFind.textContent = t('personal.hide');
+  const виды = Object.entries(счёт);
+  ui.personalResult.classList.toggle('is-found', виды.length > 0);
+  ui.personalResult.textContent = виды.length
+    ? t('personal.found', { list: виды.map(([к, n]) => `${t(`personal.kind_${к}`)} ${n}`).join(', ') })
+    : t('personal.none');
+  const первая = ui.transcript.querySelector('mark.personal');
+  if (первая && первая.scrollIntoView) первая.scrollIntoView({ block: 'center' });
 }
 
 const ICON_PLAY = '<svg viewBox="0 0 16 16" width="11" height="11"><path d="M5 3.5v9l7-4.5z" fill="currentColor"/></svg>';
@@ -1742,6 +1835,7 @@ function appendSegment(seg, scroll = true) {
     ui.transcript.insertBefore(turn, before);
   }
 
+  if (ui.personalBar) ui.personalBar.hidden = false;
   updateTranscriptEmpty();
   // Прокручиваем к свежей реплике, но только если человек не листает выше.
   // За досчитанным куском из середины встречи не прыгаем: человек в этот
@@ -3230,6 +3324,11 @@ function bindUi() {
     summaryCopy: el('summary-copy'),
     summaryCopyPlain: el('summary-copy-plain'),
     summaryCopyMd: el('summary-copy-md'),
+    summaryCopyMasked: el('summary-copy-masked'),
+    personalBar: el('personal-bar'),
+    personalFind: el('personal-find'),
+    personalResult: el('personal-result'),
+    llmMask: el('llm-mask'),
     summaryCopyMore: el('summary-copy-more'),
     summaryCopyMenu: el('summary-copy-menu'),
     summaryCopyGroup: el('summary-copy-group'),
@@ -3354,9 +3453,10 @@ function bindUi() {
       toggleCopyMenu();
     });
   }
-  for (const item of [ui.summaryCopyMd, ui.summaryCopyPlain]) {
+  for (const item of [ui.summaryCopyMd, ui.summaryCopyPlain, ui.summaryCopyMasked]) {
     if (item) item.addEventListener('click', () => copySummary(item.dataset.copyMode));
   }
+  if (ui.personalFind) ui.personalFind.addEventListener('click', togglePersonal);
   // Меню закрывается щелчком мимо и клавишей Esc, как любое меню.
   document.addEventListener('click', (e) => {
     if (ui.summaryCopyGroup && !ui.summaryCopyGroup.contains(e.target)) closeCopyMenu();
@@ -3389,6 +3489,7 @@ function bindUi() {
   ui.llmUrl.addEventListener('change', saveLlmSettings);
   ui.llmKey.addEventListener('change', saveLlmSettings);
   ui.llmModel.addEventListener('change', saveLlmSettings);
+  if (ui.llmMask) ui.llmMask.addEventListener('change', saveLlmSettings);
   ui.llmCheck.addEventListener('click', checkLlm);
   // Клик по затемнению закрывает панель, как принято в подобных окнах.
   ui.audioSheet.addEventListener('click', (e) => {

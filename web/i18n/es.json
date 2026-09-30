@@ -109,7 +109,9 @@
     "copy_markdown_hint": "Para Telegram, gestores de tareas, Notion",
     "copy_plain_hint": "Para correo y campos sin formato",
     "collapse": "Contraer notas",
-    "expand": "Expandir notas"
+    "expand": "Expandir notas",
+    "copy_masked": "Sin datos personales",
+    "copy_masked_hint": "Tarjetas, teléfonos y pasaportes sustituidos por etiquetas"
   },
   "chat": {
     "title": "Preguntas sobre la reunión",
@@ -269,7 +271,9 @@
     "tier_meta": "{size}, necesita {ram} GB de RAM o más",
     "tier_ready": "descargado",
     "tier_not_ready": "se descarga con la primera pregunta",
-    "tier_low_ram": "Este ordenador tiene {have} GB de RAM: irá lento o puede no arrancar."
+    "tier_low_ram": "Este ordenador tiene {have} GB de RAM: irá lento o puede no arrancar.",
+    "mask_personal": "Ocultar datos personales antes de enviar al servidor",
+    "mask_personal_hint": "Tarjetas, teléfonos, pasaportes y números fiscales llegan al servidor como etiquetas tipo «[teléfono]»."
   },
   "look": {
     "theme": "Tema",
@@ -441,7 +445,8 @@
     "failed": "No se pudo copiar: el portapapeles está ocupado",
     "short": "Copiar",
     "done_answer": "Respuesta copiada",
-    "done_quote": "Frase copiada"
+    "done_quote": "Frase copiada",
+    "done_masked": "Notas copiadas sin datos personales"
   },
   "license": {
     "bar_text": "Konspekt sin licencia. Cómprala para que el programa siga creciendo.",
@@ -473,5 +478,18 @@
       "expired": "La clave caducó el {date}.",
       "bridge": "El programa no respondió. Inténtalo de nuevo."
     }
+  },
+  "personal": {
+    "find": "Buscar datos personales",
+    "hide": "Quitar resaltado",
+    "none": "No se encontraron datos personales",
+    "found": "Encontrado: {list}",
+    "kind_email": "correo",
+    "kind_card": "tarjeta",
+    "kind_iban": "IBAN",
+    "kind_snils": "SNILS",
+    "kind_inn": "INN",
+    "kind_passport": "pasaporte",
+    "kind_phone": "teléfono"
   }
 }

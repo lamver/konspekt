@@ -185,6 +185,10 @@ class LlmSettings:
     # Какая своя модель пишет заметки и отвечает: fast, smart или strong
     # (см. LOCAL_MODELS в llm/local.py).
     local_model: str = "fast"
+    # Скрывать номера карт, телефоны, паспорта и прочее, прежде чем
+    # отправить текст встречи на свой сервер. Своей модели на этом
+    # компьютере это не нужно: текст никуда не уходит.
+    mask_personal_remote: bool = True
 
 
 @dataclass

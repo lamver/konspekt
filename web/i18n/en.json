@@ -109,7 +109,9 @@
     "copy_markdown_hint": "For Telegram, trackers, Notion",
     "copy_plain_hint": "For email and fields without formatting",
     "collapse": "Collapse notes",
-    "expand": "Expand notes"
+    "expand": "Expand notes",
+    "copy_masked": "Without personal data",
+    "copy_masked_hint": "Card numbers, phones and passports replaced with labels"
   },
   "chat": {
     "title": "Ask about the meeting",
@@ -269,7 +271,9 @@
     "tier_meta": "{size}, needs {ram} GB of RAM or more",
     "tier_ready": "downloaded",
     "tier_not_ready": "downloads on first question",
-    "tier_low_ram": "This computer has {have} GB of RAM: it will be slow or may not start."
+    "tier_low_ram": "This computer has {have} GB of RAM: it will be slow or may not start.",
+    "mask_personal": "Hide personal data before sending to the server",
+    "mask_personal_hint": "Card numbers, phones, passports and tax IDs reach the server as labels like “[phone]”."
   },
   "look": {
     "theme": "Theme",
@@ -441,7 +445,8 @@
     "failed": "Could not copy: the clipboard is busy",
     "short": "Copy",
     "done_answer": "Answer copied",
-    "done_quote": "Line copied"
+    "done_quote": "Line copied",
+    "done_masked": "Notes copied without personal data"
   },
   "license": {
     "bar_text": "Konspekt is unlicensed. Buy a license to keep it growing.",
@@ -473,5 +478,18 @@
       "expired": "The key expired on {date}.",
       "bridge": "The program didn't respond. Please try again."
     }
+  },
+  "personal": {
+    "find": "Find personal data",
+    "hide": "Remove highlight",
+    "none": "No personal data found",
+    "found": "Found: {list}",
+    "kind_email": "email",
+    "kind_card": "card",
+    "kind_iban": "IBAN",
+    "kind_snils": "SNILS",
+    "kind_inn": "INN",
+    "kind_passport": "passport",
+    "kind_phone": "phone"
   }
 }

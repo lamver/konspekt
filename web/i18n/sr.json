@@ -109,7 +109,9 @@
     "copy_markdown_hint": "Za Telegram, trekere, Notion",
     "copy_plain_hint": "Za poštu i polja bez formatiranja",
     "collapse": "Skupi beleške",
-    "expand": "Raširi beleške"
+    "expand": "Raširi beleške",
+    "copy_masked": "Bez ličnih podataka",
+    "copy_masked_hint": "Brojevi kartica, telefoni i pasoši zamenjeni oznakama"
   },
   "chat": {
     "title": "Pitanja o sastanku",
@@ -269,7 +271,9 @@
     "tier_meta": "{size}, potrebno je {ram} GB memorije ili više",
     "tier_ready": "preuzet",
     "tier_not_ready": "preuzima se pri prvom pitanju",
-    "tier_low_ram": "Ovaj računar ima {have} GB memorije: biće sporo ili se neće pokrenuti."
+    "tier_low_ram": "Ovaj računar ima {have} GB memorije: biće sporo ili se neće pokrenuti.",
+    "mask_personal": "Sakrij lične podatke pre slanja na server",
+    "mask_personal_hint": "Brojevi kartica, telefoni, pasoši i poreski brojevi stižu na server kao oznake poput „[telefon]“."
   },
   "look": {
     "theme": "Tema",
@@ -441,7 +445,8 @@
     "failed": "Kopiranje nije uspelo: ostava je zauzeta",
     "short": "Kopiraj",
     "done_answer": "Odgovor je kopiran",
-    "done_quote": "Replika je kopirana"
+    "done_quote": "Replika je kopirana",
+    "done_masked": "Beleške kopirane bez ličnih podataka"
   },
   "license": {
     "bar_text": "Konspekt nema licencu. Kupite je da bi se program i dalje razvijao.",
@@ -473,5 +478,18 @@
       "expired": "Ključ je istekao {date}.",
       "bridge": "Program nije odgovorio. Pokušajte ponovo."
     }
+  },
+  "personal": {
+    "find": "Pronađi lične podatke",
+    "hide": "Ukloni isticanje",
+    "none": "Lični podaci nisu pronađeni",
+    "found": "Pronađeno: {list}",
+    "kind_email": "imejl",
+    "kind_card": "kartica",
+    "kind_iban": "IBAN",
+    "kind_snils": "SNILS",
+    "kind_inn": "PIB",
+    "kind_passport": "pasoš",
+    "kind_phone": "telefon"
   }
 }

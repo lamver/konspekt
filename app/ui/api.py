@@ -432,6 +432,14 @@ class Api:
         """Запомнить масштаб интерфейса. Применяет его сам фронт."""
         return self._service.set_ui_zoom(zoom)
 
+    def find_personal(self, texts: list[str]) -> list[list[dict[str, Any]]]:
+        """Личные данные в каждом тексте: для подсветки в окне."""
+        return self._service.find_personal(texts)
+
+    def mask_personal(self, text: str) -> str:
+        """Текст, где личные данные заменены пометками."""
+        return self._service.mask_personal(text)
+
     def set_copy_mode(self, mode: str) -> str:
         """Запомнить, каким видом копировать заметки по главной кнопке."""
         return self._service.set_copy_mode(mode)

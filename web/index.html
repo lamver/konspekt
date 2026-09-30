@@ -211,6 +211,10 @@
                         <span class="split__name" data-i18n="summary.copy_plain">Простым текстом</span>
                         <span class="split__hint" data-i18n="summary.copy_plain_hint">Для почты и полей без разметки</span>
                       </button>
+                      <button class="split__item" id="summary-copy-masked" role="menuitem" data-copy-mode="masked">
+                        <span class="split__name" data-i18n="summary.copy_masked">Без личных данных</span>
+                        <span class="split__hint" data-i18n="summary.copy_masked_hint">Номера карт, телефоны, паспорта заменены пометками</span>
+                      </button>
                     </div>
                   </div>
                   <button class="btn-small" id="summary-run" data-i18n="summary.run">Сделать заметки</button>
@@ -259,6 +263,13 @@
                 <div class="model-bar__fill" id="model-fill"></div>
               </div>
               <button class="btn-small" id="model-action" hidden></button>
+            </div>
+            <!-- Найти личные данные: номера карт, телефоны, паспорта.
+                 Расшифровку потом несут в чат команды или письмо, и в
+                 длинном тексте номер карты легко не заметить. -->
+            <div class="personal-bar" id="personal-bar" hidden>
+              <button class="btn-small" id="personal-find" data-i18n="personal.find">Найти личные данные</button>
+              <span class="personal-bar__result" id="personal-result"></span>
             </div>
             <div class="transcript" id="transcript"></div>
             <div class="placeholder" id="transcript-empty">
@@ -529,6 +540,11 @@
                 <span class="field__label" data-i18n="notes_settings.model">Модель</span>
                 <input type="text" id="llm-model" placeholder="gpt-4o-mini" spellcheck="false">
               </label>
+              <label class="check">
+                <input type="checkbox" id="llm-mask" checked>
+                <span data-i18n="notes_settings.mask_personal">Скрывать личные данные перед отправкой на сервер</span>
+              </label>
+              <p class="hint" data-i18n="notes_settings.mask_personal_hint">Номера карт, телефоны, паспорта, ИНН и СНИЛС уходят на сервер пометками вроде «[телефон]».</p>
             </div>
 
             <div class="voice-enroll__row">

@@ -80,7 +80,7 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
      "  ui.chatText.style.overflowY = 'hidden';\n",
      "за потолком нет прокрутки"),
     ("app/core/service.py",
-     '        value = mode if mode in ("markdown", "plain") else "markdown"\n',
+     '        value = mode if mode in ("markdown", "plain", "masked") else "markdown"\n',
      "        value = mode\n",
      "мусор вместо вида копирования записывается"),
     ("app/core/service.py",
