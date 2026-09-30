@@ -89,6 +89,9 @@ SUMMARY_ERROR = "summary.error"
 ANALYSIS_CHUNK = "analysis.chunk"
 ANALYSIS_READY = "analysis.ready"
 ANALYSIS_ERROR = "analysis.error"
+# Пробный период кончился, а человек нажал «Запись» или бросил файл.
+# Окно показывает, почему ничего не произошло, и где купить.
+TRIAL_BLOCKED = "trial.blocked"
 # Веса модели приезжают по требованию, как и веса распознавания.
 LLM_DOWNLOAD = "llm.download"
 CHAT_CHUNK = "chat.chunk"

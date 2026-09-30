@@ -456,6 +456,10 @@ class Api:
         """Запомнить, свёрнуты ли заметки над перепиской."""
         return self._service.set_summary_collapsed(collapsed)
 
+    def trial_state(self) -> dict[str, Any]:
+        """Сколько встреч пробного периода осталось."""
+        return self._service.trial_state()
+
     def license_state(self) -> dict[str, Any]:
         """Есть ли лицензия: от этого зависит плашка «Купить»."""
         return self._service.license_state()

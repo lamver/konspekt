@@ -459,7 +459,7 @@
     "owned_title": "Licencia activa",
     "owned_hint": "Gracias por apoyar Konspekt. La clave se comprueba en este ordenador, sin internet.",
     "missing_title": "Sin licencia",
-    "missing_hint": "Todo funciona sin ella. La licencia se compra una vez y las actualizaciones son gratis. La clave llega por correo tras el pago.",
+    "missing_hint": "Las primeras {limit} reuniones funcionan por completo. Después puedes ver y copiar grabaciones, y grabar y analizar nuevas con una licencia. Pago único, actualizaciones gratis. La clave llega por correo tras el pago.",
     "key_label": "Clave del correo",
     "key_placeholder": "Pega la clave completa, empieza por KSPK1.",
     "activate": "Activar",
@@ -480,7 +480,14 @@
       "product": "Esta clave es de otro programa.",
       "expired": "La clave caducó el {date}.",
       "bridge": "El programa no respondió. Inténtalo de nuevo."
-    }
+    },
+    "trial_left": "Prueba: quedan {n} {word} de {limit}. Después podrás ver y copiar tus grabaciones, y grabar con una licencia.",
+    "trial_word": {
+      "one": "reunión",
+      "few": "reuniones",
+      "many": "reuniones"
+    },
+    "trial_over": "La prueba ha terminado. Todo lo grabado sigue aquí para ver, buscar y copiar. Graba reuniones nuevas con una licencia."
   },
   "personal": {
     "find": "Buscar datos personales",

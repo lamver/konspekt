@@ -196,6 +196,8 @@ if seed_file.exists():
 
 сервис = AppService.__new__(AppService)
 сервис.settings = settings_mod.Settings()
+from app.storage.db import Store  # noqa: E402
+сервис.store = Store(str(Path(tempfile.mkdtemp()) / "t.db"))
 проверить(сервис.license_state()["licensed"] is False, "без ключа лицензии нет, плашка нужна")
 ответ = сервис.activate_license(испорченный)
 проверить(not ответ["ok"] and ответ["error"] == "signature" and сервис.settings.license_key == "",

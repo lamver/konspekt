@@ -266,6 +266,8 @@ window.__konspekt_event = function (payload) {
   switch (payload.topic) {
     case 'meetings.changed':
       loadMeetings();
+      // Встреча могла только что пойти в счёт пробного периода.
+      if (state.license && !state.license.licensed) refreshLicense();
       break;
     case 'recording.started':
       state.isRecording = true;
@@ -337,6 +339,12 @@ window.__konspekt_event = function (payload) {
       // Разговор идёт, а запись не включена. Ничего не пишем, пока
       // человек не согласится: это предложение, а не действие.
       showNoticedTalkAsk(payload);
+      break;
+    case 'trial.blocked':
+      // Пробный период кончился: объясняем, почему «Запись» или файл не
+      // сработали, и показываем плашку с покупкой.
+      showToast(payload.message || t('license.trial_over'));
+      refreshLicense();
       break;
     case 'recording.error':
       // Запись не началась: сообщаем прямо, иначе человек будет думать,
@@ -719,6 +727,7 @@ async function runOpenLens() {
     setBusy(false);
     renderLensText(kind, lensText(kind));
     showToast((res && res.error) || t('analysis.error'));
+    if (res && res.trial) refreshLicense();
   }
 }
 
@@ -1000,6 +1009,7 @@ async function startSummary() {
     setBusy(false);
     renderSummary(state.current ? state.current.summary : '');
     showToast((res && res.error) || t('summary.error'));
+    if (res && res.trial) refreshLicense();
   }
 }
 
@@ -1216,7 +1226,11 @@ async function sendQuestion() {
   const res = await api.ask(state.currentId, text);
   if (!res || !res.ok) {
     setBusy(false);
+    // Вопрос не ушёл: возвращаем текст в поле, чтобы не набирать заново.
+    ui.chatText.value = text;
+    resizeChatInput();
     showToast((res && res.error) || t('chat.send_error'));
+    if (res && res.trial) refreshLicense();
   }
 }
 
@@ -3982,7 +3996,29 @@ async function refreshLicense() {
 function renderLicense() {
   const s = state.license;
   const licensed = !s || !!s.licensed;
-  if (ui.licenseBar) ui.licenseBar.hidden = licensed || !!state.licenseBarHidden;
+  const trial = (s && s.trial) || null;
+  const over = !licensed && !!(trial && trial.over);
+  state.trialOver = over;
+  // Кончился пробный период — плашку не спрятать: иначе «Запись» просто
+  // перестаёт работать без объяснений.
+  if (ui.licenseBar) {
+    ui.licenseBar.hidden = licensed || (!!state.licenseBarHidden && !over);
+    ui.licenseBar.classList.toggle('is-over', over);
+  }
+  const надпись = ui.licenseBar && ui.licenseBar.querySelector('.license-bar__text');
+  if (надпись && !licensed && trial) {
+    const текст = over
+      ? tЕслиЕсть('license.trial_over')
+      : tЕслиЕсть('license.trial_left', {
+        n: trial.left, limit: trial.limit, word: tPlural('license.trial_word', trial.left),
+      });
+    if (текст !== null) надпись.textContent = текст;
+  }
+  const подсказка = document.querySelector('[data-i18n="license.missing_hint"]');
+  if (подсказка && trial) {
+    const текст = tЕслиЕсть('license.missing_hint', { limit: trial.limit });
+    if (текст !== null) подсказка.textContent = текст;
+  }
   if (ui.licenseOwned) ui.licenseOwned.hidden = !licensed;
   if (ui.licenseMissing) ui.licenseMissing.hidden = licensed;
   if (ui.licenseWho) {

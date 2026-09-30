@@ -67,6 +67,24 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "No se pudieron generar las notas",
         "sr": "Beleške nisu mogle da se naprave",
     },
+    "python.trial.record": {
+        "ru": "Пробный период закончился: {limit} встреч позади. Все записи на месте, их можно смотреть, искать и копировать. Чтобы записывать дальше, купите лицензию.",
+        "en": "The trial is over: {limit} meetings recorded. Everything you recorded stays here to view, search and copy. Buy a license to keep recording.",
+        "es": "La prueba ha terminado: {limit} reuniones grabadas. Todo lo grabado sigue aquí para ver, buscar y copiar. Compra una licencia para seguir grabando.",
+        "sr": "Probni period je istekao: {limit} sastanaka je snimljeno. Sve snimljeno ostaje ovde za pregled, pretragu i kopiranje. Kupite licencu da biste nastavili snimanje.",
+    },
+    "python.trial.import_part": {
+        "ru": "Загружено {n} из {total}: на остальные пробных встреч не хватило. Купите лицензию, чтобы загружать дальше.",
+        "en": "Imported {n} of {total}: the trial has no meetings left for the rest. Buy a license to keep importing.",
+        "es": "Se importaron {n} de {total}: la prueba no tiene reuniones para el resto. Compra una licencia para seguir importando.",
+        "sr": "Učitano {n} od {total}: probni period nema više sastanaka za ostale. Kupite licencu da biste nastavili.",
+    },
+    "python.trial.llm": {
+        "ru": "Пробный период закончился. Вопросы к встрече, разборы и пересборка заметок работают с лицензией. Готовые заметки остаются с вами.",
+        "en": "The trial is over. Questions, analyses and rebuilding notes need a license. Your finished notes stay with you.",
+        "es": "La prueba ha terminado. Las preguntas, los análisis y rehacer notas requieren licencia. Tus notas terminadas siguen contigo.",
+        "sr": "Probni period je istekao. Pitanja, analize i ponovna izrada beleški rade uz licencu. Gotove beleške ostaju vama.",
+    },
     "python.analysis.unknown": {
         "ru": "Такого разбора нет",
         "en": "No such analysis",

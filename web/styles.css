@@ -1808,6 +1808,10 @@ body.is-resizing * { user-select: none !important; }
 }
 .license-bar__buy:hover { background: var(--accent-hover); }
 .license-bar .btn-link { flex-shrink: 0; font-size: 11.5px; }
+/* Пробный период кончился: плашку не прячут крестиком и текст не
+   обрезают. Иначе человек не поймёт, почему не нажимается «Запись». */
+.license-bar.is-over .license-bar__hide { display: none; }
+.license-bar.is-over .license-bar__text { white-space: normal; }
 .license-bar__hide {
   color: var(--ink-3);
   text-decoration: none;

@@ -87,6 +87,7 @@ from ..core.events import (
     ANALYSIS_CHUNK,
     ANALYSIS_ERROR,
     ANALYSIS_READY,
+    TRIAL_BLOCKED,
     SUMMARY_ERROR,
     SUMMARY_READY,
     SUMMARY_STATUS,
@@ -1609,6 +1610,15 @@ class AppService:
             )
             return self.get_meeting(self.active_meeting_id)
 
+        if not self._can_record(meeting_id):
+            # Пробный период кончился. Пишем дальше только встречу, которая
+            # уже в счёте: её дописывают, а не начинают новую.
+            bus.emit(TRIAL_BLOCKED, {
+                "action": "record",
+                "message": self._msg("python.trial.record", limit=self._trial_limit()),
+            })
+            return None
+
         if meeting_id is None:
             meeting_id = self.create_meeting()["id"]
 
@@ -2056,6 +2066,20 @@ class AppService:
         """
         if not paths:
             return []
+        свободно = self._trial_left()
+        if свободно is not None and свободно < len(paths):
+            # Загружаем столько, сколько осталось пробных встреч, и честно
+            # говорим, сколько не влезло. Молча проглотить пачку файлов
+            # хуже: человек будет ждать, что они появятся.
+            всего = len(paths)
+            paths = list(paths)[:свободно]
+            bus.emit(TRIAL_BLOCKED, {
+                "action": "import",
+                "message": (self._msg("python.trial.import_part", n=len(paths), total=всего)
+                            if paths else self._msg("python.trial.record", limit=self._trial_limit())),
+            })
+            if not paths:
+                return []
         tasks = self.importer.add(paths)
         bus.emit(IMPORT_CHANGED, {"tasks": self.importer.tasks()})
         return tasks
@@ -2321,6 +2345,8 @@ class AppService:
 
     def generate_summary(self, meeting_id: str) -> dict[str, Any]:
         """Запустить синтез заметок. Возвращается сразу, текст идёт событиями."""
+        if not self._can_use_model(meeting_id):
+            return {"ok": False, "error": self._msg("python.trial.llm"), "trial": True}
         if not self.llm.enabled:
             return {"ok": False, "error": self._msg("python.summary.disabled")}
         with self._llm_lock:
@@ -2469,6 +2495,8 @@ class AppService:
         if р.engine == "счёт":
             self.list_analyses(meeting_id)
             return {"ok": True, "done": True}
+        if not self._can_use_model(meeting_id):
+            return {"ok": False, "error": self._msg("python.trial.llm"), "trial": True}
         if not self.llm.enabled:
             return {"ok": False, "error": self._msg("python.summary.disabled")}
         with self._llm_lock:
@@ -2603,6 +2631,9 @@ class AppService:
         question = (question or "").strip()
         if not question:
             return {"ok": False, "error": self._msg("python.chat.empty_question")}
+        if not self._can_use_model(meeting_id) and calc.ответ(question, self._last_answer(meeting_id)) is None:
+            # Калькулятор модели не требует: считать можно и без лицензии.
+            return {"ok": False, "error": self._msg("python.trial.llm"), "trial": True}
         if not self.llm.enabled:
             return {"ok": False, "error": self._msg("python.chat.disabled")}
         with self._llm_lock:
@@ -2809,13 +2840,83 @@ class AppService:
 
     # --- лицензия ----------------------------------------------------------
 
+    def _licensed(self) -> bool:
+        from . import license as license_mod
+
+        key = self.settings.license_key
+        if not key:
+            return False
+        try:
+            license_mod.parse(key)
+        except license_mod.LicenseError:
+            return False
+        return True
+
+    def _trial_limit(self) -> int:
+        from . import license as license_mod
+
+        return license_mod.TRIAL_MEETINGS
+
+    def _trial_left(self) -> int | None:
+        """Сколько пробных встреч осталось. None — лицензия есть, счёта нет."""
+        if self._licensed():
+            return None
+        from . import license as license_mod
+
+        used = self.store.trial_used(license_mod.TRIAL_MIN_SPEECH_S, license_mod.TRIAL_MEETINGS)
+        return max(0, license_mod.TRIAL_MEETINGS - used)
+
+    def _can_record(self, meeting_id: str | None) -> bool:
+        """Можно ли начать запись в эту встречу.
+
+        После пробного периода нельзя начать новую, но встречу, которая уже
+        в счёте, дописать можно: человек поставил на паузу десятую встречу,
+        и отнимать у него её конец было бы нечестно.
+        """
+        left = self._trial_left()
+        if left is None or left > 0:
+            return True
+        return bool(meeting_id) and self.store.trial_counts(meeting_id)
+
+    def _can_use_model(self, meeting_id: str) -> bool:
+        """Можно ли звать модель: заметки, разборы, вопросы.
+
+        Встречи пробного периода работают целиком навсегда: за них человек
+        уже «заплатил» пробой, и отнимать у них пересборку заметок незачем.
+        Закрываются только встречи сверх пробного периода, а у старых, до
+        его появления, всё как было.
+        """
+        left = self._trial_left()
+        if left is None or left > 0:
+            return True
+        return self.store.trial_counts(meeting_id) or self.store.trial_legacy(meeting_id)
+
+    def _last_answer(self, meeting_id: str) -> str:
+        for m in reversed(self.store.list_chat_messages(meeting_id)):
+            if m.role == "assistant" and m.text.strip():
+                return m.text
+        return ""
+
+    def trial_state(self) -> dict[str, Any]:
+        """Пробный период для окна: сколько встреч прошло и сколько осталось."""
+        from . import license as license_mod
+
+        left = self._trial_left()
+        return {
+            "licensed": left is None,
+            "limit": license_mod.TRIAL_MEETINGS,
+            "left": left,
+            "over": left == 0,
+        }
+
     def license_state(self) -> dict[str, Any]:
         """Есть ли лицензия и кому выдана. Проверяется подписью, без сети."""
         from . import license as license_mod
 
         key = self.settings.license_key
+        trial = self.trial_state()
         if not key:
-            return {"licensed": False, "buy_url": license_mod.BUY_URL}
+            return {"licensed": False, "buy_url": license_mod.BUY_URL, "trial": trial}
         try:
             lic = license_mod.parse(key)
         except license_mod.LicenseError as err:
@@ -2823,8 +2924,10 @@ class AppService:
             # настроек правили руками. Не стираем: вдруг человек
             # захочет посмотреть, что было вставлено.
             log.warning("Сохранённый ключ лицензии не подошёл: %s", err.code)
-            return {"licensed": False, "error": err.code, "buy_url": license_mod.BUY_URL}
-        return {"licensed": True, "license": lic.to_dict(), "buy_url": license_mod.BUY_URL}
+            return {"licensed": False, "error": err.code, "buy_url": license_mod.BUY_URL,
+                    "trial": trial}
+        return {"licensed": True, "license": lic.to_dict(), "buy_url": license_mod.BUY_URL,
+                "trial": trial}
 
     def activate_license(self, key: str) -> dict[str, Any]:
         """Проверить вставленный ключ и, если подошёл, запомнить."""

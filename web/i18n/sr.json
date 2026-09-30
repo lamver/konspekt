@@ -459,7 +459,7 @@
     "owned_title": "Licenca je aktivna",
     "owned_hint": "Hvala što podržavate Konspekt. Ključ se proverava na ovom računaru, bez interneta.",
     "missing_title": "Nema licence",
-    "missing_hint": "Sve radi i bez nje. Licenca se kupuje jednom, ažuriranja su besplatna. Ključ stiže na mejl posle plaćanja.",
+    "missing_hint": "Prvih {limit} sastanaka radi u potpunosti. Posle toga snimke možete da gledate i kopirate, a nove snimate i analizirate uz licencu. Jednokratna kupovina, besplatna ažuriranja. Ključ stiže na mejl posle plaćanja.",
     "key_label": "Ključ iz mejla",
     "key_placeholder": "Nalepite ceo ključ, počinje sa KSPK1.",
     "activate": "Aktiviraj",
@@ -480,7 +480,14 @@
       "product": "Ovo je ključ za drugi program.",
       "expired": "Ključ je istekao {date}.",
       "bridge": "Program nije odgovorio. Pokušajte ponovo."
-    }
+    },
+    "trial_left": "Probni period: ostalo je {n} {word} od {limit}. Posle toga snimke možete da gledate i kopirate, a snimate uz licencu.",
+    "trial_word": {
+      "one": "sastanak",
+      "few": "sastanka",
+      "many": "sastanaka"
+    },
+    "trial_over": "Probni period je istekao. Sve snimljeno je i dalje ovde za pregled, pretragu i kopiranje. Nove sastanke snimajte uz licencu."
   },
   "personal": {
     "find": "Pronađi lične podatke",

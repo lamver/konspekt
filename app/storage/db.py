@@ -263,6 +263,31 @@ CREATE TABLE IF NOT EXISTS meeting_analyses (
 );
 """
 
+# Пробный период: первые встречи работают целиком, дальше только просмотр.
+#
+# Считаем встречи, а не дни: поставил и неделю не пользовался — ничего не
+# сгорело. Встреча считается один раз и навсегда (trial_counted): иначе
+# удалил встречу — вернул себе пробную. Встречи, записанные до появления
+# пробного периода, в счёт не идут (trial_legacy): те, кто поверил в
+# программу первыми, не должны получить «только просмотр» в день
+# обновления.
+#
+# По времени ничего не сверяем: перевод часов назад пробный период не
+# продлевает, потому что считать тут нечего, кроме самих встреч.
+TRIAL_SCHEMA = """
+CREATE TABLE IF NOT EXISTS trial_state (
+    key    TEXT PRIMARY KEY,
+    value  TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS trial_legacy (
+    meeting_id  TEXT PRIMARY KEY
+);
+CREATE TABLE IF NOT EXISTS trial_counted (
+    meeting_id  TEXT PRIMARY KEY,
+    counted_at  REAL NOT NULL
+);
+"""
+
 
 class Store:
     """Потокобезопасная обёртка над SQLite.
@@ -295,6 +320,8 @@ class Store:
             # базы работает как работала, просто не замечая их.
             self._conn.executescript(MEANING_SCHEMA)
             self._conn.executescript(ANALYSES_SCHEMA)
+            self._conn.executescript(TRIAL_SCHEMA)
+            self._начать_пробный_период()
             if was < 2:
                 self._add_columns(
                     "transcript_segments",
@@ -339,6 +366,58 @@ class Store:
             self._исправить_ложные_языки()
 
         self.search_ready = self._init_search(rebuild=was < 5)
+
+    def _начать_пробный_период(self) -> None:
+        """Запомнить встречи, записанные до пробного периода. Один раз."""
+        if self._conn.execute("SELECT 1 FROM trial_state WHERE key='started'").fetchone():
+            return
+        self._conn.execute("INSERT INTO trial_legacy(meeting_id) SELECT id FROM meetings")
+        self._conn.execute(
+            "INSERT INTO trial_state(key, value) VALUES ('started', ?)", (str(now()),)
+        )
+
+    def trial_used(self, min_speech: float, limit: int) -> int:
+        """Сколько встреч пробного периода уже использовано.
+
+        Встреча идёт в счёт, когда в ней набралось min_speech секунд
+        распознанной речи: случайное «Запись» — «Стоп» пробную встречу не
+        съедает. Посчитанная встреча остаётся посчитанной и после удаления.
+
+        Больше limit не считаем: посчитанной встрече модель открыта
+        навсегда, и одиннадцатая встреча, попавшая в счёт, стала бы
+        пробной задним числом.
+        """
+        with self._lock:
+            было = int(self._conn.execute("SELECT COUNT(*) FROM trial_counted").fetchone()[0])
+            if было >= limit:
+                return было
+            self._conn.execute(
+                """INSERT OR IGNORE INTO trial_counted(meeting_id, counted_at)
+                   SELECT meeting_id, ? FROM transcript_segments
+                   WHERE meeting_id NOT IN (SELECT meeting_id FROM trial_legacy)
+                     AND meeting_id NOT IN (SELECT meeting_id FROM trial_counted)
+                   GROUP BY meeting_id
+                   HAVING SUM(MAX(end_s - start_s, 0)) >= ?
+                   ORDER BY MIN(rowid)
+                   LIMIT ?""",
+                (now(), float(min_speech), limit - было),
+            )
+            self._conn.commit()
+            return int(self._conn.execute("SELECT COUNT(*) FROM trial_counted").fetchone()[0])
+
+    def trial_legacy(self, meeting_id: str) -> bool:
+        """Записана ли встреча до появления пробного периода."""
+        with self._lock:
+            return self._conn.execute(
+                "SELECT 1 FROM trial_legacy WHERE meeting_id=?", (meeting_id,)
+            ).fetchone() is not None
+
+    def trial_counts(self, meeting_id: str) -> bool:
+        """Посчитана ли встреча в пробный период."""
+        with self._lock:
+            return self._conn.execute(
+                "SELECT 1 FROM trial_counted WHERE meeting_id=?", (meeting_id,)
+            ).fetchone() is not None
 
     def _исправить_ложные_языки(self) -> None:
         """Снять ярлык чужого языка с реплик, которые распознала русская модель.
