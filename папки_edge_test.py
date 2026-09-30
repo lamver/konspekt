@@ -5,7 +5,7 @@
 - папки над встречами вне папок, в папке её встречи и число;
 - «+» у папки начинает встречу именно в этой папке;
 - папку можно свернуть, и она остаётся свёрнутой;
-- меню «⋯» у встречи: перенести в папку, убрать из папки;
+- меню встречи правой кнопкой: перенести в папку, убрать из папки;
 - перетащить встречу на папку — переносит, в пустое место — вынимает;
 - удаление папки спрашивает и говорит, что встречи останутся;
 - при поиске папки не прячут находки;
@@ -98,6 +98,9 @@ window.addEventListener('load', () => setTimeout(async () => {
   } };
   state.currentId = 'm3';
   await loadMeetings();
+  const правой = (эл) => эл.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 60, clientY: 200 }));
+  // У строки встречи нет своей кнопки меню: строка остаётся чистой.
+  и.кнопки_меню_нет = ui.list.querySelectorAll('.meeting-item__more').length === 0;
   const список = () => Array.from(ui.list.children).map((x) => x.classList.contains('folder')
     ? 'папка:' + x.querySelector('.folder__name').textContent + ':' + Array.from(x.querySelectorAll('.meeting-item')).map((m) => m.dataset.id).join(',')
     : 'встреча:' + x.dataset.id);
@@ -126,7 +129,7 @@ window.addEventListener('load', () => setTimeout(async () => {
   и.развёрнута = видно(ui.list.querySelector('[data-folder="f1"] .meeting-item'));
 
   // Меню «⋯» у встречи без папки: перенести в «Планёрки».
-  ui.list.querySelector('.meeting-item[data-id="m3"] .meeting-item__more').click();
+  правой(ui.list.querySelector('.meeting-item[data-id="m3"]'));
   await ждать();
   const меню = document.getElementById('ctx-menu');
   и.меню_видно = видно(меню);
@@ -139,7 +142,7 @@ window.addEventListener('load', () => setTimeout(async () => {
   и.тост_переноса = тосты.slice(-1)[0] || '';
 
   // Меню у встречи в папке: текущая папка неактивна, есть «Убрать из папки».
-  ui.list.querySelector('.meeting-item[data-id="m3"] .meeting-item__more').click();
+  правой(ui.list.querySelector('.meeting-item[data-id="m3"]'));
   await ждать();
   const тек = Array.from(меню.querySelectorAll('.ctx-menu__item')).find((b) => b.textContent === 'Планёрки');
   и.текущая_неактивна = !!(тек && тек.disabled);
@@ -180,6 +183,28 @@ window.addEventListener('load', () => setTimeout(async () => {
   и.край = [Math.round(кр.left), Math.round(кр.right), innerWidth];
   и.край_в_окне = видно(меню) && кр.right <= innerWidth && кр.left >= 0;
   document.body.click();
+  await ждать();
+
+  // Меню открывается у курсора при любом масштабе интерфейса. Жалоба
+  // 30.09: при увеличенном интерфейсе меню «съехало куда-то».
+  и.у_курсора = [];
+  for (const масштаб of [1, 1.25, 1.5, 0.8]) {
+    applyZoom(масштаб);
+    await ждать();
+    const строка = ui.list.querySelector('.meeting-item[data-id="m3"]');
+    const рс = строка.getBoundingClientRect();
+    const cx = Math.round(рс.left + 20);
+    const cy = Math.round(рс.top + 10);
+    строка.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: cx, clientY: cy }));
+    await ждать();
+    const мр = меню.getBoundingClientRect();
+    // Внизу окна места нет — меню поднимается и встаёт низом к курсору.
+    const верх = мр.bottom > cy + 2 ? Math.round(мр.top) : Math.round(мр.bottom);
+    и.у_курсора.push([масштаб, cx, cy, Math.round(мр.left), верх, мр.bottom <= innerHeight && мр.top >= 0]);
+    document.body.click();
+    await ждать();
+  }
+  applyZoom(1);
   await ждать();
 
   // Удаление папки: спрашивает, встречи остаются.
@@ -243,6 +268,7 @@ if и.get("ошибка"):
 проверить(и["порядок"] == ["папка:Звонки <b>клиентам</b>:m1", "папка:Планёрки:m2", "встреча:m3"],
           f"папки над встречами, в папке её встречи: {и['порядок']}")
 проверить(и["тег"] == 0, "имя папки не вставляется как HTML")
+проверить(и["кнопки_меню_нет"], "у строки встречи нет кнопки «⋯», меню — правой кнопкой")
 проверить(и["счётчик"] == "1", "у папки видно число встреч")
 проверить(и["кнопка_папки"], "кнопка «Новая папка» видна")
 проверить(и["создана"] == ["create_meeting", "f2"], f"«+» у папки начинает встречу в ней: {и['создана']}")
@@ -263,6 +289,8 @@ if и.get("ошибка"):
 проверить(и["метки_сняты"], "после перетаскивания подсветка снята")
 проверить(и["отказ_папка_цела"], "передумали удалять — папка на месте")
 проверить(и["край_в_окне"], f"меню у правого края окна не вылезает за него: {и['край']}")
+проверить(all(abs(л - x) <= 2 and abs(в - y) <= 2 and в_окне for _, x, y, л, в, в_окне in и["у_курсора"]),
+          f"меню встает у курсора при масштабе 100%, 125%, 150% и 80%: {и['у_курсора']}")
 проверить(len(и["спросили"]) == 2 and "Планёрки" in и["спросили"][0] and "не удалятся" in и["спросили"][1],
           f"удаление папки спрашивает и говорит, что встречи останутся: {и['спросили']}")
 проверить(и["встречи_остались"], "встречи удалённой папки остались и вышли из неё")

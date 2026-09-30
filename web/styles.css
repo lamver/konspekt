@@ -435,21 +435,6 @@ body { display: flex; flex-direction: column; }
 .folder.is-drop .folder__head,
 .meeting-list.is-drop-root { outline: 1px dashed var(--accent); outline-offset: -1px; background: var(--accent-soft); }
 .meeting-item.is-dragging { opacity: .45; }
-.meeting-item__more {
-  position: absolute;
-  right: 28px;
-  top: 8px;
-  display: none;
-  padding: 3px 5px;
-  border: 0;
-  border-radius: 6px;
-  background: none;
-  color: var(--ink-3);
-  cursor: pointer;
-  line-height: 1;
-}
-.meeting-item:hover .meeting-item__more { display: block; }
-.meeting-item__more:hover { background: var(--paper); color: var(--ink); }
 
 /* Меню встречи или папки. */
 .ctx-menu {

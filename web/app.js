@@ -1655,21 +1655,11 @@ function meetingNode(m, found, q) {
       askDeleteMeeting(m);
     });
 
-    // Перенос в папку: кнопка с меню и перетаскивание. Кнопка нужна,
-    // потому что перетаскивать мышью умеют не все и не всегда удобно.
-    const more = document.createElement('button');
-    more.className = 'meeting-item__more';
-    more.type = 'button';
-    more.title = t('folders.meeting_more');
-    more.textContent = '⋯';
-    more.addEventListener('click', (e) => {
-      e.stopPropagation();
-      openMoveMenu(m, more);
-    });
-
+    // Перенос в папку — правой кнопкой или перетаскиванием. Отдельной
+    // кнопки в строке нет: строка встречи должна оставаться чистой.
     node.append(title, meta);
     if (quote) node.appendChild(quote);
-    node.append(more, del);
+    node.appendChild(del);
     node.addEventListener('click', () => selectMeeting(m.id));
     node.addEventListener('contextmenu', (e) => {
       e.preventDefault();
@@ -1915,15 +1905,25 @@ function showCtxMenu(items, anchor, x, y) {
     menu.appendChild(b);
   }
   menu.hidden = false;
+  // Масштаб интерфейса сделан через zoom у всего документа. Тогда
+  // координаты щелчка и размеры элементов приходят в точках экрана, а
+  // left и top меню задаются в точках документа: их надо поделить на
+  // масштаб. Без этого при 125% меню уезжало вправо и вниз от курсора.
+  const z = currentZoom() || 1;
   const r = anchor ? anchor.getBoundingClientRect() : { left: x, right: x, bottom: y, top: y };
-  const w = menu.offsetWidth;
-  const h = menu.offsetHeight;
+  const окноШ = innerWidth;
+  const окноВ = innerHeight;
+  menu.style.left = '0px';
+  menu.style.top = '0px';
+  const размер = menu.getBoundingClientRect();
+  const w = размер.width;
+  const h = размер.height;
   let left = anchor ? r.right - w : r.left;
-  let top = r.bottom + 4;
-  if (left + w > innerWidth - 4) left = innerWidth - w - 4;
-  if (top + h > innerHeight - 4) top = Math.max(4, r.top - h - 4);
-  menu.style.left = `${Math.max(4, left)}px`;
-  menu.style.top = `${top}px`;
+  let top = anchor ? r.bottom + 4 : r.top;
+  if (left + w > окноШ - 4) left = окноШ - w - 4;
+  if (top + h > окноВ - 4) top = Math.max(4, (anchor ? r.top - 4 : r.top) - h);
+  menu.style.left = `${Math.max(4, left) / z}px`;
+  menu.style.top = `${Math.max(4, top) / z}px`;
   const первый = menu.querySelector('.ctx-menu__item:not([disabled])');
   if (первый) первый.focus();
 }

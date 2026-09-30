@@ -48,14 +48,22 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     (Ф, "  if (m.folder_id) items.push({ text: t('folders.move_out'), run: () => moveMeeting(m.id, null) });\n", "",
      "встречу нельзя убрать из папки"),
     (Ф, "    if (it.current) b.disabled = true;\n", "", "текущая папка в меню активна"),
+    (Ф, "    node.addEventListener('contextmenu', (e) => {\n      e.preventDefault();\n      openMoveMenu(m, null, e.clientX, e.clientY);\n    });\n",
+     "", "у встречи не открывается меню правой кнопкой"),
     (Ф, "    moveMeeting(e.dataTransfer.getData('text/konspekt-meeting'), f.id);\n", "",
      "перетаскивание на папку не переносит"),
     (Ф, "    moveMeeting(e.dataTransfer.getData('text/konspekt-meeting'), null);\n", "",
      "перетаскивание в пустое место не вынимает"),
     (Ф, "  if (!ok) return;\n  await api.delete_folder(f.id);\n", "  await api.delete_folder(f.id);\n",
      "папка удаляется без вопроса"),
-    (Ф, "  if (left + w > innerWidth - 4) left = innerWidth - w - 4;\n", "",
+    (Ф, "  if (left + w > окноШ - 4) left = окноШ - w - 4;\n", "",
      "меню вылезает за окно"),
+    (Ф, "  menu.style.left = `${Math.max(4, left) / z}px`;\n", "  menu.style.left = `${Math.max(4, left)}px`;\n",
+     "при увеличенном интерфейсе меню съезжает от курсора вбок"),
+    (Ф, "  menu.style.top = `${Math.max(4, top) / z}px`;\n", "  menu.style.top = `${Math.max(4, top)}px`;\n",
+     "при увеличенном интерфейсе меню съезжает от курсора вниз"),
+    (Ф, "  if (top + h > окноВ - 4) top = Math.max(4, (anchor ? r.top - 4 : r.top) - h);\n", "",
+     "у нижнего края окна меню уходит за край"),
 ]
 
 
