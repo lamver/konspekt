@@ -2676,24 +2676,25 @@ class AppService:
                 if m.id != answer_id and m.text.strip()
             ][:-1]
 
+            # Пример считаем сами, и знаками, и словами («минус 400»):
+            # модель тут угадывает (см. llm/calc.py), а калькулятор верен
+            # и мгновенен. Всё, что не пример, calc вернёт None. Считаем
+            # до поиска по встрече: для примера он не нужен.
+            прошлый = next((h["content"] for h in reversed(history)
+                            if h["role"] == "assistant"), "")
+            посчитано = calc.ответ(question, прошлый)
+            if посчитано is not None:
+                bus.emit(CHAT_CHUNK, {"meeting_id": meeting_id,
+                                      "message_id": answer_id, "text": посчитано})
+                self.store.update_chat_message(answer_id, посчитано)
+                bus.emit(CHAT_MESSAGE, {
+                    "meeting_id": meeting_id,
+                    "message": {"id": answer_id, "meeting_id": meeting_id,
+                                "role": "assistant", "text": посчитано},
+                    "done": True,
+                })
+                return
             ctx = self._chat_context(meeting_id, question, history)
-            if not ctx.attach:
-                # Пример без букв считаем сами: модель тут угадывает
-                # (см. llm/calc.py), а калькулятор верен и мгновенен.
-                прошлый = next((h["content"] for h in reversed(history)
-                                if h["role"] == "assistant"), "")
-                посчитано = calc.ответ(question, прошлый)
-                if посчитано is not None:
-                    bus.emit(CHAT_CHUNK, {"meeting_id": meeting_id,
-                                          "message_id": answer_id, "text": посчитано})
-                    self.store.update_chat_message(answer_id, посчитано)
-                    bus.emit(CHAT_MESSAGE, {
-                        "meeting_id": meeting_id,
-                        "message": {"id": answer_id, "meeting_id": meeting_id,
-                                    "role": "assistant", "text": посчитано},
-                        "done": True,
-                    })
-                    return
             messages = chat_messages(
                 title=meeting.title,
                 transcript=ctx.transcript,

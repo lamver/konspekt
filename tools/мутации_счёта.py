@@ -27,10 +27,15 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
      "после отрицательного ответа счёт рвётся"),
     (К, "    if not в or not _ЗНАКИ.match(в) or not re.search(r\"\\d\", в):\n",
      "    if not в or not re.search(r\"\\d\", в):\n", "в калькулятор пускаются буквы"),
-    (С, "            if not ctx.attach:\n                # Пример без букв считаем сами",
-     "            if False:\n                # Пример без букв считаем сами", "пример уходит в модель"),
-    (С, "                    return\n            messages = chat_messages(", "            messages = chat_messages(",
+    (С, "            посчитано = calc.ответ(question, прошлый)\n",
+     "            посчитано = None\n", "пример уходит в модель"),
+    (С, "                return\n            ctx = self._chat_context(meeting_id, question, history)\n",
+     "            ctx = self._chat_context(meeting_id, question, history)\n",
      "после счёта модель всё равно зовётся"),
+    (К, "    в = _слова_в_знаки((вопрос or \"\").strip()).rstrip(\"=?\").strip()\n",
+     "    в = (вопрос or \"\").strip().rstrip(\"=?\").strip()\n", "«минус 400» словами не считается"),
+    (К, "    т = текст.lower().replace(\"ё\", \"е\")\n", "    т = текст.replace(\"ё\", \"е\")\n",
+     "«Минус 400» с большой буквы не считается"),
 ]
 
 
