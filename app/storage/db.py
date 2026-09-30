@@ -240,6 +240,29 @@ CREATE TABLE IF NOT EXISTS meaning_state (
 );
 """
 
+# Разборы встречи в разных разрезах: итоги, SPIN, STAR, SOAP и другие
+# (llm/lenses.py). У каждого разреза свой результат, и один разбор не
+# затирает другой: человек сделал разбор по SPIN, потом по STAR, и оба
+# лежат, пока встреча не удалена.
+#
+# signature — отпечаток расшифровки на момент разбора (тот же, что у
+# поиска по смыслу). Встреча дополнилась после разбора — отпечаток не
+# сходится, и карточка честно говорит, что разбор устарел.
+#
+# Таблица только добавляется, без повышения версии схемы: прежняя версия
+# программы поверх такой базы работает как работала.
+ANALYSES_SCHEMA = """
+CREATE TABLE IF NOT EXISTS meeting_analyses (
+    meeting_id  TEXT NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,
+    kind        TEXT NOT NULL,
+    text        TEXT NOT NULL DEFAULT '',
+    signature   TEXT NOT NULL DEFAULT '',
+    model       TEXT NOT NULL DEFAULT '',
+    created_at  REAL NOT NULL,
+    PRIMARY KEY (meeting_id, kind)
+);
+"""
+
 
 class Store:
     """Потокобезопасная обёртка над SQLite.
@@ -271,6 +294,7 @@ class Store:
             # только добавляются, и прежняя версия программы поверх такой
             # базы работает как работала, просто не замечая их.
             self._conn.executescript(MEANING_SCHEMA)
+            self._conn.executescript(ANALYSES_SCHEMA)
             if was < 2:
                 self._add_columns(
                     "transcript_segments",
@@ -615,6 +639,39 @@ class Store:
                 (meeting_id,),
             ).fetchone()
         return f"{row[0]}:{row[1]}:{row[2]:.2f}"
+
+    # --- разборы встречи ------------------------------------------------
+
+    def save_analysis(
+        self, meeting_id: str, kind: str, text: str, signature: str, model: str = "",
+    ) -> None:
+        """Сохранить разбор встречи в одном разрезе, заменив прежний."""
+        with self._lock:
+            try:
+                self._conn.execute(
+                    """INSERT INTO meeting_analyses
+                       (meeting_id, kind, text, signature, model, created_at)
+                       VALUES (?,?,?,?,?,?)
+                       ON CONFLICT(meeting_id, kind) DO UPDATE SET
+                         text=excluded.text, signature=excluded.signature,
+                         model=excluded.model, created_at=excluded.created_at""",
+                    (meeting_id, kind, text, signature, model, now()),
+                )
+                self._conn.commit()
+            except sqlite3.IntegrityError:
+                # Встречу удалили, пока шёл разбор: сохранять некуда.
+                self._conn.rollback()
+
+    def list_analyses(self, meeting_id: str) -> list[dict[str, Any]]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM meeting_analyses WHERE meeting_id=?", (meeting_id,)
+            ).fetchall()
+        return [
+            {"kind": r["kind"], "text": r["text"], "signature": r["signature"],
+             "model": r["model"], "created_at": r["created_at"]}
+            for r in rows
+        ]
 
     def meetings_needing_meaning(self, model: str) -> list[str]:
         """Встречи, чьи куски не посчитаны или посчитаны по старому тексту.

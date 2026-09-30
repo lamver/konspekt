@@ -167,9 +167,10 @@ function refreshDynamicTexts() {
   }
   if (ui.summaryRun) {
     const has = ui.summaryBody && !ui.summaryBody.hidden && ui.summaryBody.innerHTML.trim();
-    const надпись = has ? tЕслиЕсть('summary.redo') : tЕслиЕсть('summary.run');
+    const надпись = has ? tЕслиЕсть('summary.redo') : tЕслиЕсть(runKey(state.openLens || 'summary'));
     if (надпись !== null) ui.summaryRun.textContent = надпись;
   }
+  if (ui.lenses && !ui.lenses.hidden) renderLensGrid();
   if (state.currentId && state.current) renderMeta(state.current);
   if (ui.list) renderMeetingList();
 }
@@ -194,6 +195,13 @@ const state = {
   // Какую встречу сейчас разбирает модель.
   busyMeetingId: null,
   summaryText: '',
+  // Карточки разбора открытой встречи и какая из них раскрыта. null —
+  // видна сетка. Итоги тоже карточка: 'summary'.
+  lenses: [],
+  openLens: null,
+  // Какой разбор сейчас считает модель: она одна, и кнопки других
+  // карточек должны это знать.
+  busyKind: null,
   // Идёт ли досчёт кусков, не влезших в живую очередь распознавания,
   // и какой встрече после этого полагаются автоматические заметки.
   backfilling: false,
@@ -408,15 +416,28 @@ window.__konspekt_event = function (payload) {
       // Длинная встреча разбирается по частям: без этой строки
       // экран молчит минутами и выглядит зависшим. Пишем в шапку, а не
       // в тело: тело к этому моменту может уже печатать текст.
-      if (payload.meeting_id === state.currentId) setSummaryStatus(payload.text);
+      if (payload.meeting_id === state.currentId && state.openLens === 'summary') setSummaryStatus(payload.text);
       break;
     case 'summary.ready':
       onSummaryReady(payload);
       break;
     case 'summary.error':
       setBusy(false);
-      renderSummary(state.current ? state.current.summary : '');
+      if (state.openLens === 'summary') renderSummary(state.current ? state.current.summary : '');
       showToast(payload.error || t('summary.error'));
+      break;
+    case 'analysis.chunk':
+      onAnalysisChunk(payload);
+      break;
+    case 'analysis.ready':
+      onAnalysisReady(payload);
+      break;
+    case 'analysis.error':
+      setBusy(false);
+      if (payload.meeting_id === state.currentId && state.openLens === payload.kind) {
+        renderLensText(payload.kind, lensText(payload.kind));
+      }
+      showToast(payload.error || t('analysis.error'));
       break;
     case 'chat.chunk':
       onChatChunk(payload);
@@ -522,17 +543,212 @@ function renderMarkdown(text) {
 }
 
 function renderSummary(text) {
+  renderLensText('summary', text);
+}
+
+/* --- Карточки разбора ---------------------------------------------------- */
+
+/** Надпись кнопки запуска у ещё не сделанного разбора. */
+function runKey(kind) {
+  return kind === 'summary' ? 'summary.run' : 'analysis.run';
+}
+
+function lensTitle(kind) {
+  return t(`analysis.kinds.${kind}.title`);
+}
+
+function lensInfo(kind) {
+  return state.lenses.find((l) => l.kind === kind) || null;
+}
+
+/** Текст разбора: у итогов он живёт ещё и в самой встрече. */
+function lensText(kind) {
+  if (kind === 'summary') return state.current ? state.current.summary || '' : '';
+  const info = lensInfo(kind);
+  return info ? info.text || '' : '';
+}
+
+/**
+ * Показать один разбор целиком: тот же блок, что у итогов, с теми же
+ * копированием и сворачиванием. Второй набор кнопок под каждую методику
+ * значил бы и второй набор ошибок.
+ */
+function renderLensText(kind, text) {
+  state.openLens = kind;
   const has = Boolean((text || '').trim());
+  if (ui.lenses) ui.lenses.hidden = true;
+  if (ui.lensBack) ui.lensBack.hidden = false;
   ui.summaryBody.innerHTML = has ? renderMarkdown(text) : '';
   ui.summaryBody.hidden = !has;
   ui.summaryEmpty.hidden = has;
-  ui.summaryRun.textContent = has ? t('summary.redo') : t('summary.run');
+  const [заголовок, пояснение] = ui.summaryEmpty.querySelectorAll('h3, p');
+  const пустой = kind === 'summary' ? 'summary' : 'analysis';
+  const з = tЕслиЕсть(`${пустой}.empty_title`);
+  const п = tЕслиЕсть(`${пустой}.empty_text`);
+  if (заголовок && з !== null) заголовок.textContent = з;
+  if (пояснение && п !== null) пояснение.textContent = п;
+  const info = lensInfo(kind);
+  // Разбор без модели считается сам, запускать его нечего.
+  ui.summaryRun.hidden = Boolean(info && info.engine === 'счёт');
+  ui.summaryRun.textContent = has ? t('summary.redo') : t(runKey(kind));
+  if (ui.lensStale) ui.lensStale.hidden = !(info && info.stale && has);
   // Копировать нечего, пока заметок нет. Живая кнопка, которая молча
   // кладёт в буфер пустоту, хуже спрятанной: человек решит, что
   // скопировал, и вставит пустоту в чат команды.
   if (ui.summaryCopyGroup) ui.summaryCopyGroup.hidden = !has;
   if (!has) closeCopyMenu();
   setSummaryStatus('');
+}
+
+/** Первые строки разбора простым текстом: превью на карточке. */
+function lensPreview(text) {
+  const простой = markdownToPlain(text || '').replace(/\s+/g, ' ').trim();
+  return простой.length > 220 ? `${простой.slice(0, 220)}…` : простой;
+}
+
+/**
+ * Сетка карточек: что уже разобрано и что можно разобрать.
+ *
+ * Превью берём из готового текста: по нему видно, стоит ли открывать.
+ * Устаревший разбор помечаем прямо на карточке, иначе человек прочтёт
+ * итоги первой половины встречи как итоги всей.
+ */
+function renderLensGrid() {
+  if (!ui.lenses) return;
+  state.openLens = null;
+  ui.lenses.innerHTML = '';
+  for (const info of state.lenses) {
+    const текст = info.kind === 'summary' ? lensText('summary') : info.text || '';
+    const карточка = document.createElement('button');
+    карточка.type = 'button';
+    карточка.className = 'lens';
+    карточка.dataset.kind = info.kind;
+    карточка.classList.toggle('is-empty', !текст.trim());
+    const шапка = document.createElement('span');
+    шапка.className = 'lens__head';
+    const имя = document.createElement('span');
+    имя.className = 'lens__title';
+    имя.textContent = lensTitle(info.kind);
+    шапка.appendChild(имя);
+    const идёт = state.llmBusy && state.busyMeetingId === state.currentId && state.busyKind === info.kind;
+    let метка = '';
+    if (идёт) метка = '…';
+    else if (info.stale && текст.trim()) метка = t('analysis.stale_badge');
+    else if (info.engine === 'счёт') метка = t('analysis.counted');
+    if (метка) {
+      const знак = document.createElement('span');
+      знак.className = 'lens__badge';
+      знак.classList.toggle('is-stale', Boolean(info.stale) && !идёт);
+      знак.textContent = метка;
+      шапка.appendChild(знак);
+    }
+    карточка.appendChild(шапка);
+    const превью = document.createElement('span');
+    превью.className = 'lens__preview';
+    превью.textContent = текст.trim()
+      ? lensPreview(текст)
+      : `${t(`analysis.kinds.${info.kind}.hint`)}. ${t('analysis.not_done')}`;
+    карточка.appendChild(превью);
+    карточка.title = t(`analysis.kinds.${info.kind}.hint`);
+    карточка.addEventListener('click', () => openLens(info.kind));
+    ui.lenses.appendChild(карточка);
+  }
+  ui.lenses.hidden = false;
+  ui.summaryBody.hidden = true;
+  ui.summaryEmpty.hidden = true;
+  if (ui.lensStale) ui.lensStale.hidden = true;
+  if (ui.lensBack) ui.lensBack.hidden = true;
+  ui.summaryRun.hidden = true;
+  if (ui.summaryCopyGroup) ui.summaryCopyGroup.hidden = true;
+  closeCopyMenu();
+  if (!(state.llmBusy && state.busyMeetingId === state.currentId)) setSummaryStatus(t('analysis.grid_title'));
+}
+
+/** Загрузить карточки встречи. Старый ответ для другой встречи выбрасываем. */
+async function loadLenses(meetingId) {
+  if (!api.list_analyses) return;
+  let список = null;
+  try {
+    список = await api.list_analyses(meetingId);
+  } catch (e) {
+    список = null;
+  }
+  if (!Array.isArray(список) || meetingId !== state.currentId) return;
+  state.lenses = список;
+  if (state.openLens === null) renderLensGrid();
+  else if (!(state.llmBusy && state.busyKind === state.openLens)) {
+    renderLensText(state.openLens, lensText(state.openLens));
+  }
+}
+
+function openLens(kind) {
+  renderLensText(kind, lensText(kind));
+  if (state.llmBusy && state.busyMeetingId === state.currentId && state.busyKind === kind) {
+    ui.summaryBody.innerHTML = renderMarkdown(state.summaryText || '');
+    ui.summaryBody.hidden = false;
+    ui.summaryEmpty.hidden = true;
+    setSummaryStatus(t(state.summaryText ? 'analysis.generating' : 'analysis.reading'));
+  } else {
+    setSummaryStatus(lensTitle(kind));
+  }
+}
+
+function backToLenses() {
+  renderLensGrid();
+  // Пока карточка была открыта, встреча могла дополниться: разбор
+  // разговора пересчитается, а методики получат пометку.
+  if (state.currentId) loadLenses(state.currentId);
+}
+
+/** Кнопка «Сделать» у открытой карточки. */
+async function runOpenLens() {
+  const kind = state.openLens || 'summary';
+  if (kind === 'summary') return runSummary();
+  if (!state.currentId || state.llmBusy) return;
+  flushNotes();
+  state.summaryText = '';
+  ui.summaryBody.innerHTML = '';
+  ui.summaryBody.hidden = false;
+  ui.summaryEmpty.hidden = true;
+  if (ui.lensStale) ui.lensStale.hidden = true;
+  setBusy(true, state.currentId, kind);
+  setSummaryStatus(t('analysis.reading'));
+  if (state.summaryCollapsed) toggleSummaryCollapsed();
+  const res = await api.run_analysis(state.currentId, kind);
+  if (!res || !res.ok) {
+    setBusy(false);
+    renderLensText(kind, lensText(kind));
+    showToast((res && res.error) || t('analysis.error'));
+  }
+}
+
+function onAnalysisChunk(payload) {
+  if (payload.meeting_id !== state.currentId || payload.kind !== state.busyKind) return;
+  if (payload.status) {
+    if (state.openLens === payload.kind) setSummaryStatus(payload.status);
+    return;
+  }
+  if (!state.summaryText && state.openLens === payload.kind) setSummaryStatus(t('analysis.generating'));
+  state.summaryText = (state.summaryText || '') + (payload.text || '');
+  if (state.openLens !== payload.kind) return;
+  ui.summaryBody.innerHTML = renderMarkdown(state.summaryText);
+  ui.summaryBody.scrollTop = ui.summaryBody.scrollHeight;
+}
+
+function onAnalysisReady(payload) {
+  setBusy(false);
+  if (payload.meeting_id !== state.currentId) return;
+  const info = lensInfo(payload.kind);
+  if (info && (payload.text || '').trim()) {
+    info.text = payload.text;
+    info.stale = false;
+  }
+  if (state.openLens === payload.kind) {
+    renderLensText(payload.kind, lensText(payload.kind));
+    setSummaryStatus(lensTitle(payload.kind));
+  } else if (state.openLens === null) {
+    renderLensGrid();
+  }
 }
 
 /* --- Копирование заметок: одна кнопка и меню ----------------------------- */
@@ -559,7 +775,7 @@ function syncCopyButton() {
 
 /** Скопировать заметки в выбранном виде и запомнить выбор. */
 function copySummary(mode) {
-  const текст = state.current ? state.current.summary : '';
+  const текст = lensText(state.openLens || 'summary');
   const вид = COPY_MODES.includes(mode) ? mode : copyMode();
   if (вид !== state.copyMode) {
     state.copyMode = вид;
@@ -722,10 +938,12 @@ function setSummaryStatus(text) {
  * Запоминаем какая: иначе человек перешёл на соседнюю запись и видит
  * там «Остановить», будто считается она.
  */
-function setBusy(busy, meetingId) {
+function setBusy(busy, meetingId, kind) {
   state.llmBusy = busy;
   state.busyMeetingId = busy ? (meetingId || state.currentId) : null;
+  state.busyKind = busy ? (kind || 'summary') : null;
   syncBusyUi();
+  if (state.openLens === null && ui.lenses && !ui.lenses.hidden) renderLensGrid();
 }
 
 /** Привести кнопки в соответствие с тем, считается ли открытая встреча. */
@@ -764,11 +982,15 @@ async function startSummary() {
   // Заметки могли быть только что напечатаны: они важнее расшифровки,
   // и уходить в модель должны вместе с ней.
   flushNotes();
+  // Итоги считаются на своей карточке: человек видит, что именно
+  // печатается, даже если до этого смотрел сетку.
+  renderLensText('summary', state.current ? state.current.summary : '');
   state.summaryText = '';
   ui.summaryBody.innerHTML = '';
   ui.summaryBody.hidden = false;
   ui.summaryEmpty.hidden = true;
-  setBusy(true, state.currentId);
+  if (ui.lensStale) ui.lensStale.hidden = true;
+  setBusy(true, state.currentId, 'summary');
   setSummaryStatus(t('summary.reading'));
   // Свёрнутые заметки при пересборке разворачиваем: иначе человек нажал
   // кнопку и не видит, что что-то происходит.
@@ -783,8 +1005,9 @@ async function startSummary() {
 
 function onSummaryChunk(payload) {
   if (payload.meeting_id !== state.currentId) return;
-  if (!state.summaryText) setSummaryStatus(t('summary.generating'));
+  if (!state.summaryText && state.openLens === 'summary') setSummaryStatus(t('summary.generating'));
   state.summaryText = (state.summaryText || '') + payload.text;
+  if (state.openLens !== 'summary') return;
   ui.summaryBody.innerHTML = renderMarkdown(state.summaryText);
   ui.summaryBody.scrollTop = ui.summaryBody.scrollHeight;
 }
@@ -794,7 +1017,13 @@ function onSummaryReady(payload) {
   setSummaryStatus('');
   if (payload.meeting_id !== state.currentId) return;
   if (state.current) state.current.summary = payload.summary || '';
-  renderSummary(payload.summary || state.summaryText);
+  const info = lensInfo('summary');
+  if (info && (payload.summary || '').trim()) {
+    info.text = payload.summary;
+    info.stale = false;
+  }
+  if (state.openLens === 'summary') renderSummary(payload.summary || state.summaryText);
+  else if (state.openLens === null) renderLensGrid();
 }
 
 /* --- Переписка ---------------------------------------------------------- */
@@ -1457,11 +1686,16 @@ async function selectMeeting(id, jumpTo = null) {
   renderTranscript(meeting.segments || []);
   renderSummary(meeting.summary || '');
   state.summaryText = meeting.summary || '';
-  // Разбор мог остаться на другой встрече: кнопки должны говорить
-  // правду про ту запись, которая открыта сейчас.
+  // Открываем сетку разборов: так видно, что уже разобрано. Если модель
+  // прямо сейчас считает разбор этой встречи — сразу его карточку.
+  state.lenses = [];
   if (state.llmBusy && state.busyMeetingId === id) {
-    setSummaryStatus('Заметки ещё собираются…');
+    renderLensText(state.busyKind || 'summary', '');
+    setSummaryStatus(t(state.busyKind && state.busyKind !== 'summary' ? 'analysis.reading' : 'summary.reading'));
+  } else {
+    renderLensGrid();
   }
+  loadLenses(id);
   syncBusyUi();
   // Переписка своя у каждой встречи, поэтому тянем её при каждом
   // переключении, а не держим всё в памяти.
@@ -3336,6 +3570,9 @@ function bindUi() {
   summaryTitle: el('summary-title'),
     summaryEmpty: el('summary-empty'),
     summaryRun: el('summary-run'),
+    lenses: el('lenses'),
+    lensBack: el('lens-back'),
+    lensStale: el('lens-stale'),
     summaryStop: el('summary-stop'),
     summaryCopy: el('summary-copy'),
     summaryCopyPlain: el('summary-copy-plain'),
@@ -3456,7 +3693,8 @@ function bindUi() {
   }
   ui.modelAction.addEventListener('click', onModelAction);
 
-  ui.summaryRun.addEventListener('click', runSummary);
+  ui.summaryRun.addEventListener('click', runOpenLens);
+  if (ui.lensBack) ui.lensBack.addEventListener('click', backToLenses);
   ui.summaryStop.addEventListener('click', () => api.stop_generation());
   // Главная кнопка копирует тем видом, что выбран последним; стрелка
   // открывает выбор. Сырую разметку берём, а не нарисованное: в трекере

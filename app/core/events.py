@@ -84,6 +84,11 @@ SUMMARY_CHUNK = "summary.chunk"
 # Сообщаем словами, что происходит, иначе это читается как зависание.
 SUMMARY_STATUS = "summary.status"
 SUMMARY_ERROR = "summary.error"
+# Разборы встречи по разрезам (llm/lenses.py): текст идёт по кускам,
+# как у саммари, а в конце карточка обновляется целиком.
+ANALYSIS_CHUNK = "analysis.chunk"
+ANALYSIS_READY = "analysis.ready"
+ANALYSIS_ERROR = "analysis.error"
 # Веса модели приезжают по требованию, как и веса распознавания.
 LLM_DOWNLOAD = "llm.download"
 CHAT_CHUNK = "chat.chunk"

@@ -67,6 +67,18 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "No se pudieron generar las notas",
         "sr": "Beleške nisu mogle da se naprave",
     },
+    "python.analysis.unknown": {
+        "ru": "Такого разбора нет",
+        "en": "No such analysis",
+        "es": "No existe ese análisis",
+        "sr": "Takva analiza ne postoji",
+    },
+    "python.analysis.part": {
+        "ru": "Встреча длинная, читаем часть {i} из {n}…",
+        "en": "Long meeting, reading part {i} of {n}…",
+        "es": "Reunión larga, leyendo la parte {i} de {n}…",
+        "sr": "Sastanak je dug, čitamo deo {i} od {n}…",
+    },
     "python.chat.empty_question": {
         "ru": "Пустой вопрос",
         "en": "Empty question",

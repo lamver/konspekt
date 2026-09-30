@@ -20,6 +20,9 @@ import webview
 
 from ..core import paths, settings as settings_mod
 from ..core.events import (
+    ANALYSIS_CHUNK,
+    ANALYSIS_ERROR,
+    ANALYSIS_READY,
     APP_QUIT,
     CHAT_CHUNK,
     CHAT_ERROR,
@@ -86,6 +89,12 @@ FORWARDED_EVENTS = (
     SUMMARY_READY,
     SUMMARY_STATUS,
     SUMMARY_ERROR,
+    # Разборы по методикам. Без них карточка SPIN или STAR навсегда
+    # застревала бы на «Читаем расшифровку…»: модель досчитала, а окно
+    # об этом не узнало.
+    ANALYSIS_CHUNK,
+    ANALYSIS_READY,
+    ANALYSIS_ERROR,
     CHAT_CHUNK,
     CHAT_MESSAGE,
     CHAT_ERROR,

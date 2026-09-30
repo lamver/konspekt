@@ -496,5 +496,57 @@
     "kind_phone": "phone",
     "kind_person": "name",
     "kind_address": "address"
+  },
+  "analysis": {
+    "grid_title": "Meeting analysis",
+    "back": "All analyses",
+    "run": "Analyze",
+    "empty_title": "No analysis yet",
+    "empty_text": "Press “Analyze” and the model will break the meeting down using this method.",
+    "not_done": "Not done",
+    "stale": "The meeting has grown since this analysis. Redo it to include the new part.",
+    "stale_badge": "Outdated",
+    "counted": "No model",
+    "reading": "Reading the transcript…",
+    "generating": "Writing the analysis…",
+    "error": "Couldn't analyze the meeting",
+    "kinds": {
+      "summary": {
+        "title": "Summary",
+        "hint": "Decisions, tasks, open questions"
+      },
+      "talk": {
+        "title": "Conversation",
+        "hint": "Talk time, monologues, pauses"
+      },
+      "tone": {
+        "title": "Tone and words",
+        "hint": "Confidence, doubts, emotions in speech"
+      },
+      "sales": {
+        "title": "Sales call",
+        "hint": "SPIN and BANT: pains, budget, decision maker"
+      },
+      "interview": {
+        "title": "Interview",
+        "hint": "STAR: examples, strengths, gaps"
+      },
+      "one_on_one": {
+        "title": "One-on-one",
+        "hint": "Mood, feedback, growth"
+      },
+      "negotiation": {
+        "title": "Negotiation",
+        "hint": "Positions, interests, concessions"
+      },
+      "standup": {
+        "title": "Team status",
+        "hint": "Done, in progress, blockers"
+      },
+      "medical": {
+        "title": "Doctor visit",
+        "hint": "SOAP: complaints, exam, assessment, plan"
+      }
+    }
   }
 }

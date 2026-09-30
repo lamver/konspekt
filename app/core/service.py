@@ -84,6 +84,9 @@ from ..core.events import (
     RECORDING_STARTED,
     RECORDING_STOPPED,
     SUMMARY_CHUNK,
+    ANALYSIS_CHUNK,
+    ANALYSIS_ERROR,
+    ANALYSIS_READY,
     SUMMARY_ERROR,
     SUMMARY_READY,
     SUMMARY_STATUS,
@@ -110,6 +113,8 @@ from . import personal
 from ..llm.local import tier_or_default
 from ..llm.chunking import fits, split_transcript
 from ..llm.prompts import chunk_messages, merge_messages
+from ..llm import lenses
+from . import analysis as analysis_mod
 from ..storage import Store
 
 log = logging.getLogger(__name__)
@@ -2373,6 +2378,12 @@ class AppService:
             # прервать генерацию, и терять готовый текст обиднее всего.
             if text.strip():
                 self.store.update_meeting(meeting_id, summary=text.strip())
+                # Итоги — одна из карточек разбора: там видно, когда они
+                # сделаны и не устарели ли с тех пор.
+                self.store.save_analysis(
+                    meeting_id, "summary", text.strip(),
+                    self.store.meaning_signature(meeting_id), self._model_label(),
+                )
             bus.emit(SUMMARY_READY, {"meeting_id": meeting_id, "summary": text.strip()})
             bus.emit(MEETINGS_CHANGED)
         except LlmError as exc:
@@ -2381,6 +2392,140 @@ class AppService:
             log.exception("Синтез заметок упал")
             bus.emit(SUMMARY_ERROR, {"meeting_id": meeting_id,
                                      "error": self._msg("python.summary.error")})
+        finally:
+            with self._llm_lock:
+                self._llm_busy = False
+
+    # --- разборы по разрезам -------------------------------------------------
+
+    def _model_label(self) -> str:
+        """Кто сделал разбор: своя модель по уровню или модель сервера."""
+        if self.llm.backend == "remote":
+            return f"remote:{self.settings.llm.model or ''}"
+        return f"local:{self.llm.tier}"
+
+    def _segments_for_analysis(self, meeting_id: str) -> list[dict[str, Any]]:
+        return [
+            {"text": s.text, "start": s.start, "end": s.end,
+             "who": self._кто_сказал(s), "track": s.speaker.value}
+            for s in self.store.list_segments(meeting_id)
+            if s.text.strip() and not s.doubtful
+        ]
+
+    def list_analyses(self, meeting_id: str) -> list[dict[str, Any]]:
+        """Карточки разбора встречи по порядку, с результатами, где они есть.
+
+        Разборы без модели (разговор, тон) считаются тут же: это десятки
+        миллисекунд даже на трёхчасовой встрече, и хранить их незачем,
+        пока расшифровка та же. Сохраняем, чтобы у карточки было время.
+        """
+        signature = self.store.meaning_signature(meeting_id)
+        готовые = {a["kind"]: a for a in self.store.list_analyses(meeting_id)}
+        meeting = self.store.get_meeting(meeting_id)
+        # Старые встречи: саммари лежит в поле встречи, а карточки ещё не было.
+        if meeting is not None and meeting.summary.strip() and "summary" not in готовые:
+            готовые["summary"] = {"kind": "summary", "text": meeting.summary,
+                                  "signature": "", "model": "", "created_at": meeting.created_at}
+        сегменты = None
+        out = []
+        for kind in lenses.ПОРЯДОК:
+            р = lenses.РАЗРЕЗЫ[kind]
+            a = готовые.get(kind)
+            if р.engine == "счёт" and (a is None or a["signature"] != signature):
+                if сегменты is None:
+                    сегменты = self._segments_for_analysis(meeting_id)
+                text = self._count_analysis(kind, сегменты)
+                if text:
+                    self.store.save_analysis(meeting_id, kind, text, signature, "счёт")
+                    a = {"kind": kind, "text": text, "signature": signature,
+                         "model": "счёт", "created_at": time.time()}
+            out.append({
+                "kind": kind,
+                "engine": р.engine,
+                "text": (a or {}).get("text", ""),
+                "created_at": (a or {}).get("created_at"),
+                "model": (a or {}).get("model", ""),
+                # Встреча дополнилась после разбора. У старых саммари без
+                # отпечатка не знаем — и не пугаем зря.
+                "stale": bool(a and a["signature"] and a["signature"] != signature),
+            })
+        return out
+
+    @staticmethod
+    def _count_analysis(kind: str, segments: list[dict[str, Any]]) -> str:
+        if kind == "talk":
+            return analysis_mod.разговор(segments)["markdown"]
+        if kind == "tone":
+            return analysis_mod.тон(segments)["markdown"]
+        return ""
+
+    def run_analysis(self, meeting_id: str, kind: str) -> dict[str, Any]:
+        """Сделать разбор встречи в разрезе. Итоги идут прежней дорогой."""
+        if kind not in lenses.РАЗРЕЗЫ:
+            return {"ok": False, "error": self._msg("python.analysis.unknown")}
+        if kind == "summary":
+            return self.generate_summary(meeting_id)
+        р = lenses.РАЗРЕЗЫ[kind]
+        if р.engine == "счёт":
+            self.list_analyses(meeting_id)
+            return {"ok": True, "done": True}
+        if not self.llm.enabled:
+            return {"ok": False, "error": self._msg("python.summary.disabled")}
+        with self._llm_lock:
+            if self._llm_busy:
+                return {"ok": False, "error": self._msg("python.summary.busy")}
+            self._llm_busy = True
+            self._llm_cancel = False
+        threading.Thread(
+            target=self._run_analysis, args=(meeting_id, kind),
+            name=f"analysis-{kind}", daemon=True,
+        ).start()
+        return {"ok": True, "started": True}
+
+    def _run_analysis(self, meeting_id: str, kind: str) -> None:
+        try:
+            meeting = self.store.get_meeting(meeting_id)
+            if meeting is None:
+                bus.emit(ANALYSIS_ERROR, {"meeting_id": meeting_id, "kind": kind,
+                                          "error": self._msg("python.summary.meeting_not_found")})
+                return
+            signature = self.store.meaning_signature(meeting_id)
+            transcript = self.transcript_text(meeting_id)
+            if not transcript.strip():
+                bus.emit(ANALYSIS_ERROR, {"meeting_id": meeting_id, "kind": kind,
+                                          "error": self._msg("python.summary.nothing")})
+                return
+            self._ensure_llm_model()
+            client = self.llm.client()
+            if not fits(transcript, TRANSCRIPT_BUDGET):
+                # Длинная встреча: сначала выжимка по частям, как у итогов,
+                # и уже по ней разбор в нужном разрезе.
+                parts = split_transcript(transcript, TRANSCRIPT_BUDGET)
+                drafts = []
+                for i, part in enumerate(parts, 1):
+                    if self._llm_cancel:
+                        break
+                    bus.emit(ANALYSIS_CHUNK, {"meeting_id": meeting_id, "kind": kind, "status":
+                                              self._msg("python.analysis.part", i=i, n=len(parts))})
+                    drafts.append(client.complete(self._for_model(chunk_messages(part)), max_tokens=700))
+                transcript = "\n\n".join(f"Часть {i + 1}:\n{d.strip()}" for i, d in enumerate(drafts))
+
+            def on_chunk(piece: str) -> None:
+                bus.emit(ANALYSIS_CHUNK, {"meeting_id": meeting_id, "kind": kind, "text": piece})
+
+            text = client.stream(
+                self._for_model(lenses.messages(kind, meeting.title, transcript, meeting.notes)),
+                on_chunk=on_chunk, should_stop=lambda: self._llm_cancel,
+            )
+            if text.strip():
+                self.store.save_analysis(meeting_id, kind, text.strip(), signature, self._model_label())
+            bus.emit(ANALYSIS_READY, {"meeting_id": meeting_id, "kind": kind, "text": text.strip()})
+        except LlmError as exc:
+            bus.emit(ANALYSIS_ERROR, {"meeting_id": meeting_id, "kind": kind, "error": str(exc)})
+        except Exception:
+            log.exception("Разбор %s упал", kind)
+            bus.emit(ANALYSIS_ERROR, {"meeting_id": meeting_id, "kind": kind,
+                                      "error": self._msg("python.summary.error")})
         finally:
             with self._llm_lock:
                 self._llm_busy = False

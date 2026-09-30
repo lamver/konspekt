@@ -187,6 +187,10 @@
                   data-i18n-title="summary.collapse" title="Свернуть заметки">
                   <svg viewBox="0 0 16 16" width="12" height="12"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
+                <!-- Назад к сетке разборов. Видна только у открытой
+                     карточки: в сетке возвращаться некуда. -->
+                <button class="btn-small lens-back" id="lens-back" hidden
+                  data-i18n="analysis.back">Все разборы</button>
                 <!-- Вкладка уже называется «Саммари», поэтому здесь
                      держим не второе такое же слово, а ход разбора. -->
                 <span class="summary__title" id="summary-title"></span>
@@ -221,6 +225,12 @@
                   <button class="btn-small" id="summary-stop" data-i18n="summary.stop" hidden>Остановить</button>
                 </div>
               </div>
+              <!-- Сетка разборов: итоги, разговор, тон и методики. Встреча
+                   одна, а смотреть на неё нужно по-разному: продажнику
+                   важны боли и бюджет, врачу жалобы и план. Каждая карточка
+                   показывает начало разбора, щелчок открывает целиком. -->
+              <div class="lenses" id="lenses" hidden></div>
+              <div class="lens-stale" id="lens-stale" hidden data-i18n="analysis.stale">Встреча дополнилась после разбора. Пересоберите, чтобы учесть новое.</div>
               <div class="summary__body" id="summary-body"></div>
               <div class="placeholder placeholder--tight" id="summary-empty">
                 <h3 data-i18n="summary.empty_title">Заметок пока нет</h3>

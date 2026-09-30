@@ -496,5 +496,57 @@
     "kind_phone": "telefon",
     "kind_person": "ime",
     "kind_address": "adresa"
+  },
+  "analysis": {
+    "grid_title": "Analiza sastanka",
+    "back": "Sve analize",
+    "run": "Analiziraj",
+    "empty_title": "Još nema analize",
+    "empty_text": "Pritisnite „Analiziraj“ i model će razložiti sastanak po ovoj metodi.",
+    "not_done": "Nije urađeno",
+    "stale": "Sastanak je dopunjen posle analize. Ponovite je da uključite novo.",
+    "stale_badge": "Zastarelo",
+    "counted": "Bez modela",
+    "reading": "Čitamo transkript…",
+    "generating": "Pišemo analizu…",
+    "error": "Analiza nije uspela",
+    "kinds": {
+      "summary": {
+        "title": "Zaključci",
+        "hint": "Odluke, zadaci, otvorena pitanja"
+      },
+      "talk": {
+        "title": "Razgovor",
+        "hint": "Ko je koliko pričao, monolozi, pauze"
+      },
+      "tone": {
+        "title": "Ton i reči",
+        "hint": "Sigurnost, sumnje, emocije u govoru"
+      },
+      "sales": {
+        "title": "Prodaja",
+        "hint": "SPIN i BANT: problemi, budžet, ko odlučuje"
+      },
+      "interview": {
+        "title": "Intervju",
+        "hint": "STAR: primeri, jake strane, praznine"
+      },
+      "one_on_one": {
+        "title": "Jedan na jedan",
+        "hint": "Raspoloženje, povratna informacija, razvoj"
+      },
+      "negotiation": {
+        "title": "Pregovori",
+        "hint": "Pozicije, interesi, ustupci"
+      },
+      "standup": {
+        "title": "Status tima",
+        "hint": "Urađeno, u toku, šta koči"
+      },
+      "medical": {
+        "title": "Pregled kod lekara",
+        "hint": "SOAP: tegobe, pregled, procena, plan"
+      }
+    }
   }
 }

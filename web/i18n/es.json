@@ -496,5 +496,57 @@
     "kind_phone": "teléfono",
     "kind_person": "nombre",
     "kind_address": "dirección"
+  },
+  "analysis": {
+    "grid_title": "Análisis de la reunión",
+    "back": "Todos los análisis",
+    "run": "Analizar",
+    "empty_title": "Aún no hay análisis",
+    "empty_text": "Pulsa «Analizar» y el modelo desglosará la reunión con este método.",
+    "not_done": "Sin hacer",
+    "stale": "La reunión creció después del análisis. Rehazlo para incluir lo nuevo.",
+    "stale_badge": "Desactualizado",
+    "counted": "Sin modelo",
+    "reading": "Leyendo la transcripción…",
+    "generating": "Escribiendo el análisis…",
+    "error": "No se pudo analizar la reunión",
+    "kinds": {
+      "summary": {
+        "title": "Resumen",
+        "hint": "Decisiones, tareas, preguntas abiertas"
+      },
+      "talk": {
+        "title": "Conversación",
+        "hint": "Tiempo de habla, monólogos, pausas"
+      },
+      "tone": {
+        "title": "Tono y palabras",
+        "hint": "Seguridad, dudas, emociones"
+      },
+      "sales": {
+        "title": "Venta",
+        "hint": "SPIN y BANT: problemas, presupuesto, quién decide"
+      },
+      "interview": {
+        "title": "Entrevista",
+        "hint": "STAR: ejemplos, fortalezas, carencias"
+      },
+      "one_on_one": {
+        "title": "Uno a uno",
+        "hint": "Ánimo, feedback, desarrollo"
+      },
+      "negotiation": {
+        "title": "Negociación",
+        "hint": "Posiciones, intereses, concesiones"
+      },
+      "standup": {
+        "title": "Estado del equipo",
+        "hint": "Hecho, en curso, bloqueos"
+      },
+      "medical": {
+        "title": "Consulta médica",
+        "hint": "SOAP: síntomas, examen, evaluación, plan"
+      }
+    }
   }
 }

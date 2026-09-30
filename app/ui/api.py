@@ -262,6 +262,14 @@ class Api:
     def cancel_llm_download(self) -> dict[str, Any]:
         return self._service.cancel_llm_download()
 
+    def list_analyses(self, meeting_id: str) -> list[dict[str, Any]]:
+        """Карточки разбора встречи с результатами."""
+        return self._service.list_analyses(meeting_id)
+
+    def run_analysis(self, meeting_id: str, kind: str) -> dict[str, Any]:
+        """Сделать разбор встречи в одном разрезе."""
+        return self._service.run_analysis(meeting_id, kind)
+
     def generate_summary(self, meeting_id: str) -> dict[str, Any]:
         return self._service.generate_summary(meeting_id)
 
