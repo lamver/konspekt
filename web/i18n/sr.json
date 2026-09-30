@@ -111,7 +111,7 @@
     "collapse": "Skupi beleške",
     "expand": "Raširi beleške",
     "copy_masked": "Bez ličnih podataka",
-    "copy_masked_hint": "Brojevi kartica, telefoni i pasoši zamenjeni oznakama"
+    "copy_masked_hint": "Brojevi kartica, telefoni, pasoši, puna imena i adrese zamenjeni oznakama"
   },
   "chat": {
     "title": "Pitanja o sastanku",
@@ -493,6 +493,8 @@
     "kind_snils": "SNILS",
     "kind_inn": "PIB",
     "kind_passport": "pasoš",
-    "kind_phone": "telefon"
+    "kind_phone": "telefon",
+    "kind_person": "ime",
+    "kind_address": "adresa"
   }
 }

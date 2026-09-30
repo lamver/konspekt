@@ -111,7 +111,7 @@
     "collapse": "Contraer notas",
     "expand": "Expandir notas",
     "copy_masked": "Sin datos personales",
-    "copy_masked_hint": "Tarjetas, teléfonos y pasaportes sustituidos por etiquetas"
+    "copy_masked_hint": "Tarjetas, teléfonos, pasaportes, nombres completos y direcciones sustituidos por etiquetas"
   },
   "chat": {
     "title": "Preguntas sobre la reunión",
@@ -493,6 +493,8 @@
     "kind_snils": "SNILS",
     "kind_inn": "INN",
     "kind_passport": "pasaporte",
-    "kind_phone": "teléfono"
+    "kind_phone": "teléfono",
+    "kind_person": "nombre",
+    "kind_address": "dirección"
   }
 }
