@@ -382,8 +382,10 @@ window.__konspekt_event = function (payload) {
         // И в боковой панели тоже: заголовок саммари видно только на
         // своей вкладке, а ждать полтора гигабайта человек будет где
         // угодно.
+        // Размер берём из самой загрузки: моделей три, от 1,8 до 5 ГБ, и
+        // написанные в тексте «1,7 ГБ» при мощной модели были враньём.
         showModelLoad(payload.bytes, payload.total, t('summary.downloading_model_title'),
-          t('summary.download_hint'));
+          t('summary.download_hint', { size: fmtGb(payload.total) }));
       } else if (payload.state === 'error') {
         hideModelLoad();
         showToast(payload.message || t('summary.download_error'));
@@ -1033,7 +1035,7 @@ function renderLlmSettings(status) {
 
   let hint = LLM_HINTS[status.backend] ? LLM_HINTS[status.backend]() : '';
   if (status.backend === 'local' && !status.model_ready) {
-    hint += t('notes_settings.hint_local_not_ready');
+    hint += t('notes_settings.hint_local_not_ready', { size: fmtGb(status.total_bytes) });
   }
   ui.llmHint.textContent = hint;
   ui.llmCheckResult.textContent = '';
