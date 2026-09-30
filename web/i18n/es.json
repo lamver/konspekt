@@ -126,7 +126,10 @@
     "dictate": "Dictar una pregunta",
     "dictate_stop": "Detener e insertar el texto",
     "dictate_empty": "No se escuchó nada",
-    "dictate_failed": "No se pudo dictar"
+    "dictate_failed": "No se pudo dictar",
+    "model_local": "Modelo {name}",
+    "model_remote": "Servidor: {name}",
+    "model_tooltip": "Qué modelo responde. Haga clic para cambiarlo"
   },
   "transcript": {
     "empty_title": "La transcripción aparecerá aquí",

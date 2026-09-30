@@ -126,7 +126,10 @@
     "dictate": "Izdiktiraj pitanje",
     "dictate_stop": "Zaustavi i ubaci tekst",
     "dictate_empty": "Ništa se nije čulo",
-    "dictate_failed": "Diktiranje nije pokrenuto"
+    "dictate_failed": "Diktiranje nije pokrenuto",
+    "model_local": "{name} model",
+    "model_remote": "Server: {name}",
+    "model_tooltip": "Koji model odgovara. Kliknite da promenite"
   },
   "transcript": {
     "empty_title": "Transkript će se pojaviti ovde",

@@ -58,6 +58,7 @@ window.addEventListener('load', () => setTimeout(async () => {
   document.querySelector('[data-page="notes"]').hidden = false;
   document.getElementById('prefs') && (document.getElementById('prefs').hidden = false);
   renderLlmSettings(статус('fast', 8));
+  и.подпись_быстрая = ui.chatModel.hidden ? '' : ui.chatModel.textContent;
   const карточки = () => Array.from(ui.llmTiers.querySelectorAll('.llm-tier'));
   и.видно = !ui.llmTiers.hidden;
   и.карточек = карточки().length;
@@ -71,9 +72,14 @@ window.addEventListener('load', () => setTimeout(async () => {
   await new Promise((r) => setTimeout(r, 50));
   и.вызовы = вызовы;
   и.выбрана_после = карточки().filter((к) => к.classList.contains('is-current')).map((к) => к.dataset.tier);
+  и.подпись_после = ui.chatModel.textContent;
   // Свой сервер: карточки своих моделей не нужны.
   renderLlmSettings({ ...статус('fast', 32), backend: 'remote' });
   и.скрыто_у_сервера = ui.llmTiers.hidden;
+  renderLlmSettings({ ...статус('fast', 32), backend: 'remote', model: 'gpt-4o-mini' });
+  и.подпись_сервер = ui.chatModel.textContent;
+  renderLlmSettings({ ...статус('fast', 32), backend: 'null' });
+  и.подпись_выкл = ui.chatModel.hidden;
   renderLlmSettings(статус('fast', 32));
   и.предупреждений_при_32 = карточки().filter((к) => к.querySelector('.llm-tier__warn')).length;
   document.body.setAttribute('data-itogi', JSON.stringify(и));
@@ -122,6 +128,10 @@ else:
     проверить(и["выбрана_после"] == ["smart"], "после щелчка выделена новая модель")
     проверить(и["скрыто_у_сервера"], "у своего сервера карточки своих моделей скрыты")
     проверить(и["предупреждений_при_32"] == 0, "на 32 ГБ предупреждений нет")
+    проверить(и["подпись_быстрая"] == "Быстрая модель", f"у переписки видно, какая модель отвечает: {и['подпись_быстрая']!r}")
+    проверить(и["подпись_после"] == "Умная модель", f"после смены подпись меняется: {и['подпись_после']!r}")
+    проверить(и["подпись_сервер"] == "Сервер: gpt-4o-mini", f"у своего сервера видно имя модели: {и['подпись_сервер']!r}")
+    проверить(и["подпись_выкл"], "без модели подписи нет")
 
 print()
 if БЕДЫ:

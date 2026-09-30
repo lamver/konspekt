@@ -1830,3 +1830,19 @@ mark.personal {
   padding: 0 1px;
 }
 
+/* Какая модель отвечает в чате: тихая подпись у заголовка. */
+.chat__title { display: inline-flex; align-items: baseline; gap: 8px; }
+.chat__model {
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: none;
+  color: var(--ink-3);
+  font: inherit;
+  font-size: 10.5px;
+  line-height: 1.6;
+  cursor: pointer;
+}
+.chat__model:hover { color: var(--ink); border-color: var(--ink-3); }
+.chat__model[hidden] { display: none; }
+

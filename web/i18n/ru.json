@@ -126,7 +126,10 @@
     "dictate": "Продиктовать вопрос",
     "dictate_stop": "Остановить и вставить текст",
     "dictate_empty": "Ничего не расслышали",
-    "dictate_failed": "Продиктовать не вышло"
+    "dictate_failed": "Продиктовать не вышло",
+    "model_local": "{name} модель",
+    "model_remote": "Сервер: {name}",
+    "model_tooltip": "Какая модель отвечает. Щёлкните, чтобы сменить"
   },
   "transcript": {
     "empty_title": "Транскрипт появится здесь",

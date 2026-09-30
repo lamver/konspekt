@@ -1029,6 +1029,7 @@ function renderLlmSettings(status) {
   if (ui.llmMask) ui.llmMask.checked = status.mask_personal_remote !== false;
 
   renderLlmTiers(status);
+  renderChatModel(status);
 
   let hint = LLM_HINTS[status.backend] ? LLM_HINTS[status.backend]() : '';
   if (status.backend === 'local' && !status.model_ready) {
@@ -1096,6 +1097,19 @@ function renderLlmTiers(status) {
     card.addEventListener('click', () => chooseLlmTier(m.code));
     ui.llmTiers.appendChild(card);
   }
+}
+
+/** Подпись у переписки: какая модель отвечает прямо сейчас. */
+function renderChatModel(status) {
+  if (!ui.chatModel) return;
+  let text = '';
+  if (status.backend === 'local' && LLM_TIERS.includes(status.local_model)) {
+    text = t('chat.model_local', { name: t(`notes_settings.tier_${status.local_model}`) });
+  } else if (status.backend === 'remote') {
+    text = t('chat.model_remote', { name: status.model || status.base_url || '?' });
+  }
+  ui.chatModel.textContent = text;
+  ui.chatModel.hidden = !text;
 }
 
 async function chooseLlmTier(code) {
@@ -3343,6 +3357,7 @@ function bindUi() {
     llmBackend: el('llm-backend'),
     llmRemote: el('llm-remote'),
     llmTiers: el('llm-tiers'),
+    chatModel: el('chat-model'),
     llmUrl: el('llm-url'),
     llmKey: el('llm-key'),
     llmModel: el('llm-model'),
@@ -3457,6 +3472,12 @@ function bindUi() {
     if (item) item.addEventListener('click', () => copySummary(item.dataset.copyMode));
   }
   if (ui.personalFind) ui.personalFind.addEventListener('click', togglePersonal);
+  if (ui.chatModel) {
+    ui.chatModel.addEventListener('click', async () => {
+      await openAudioSheet();
+      showPrefsTab('notes');
+    });
+  }
   // Меню закрывается щелчком мимо и клавишей Esc, как любое меню.
   document.addEventListener('click', (e) => {
     if (ui.summaryCopyGroup && !ui.summaryCopyGroup.contains(e.target)) closeCopyMenu();
@@ -3822,6 +3843,9 @@ async function init() {
 
   await loadMeetings();
   refreshLicense();
+  // Подпись «какая модель отвечает» у переписки видна сразу, а не только
+  // после захода в настройки.
+  refreshLlmStatus();
   // Разбор файлов мог продолжаться, пока окно было скрыто в трее.
   await refreshImports();
   // Обновление могло скачаться до того, как окно открыли: тогда события

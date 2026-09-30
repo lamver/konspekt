@@ -126,7 +126,10 @@
     "dictate": "Dictate a question",
     "dictate_stop": "Stop and insert the text",
     "dictate_empty": "Nothing was picked up",
-    "dictate_failed": "Dictation did not start"
+    "dictate_failed": "Dictation did not start",
+    "model_local": "{name} model",
+    "model_remote": "Server: {name}",
+    "model_tooltip": "Which model answers. Click to change"
   },
   "transcript": {
     "empty_title": "The transcript will appear here",

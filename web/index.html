@@ -231,7 +231,15 @@
 
             <div class="chat" id="chat">
               <div class="chat__head">
-                <span data-i18n="chat.title">Вопросы по встрече</span>
+                <span class="chat__title">
+                  <span data-i18n="chat.title">Вопросы по встрече</span>
+                  <!-- Кто отвечает. Без подписи не понять, почему ответы
+                       вдруг стали умнее или глупее: модель выбирают в
+                       настройках, а переписка идёт здесь. Щелчок ведёт
+                       к выбору модели. -->
+                  <button class="chat__model" id="chat-model" type="button" hidden
+                    data-i18n-title="chat.model_tooltip" title="Сменить модель"></button>
+                </span>
                 <button class="btn-link" id="chat-clear" data-i18n="chat.clear" hidden>Очистить</button>
               </div>
               <div class="chat__list" id="chat-list"></div>
