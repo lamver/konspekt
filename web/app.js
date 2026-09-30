@@ -183,6 +183,9 @@ const state = {
   recordingId: null,
   startedAt: null,
   filter: '',
+  // Папки встреч и какие из них свёрнуты.
+  folders: [],
+  collapsedFolders: new Set(),
   // Найденное в расшифровках: запрос, к которому относится результат,
   // и карта «встреча → совпадения». Отдельно от filter, потому что
   // ответ базы приходит с задержкой и может отстать от строки поиска.
@@ -1530,8 +1533,12 @@ function fmtDate(ts) {
 /* --- Список встреч ------------------------------------------------------ */
 
 async function loadMeetings() {
-  const meetings = await api.list_meetings();
+  const [meetings, folders] = await Promise.all([
+    api.list_meetings(),
+    api.list_folders ? api.list_folders() : Promise.resolve([]),
+  ]);
   state.meetings = meetings || [];
+  state.folders = folders || [];
   renderMeetingList();
   // Если ничего не выбрано, открываем самую свежую встречу.
   if (!state.currentId && state.meetings.length) {
@@ -1561,7 +1568,24 @@ function renderMeetingList() {
   }
 
   ui.list.innerHTML = '';
+  // Пока ищем, папки не мешают: выдача идёт одним списком по
+  // полезности, иначе лучшая находка пряталась бы в свёрнутой папке.
+  if (q || !state.folders.length) {
+    for (const m of items) ui.list.appendChild(meetingNode(m, found, q));
+    return;
+  }
+  const известные = new Set(state.folders.map((f) => f.id));
+  for (const f of state.folders) {
+    const свои = items.filter((m) => m.folder_id === f.id);
+    ui.list.appendChild(folderNode(f, свои, found, q));
+  }
   for (const m of items) {
+    if (!m.folder_id || !известные.has(m.folder_id)) ui.list.appendChild(meetingNode(m, found, q));
+  }
+}
+
+/** Строка встречи в списке. */
+function meetingNode(m, found, q) {
     const node = document.createElement('div');
     node.className = 'meeting-item' + (m.id === state.currentId ? ' is-active' : '');
     node.dataset.id = m.id;
@@ -1631,12 +1655,305 @@ function renderMeetingList() {
       askDeleteMeeting(m);
     });
 
+    // Перенос в папку: кнопка с меню и перетаскивание. Кнопка нужна,
+    // потому что перетаскивать мышью умеют не все и не всегда удобно.
+    const more = document.createElement('button');
+    more.className = 'meeting-item__more';
+    more.type = 'button';
+    more.title = t('folders.meeting_more');
+    more.textContent = '⋯';
+    more.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openMoveMenu(m, more);
+    });
+
     node.append(title, meta);
     if (quote) node.appendChild(quote);
-    node.appendChild(del);
+    node.append(more, del);
     node.addEventListener('click', () => selectMeeting(m.id));
-    ui.list.appendChild(node);
+    node.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      openMoveMenu(m, null, e.clientX, e.clientY);
+    });
+    node.draggable = true;
+    node.addEventListener('dragstart', (e) => {
+      e.dataTransfer.setData('text/konspekt-meeting', m.id);
+      e.dataTransfer.effectAllowed = 'move';
+      node.classList.add('is-dragging');
+    });
+    node.addEventListener('dragend', () => {
+      node.classList.remove('is-dragging');
+      clearDropMarks();
+    });
+    return node;
+}
+
+/* --- Папки --------------------------------------------------------------- */
+
+const ИКОНКА_ПАПКИ = '<svg viewBox="0 0 16 16" width="12" height="12"><path d="M2 4.5V12a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1H8L6.5 3.5H3a1 1 0 0 0-1 1Z" stroke="currentColor" stroke-width="1.3" fill="none" stroke-linejoin="round"/></svg>';
+const СТРЕЛКА = '<svg viewBox="0 0 16 16" width="10" height="10"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+/** Встреча, которую сейчас тащат мышью, или null. */
+function draggedMeeting(e) {
+  const dt = e.dataTransfer;
+  if (!dt || !dt.types) return false;
+  return Array.from(dt.types).includes('text/konspekt-meeting');
+}
+
+function clearDropMarks() {
+  document.querySelectorAll('.folder.is-drop').forEach((x) => x.classList.remove('is-drop'));
+  if (ui.list) ui.list.classList.remove('is-drop-root');
+}
+
+/**
+ * Папка в списке: шапка с именем, числом встреч и кнопками, под ней её
+ * встречи. «+» начинает встречу прямо в папке — всё как обычно, только
+ * встреча сразу лежит где надо.
+ */
+function folderNode(f, встречи, found, q) {
+  const box = document.createElement('div');
+  box.className = 'folder';
+  box.dataset.folder = f.id;
+  const свёрнута = state.collapsedFolders.has(f.id);
+  box.classList.toggle('is-collapsed', свёрнута);
+
+  const head = document.createElement('div');
+  head.className = 'folder__head';
+  head.setAttribute('role', 'button');
+  head.setAttribute('aria-expanded', String(!свёрнута));
+  const arrow = document.createElement('span');
+  arrow.className = 'folder__arrow';
+  arrow.innerHTML = СТРЕЛКА;
+  const icon = document.createElement('span');
+  icon.className = 'folder__icon';
+  icon.innerHTML = ИКОНКА_ПАПКИ;
+  const name = document.createElement('span');
+  name.className = 'folder__name';
+  name.textContent = f.name;
+  name.title = f.name;
+  const count = document.createElement('span');
+  count.className = 'folder__count';
+  count.textContent = String(встречи.length);
+  const add = document.createElement('button');
+  add.className = 'folder__add';
+  add.type = 'button';
+  add.title = t('folders.add_meeting');
+  add.textContent = '+';
+  add.addEventListener('click', (e) => {
+    e.stopPropagation();
+    createMeeting(f.id);
+  });
+  const more = document.createElement('button');
+  more.className = 'folder__more';
+  more.type = 'button';
+  more.title = t('folders.more');
+  more.textContent = '⋯';
+  more.addEventListener('click', (e) => {
+    e.stopPropagation();
+    openFolderMenu(f, more);
+  });
+  head.append(arrow, icon, name, count, add, more);
+  head.addEventListener('click', () => toggleFolder(f.id));
+  head.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    openFolderMenu(f, null, e.clientX, e.clientY);
+  });
+
+  // Бросить встречу на папку — перенести её туда.
+  box.addEventListener('dragover', (e) => {
+    if (!draggedMeeting(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'move';
+    clearDropMarks();
+    box.classList.add('is-drop');
+  });
+  box.addEventListener('dragleave', (e) => {
+    if (!box.contains(e.relatedTarget)) box.classList.remove('is-drop');
+  });
+  box.addEventListener('drop', (e) => {
+    if (!draggedMeeting(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    clearDropMarks();
+    moveMeeting(e.dataTransfer.getData('text/konspekt-meeting'), f.id);
+  });
+
+  const body = document.createElement('div');
+  body.className = 'folder__body';
+  if (встречи.length) {
+    for (const m of встречи) body.appendChild(meetingNode(m, found, q));
+  } else {
+    const пусто = document.createElement('div');
+    пусто.className = 'folder__empty';
+    пусто.textContent = t('folders.empty');
+    body.appendChild(пусто);
   }
+  box.append(head, body);
+  return box;
+}
+
+function toggleFolder(id) {
+  if (state.collapsedFolders.has(id)) state.collapsedFolders.delete(id);
+  else state.collapsedFolders.add(id);
+  renderMeetingList();
+  if (api.set_collapsed_folders) api.set_collapsed_folders([...state.collapsedFolders]);
+}
+
+/**
+ * Имя папки: при создании и переименовании. Отдаёт введённое имя или
+ * null, если передумали.
+ */
+function askFolderName(title, value) {
+  return new Promise((resolve) => {
+    ui.folderSheetTitle.textContent = title;
+    ui.folderName.value = value || '';
+    ui.folderSheet.hidden = false;
+    ui.folderName.focus();
+    ui.folderName.select();
+    const finish = (answer) => {
+      ui.folderSheet.hidden = true;
+      ui.folderSave.removeEventListener('click', onSave);
+      ui.folderCancel.removeEventListener('click', onCancel);
+      ui.folderSheet.removeEventListener('click', onBackdrop);
+      document.removeEventListener('keydown', onKey, true);
+      resolve(answer);
+    };
+    const onSave = () => {
+      const имя = ui.folderName.value.trim();
+      if (!имя) { ui.folderName.focus(); return; }
+      finish(имя);
+    };
+    const onCancel = () => finish(null);
+    const onBackdrop = (e) => { if (e.target === ui.folderSheet) finish(null); };
+    const onKey = (e) => {
+      if (e.key === 'Escape') { e.stopPropagation(); finish(null); }
+      if (e.key === 'Enter') { e.stopPropagation(); e.preventDefault(); onSave(); }
+    };
+    ui.folderSave.addEventListener('click', onSave);
+    ui.folderCancel.addEventListener('click', onCancel);
+    ui.folderSheet.addEventListener('click', onBackdrop);
+    document.addEventListener('keydown', onKey, true);
+  });
+}
+
+async function createFolder() {
+  const имя = await askFolderName(t('folders.new'), '');
+  if (!имя) return null;
+  const f = await api.create_folder(имя);
+  await loadMeetings();
+  return f;
+}
+
+async function renameFolder(f) {
+  const имя = await askFolderName(t('folders.rename'), f.name);
+  if (!имя || имя === f.name) return;
+  await api.rename_folder(f.id, имя);
+  await loadMeetings();
+}
+
+async function deleteFolder(f) {
+  const ok = await confirmDialog(
+    t('folders.delete_confirm_title', { name: f.name }),
+    t('folders.delete_confirm_text'),
+  );
+  if (!ok) return;
+  await api.delete_folder(f.id);
+  state.collapsedFolders.delete(f.id);
+  await loadMeetings();
+  showToast(t('folders.deleted'));
+}
+
+async function moveMeeting(meetingId, folderId) {
+  if (!meetingId) return;
+  const m = state.meetings.find((x) => x.id === meetingId);
+  if (m && (m.folder_id || null) === (folderId || null)) return;
+  const res = await api.move_meeting(meetingId, folderId || null);
+  if (!res || !res.ok) return;
+  if (folderId) state.collapsedFolders.delete(folderId);
+  await loadMeetings();
+  const f = state.folders.find((x) => x.id === folderId);
+  showToast(folderId ? t('folders.moved', { name: f ? f.name : '' }) : t('folders.moved_out'));
+}
+
+/* --- Меню ---------------------------------------------------------------- */
+
+function closeCtxMenu() {
+  if (ui.ctxMenu) ui.ctxMenu.hidden = true;
+}
+
+/** Показать меню у кнопки или в точке щелчка правой кнопкой. */
+function showCtxMenu(items, anchor, x, y) {
+  const menu = ui.ctxMenu;
+  menu.innerHTML = '';
+  for (const it of items) {
+    if (it.sep) {
+      const sep = document.createElement('div');
+      sep.className = 'ctx-menu__sep';
+      menu.appendChild(sep);
+      continue;
+    }
+    if (it.label) {
+      const l = document.createElement('div');
+      l.className = 'ctx-menu__label';
+      l.textContent = it.label;
+      menu.appendChild(l);
+      continue;
+    }
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'ctx-menu__item' + (it.current ? ' is-current' : '') + (it.danger ? ' is-danger' : '');
+    b.setAttribute('role', 'menuitem');
+    b.textContent = it.text;
+    b.title = it.text;
+    if (it.current) b.disabled = true;
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeCtxMenu();
+      it.run();
+    });
+    menu.appendChild(b);
+  }
+  menu.hidden = false;
+  const r = anchor ? anchor.getBoundingClientRect() : { left: x, right: x, bottom: y, top: y };
+  const w = menu.offsetWidth;
+  const h = menu.offsetHeight;
+  let left = anchor ? r.right - w : r.left;
+  let top = r.bottom + 4;
+  if (left + w > innerWidth - 4) left = innerWidth - w - 4;
+  if (top + h > innerHeight - 4) top = Math.max(4, r.top - h - 4);
+  menu.style.left = `${Math.max(4, left)}px`;
+  menu.style.top = `${top}px`;
+  const первый = menu.querySelector('.ctx-menu__item:not([disabled])');
+  if (первый) первый.focus();
+}
+
+/** Меню встречи: в какую папку перенести или убрать из папки. */
+function openMoveMenu(m, anchor, x, y) {
+  const items = [{ label: t('folders.move_to') }];
+  if (!state.folders.length) items.push({ label: t('folders.no_folders') });
+  for (const f of state.folders) {
+    items.push({ text: f.name, current: m.folder_id === f.id, run: () => moveMeeting(m.id, f.id) });
+  }
+  items.push({ sep: true });
+  items.push({
+    text: t('folders.new_and_move'),
+    run: async () => {
+      const f = await createFolder();
+      if (f && f.id) await moveMeeting(m.id, f.id);
+    },
+  });
+  if (m.folder_id) items.push({ text: t('folders.move_out'), run: () => moveMeeting(m.id, null) });
+  showCtxMenu(items, anchor, x, y);
+}
+
+function openFolderMenu(f, anchor, x, y) {
+  showCtxMenu([
+    { text: t('folders.add_meeting'), run: () => createMeeting(f.id) },
+    { text: t('folders.rename'), run: () => renameFolder(f) },
+    { sep: true },
+    { text: t('folders.delete'), danger: true, run: () => deleteFolder(f) },
+  ], anchor, x, y);
 }
 
 /**
@@ -2609,8 +2926,10 @@ function showSaveHint() {
   setTimeout(() => ui.saveHint.classList.remove('is-visible'), 1200);
 }
 
-async function createMeeting() {
-  const meeting = await api.create_meeting();
+async function createMeeting(folderId) {
+  const папка = folderId || null;
+  const meeting = await api.create_meeting(null, папка);
+  if (папка) state.collapsedFolders.delete(папка);
   if (!meeting) return;
   await loadMeetings();
   refreshModelStatus();
@@ -3604,6 +3923,12 @@ function bindUi() {
   Object.assign(ui, {
     titlebar: el('titlebar'),
     list: el('meeting-list'),
+    folderSheet: el('folder-sheet'),
+    folderSheetTitle: el('folder-sheet-title'),
+    folderName: el('folder-name'),
+    folderSave: el('folder-save'),
+    folderCancel: el('folder-cancel'),
+    ctxMenu: el('ctx-menu'),
     sidebar: el('sidebar'),
     sidebarGrip: el('sidebar-grip'),
     search: el('search'),
@@ -3740,8 +4065,33 @@ function bindUi() {
     licenseActivate: el('license-activate'),
   });
 
-  el('btn-new').addEventListener('click', createMeeting);
-  el('btn-empty-new').addEventListener('click', createMeeting);
+  el('btn-new').addEventListener('click', () => createMeeting());
+  el('btn-folder').addEventListener('click', createFolder);
+  // Бросить встречу в пустое место списка — вынуть её из папки.
+  ui.list.addEventListener('dragover', (e) => {
+    if (!draggedMeeting(e)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    clearDropMarks();
+    ui.list.classList.add('is-drop-root');
+  });
+  ui.list.addEventListener('dragleave', (e) => {
+    if (!ui.list.contains(e.relatedTarget)) ui.list.classList.remove('is-drop-root');
+  });
+  ui.list.addEventListener('drop', (e) => {
+    if (!draggedMeeting(e)) return;
+    e.preventDefault();
+    clearDropMarks();
+    moveMeeting(e.dataTransfer.getData('text/konspekt-meeting'), null);
+  });
+  document.addEventListener('click', (e) => {
+    if (ui.ctxMenu && !ui.ctxMenu.contains(e.target)) closeCtxMenu();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeCtxMenu();
+  });
+  window.addEventListener('blur', closeCtxMenu);
+  el('btn-empty-new').addEventListener('click', () => createMeeting());
   el('btn-import').addEventListener('click', pickFiles);
   el('btn-empty-import').addEventListener('click', pickFiles);
   el('imports-clear').addEventListener('click', async () => {
@@ -4221,6 +4571,7 @@ async function init() {
     state.copyMode = settings.copy_mode || 'markdown';
     syncCopyButton();
     applySummaryCollapsed(Boolean(settings.summary_collapsed));
+    state.collapsedFolders = new Set(settings.collapsed_folders || []);
   } else {
     await setLanguage('ru', { persist: false });
   }

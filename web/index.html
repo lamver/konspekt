@@ -69,6 +69,11 @@
           <svg viewBox="0 0 16 16" width="13" height="13"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>
           <span data-i18n="sidebar.new_meeting">Новая встреча</span>
         </button>
+        <!-- Папка встреч: группа в списке. Внутри можно начать встречу,
+             встречу можно перенести в папку и вынуть обратно. -->
+        <button class="icon-btn" id="btn-folder" data-i18n-title="folders.new" title="Новая папка">
+          <svg viewBox="0 0 16 16" width="14" height="14"><path d="M2 4.5V12a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1H8L6.5 3.5H3a1 1 0 0 0-1 1ZM8 7.5v3.5M6.25 9.25h3.5" stroke="currentColor" stroke-width="1.3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
         <button class="icon-btn" id="btn-import" data-i18n-title="sidebar.import" title="Загрузить записи">
           <svg viewBox="0 0 16 16" width="14" height="14"><path d="M8 10.5V2.5M5 5.5 8 2.5l3 3M3 10v2.5h10V10" stroke="currentColor" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
@@ -725,6 +730,24 @@
       </div>
     </div>
   </div>
+
+  <!-- Имя папки: при создании и переименовании. Своё окно, а не
+       window.prompt: системный показывает адрес страницы и выдаёт
+       веб-нутро программы. -->
+  <div class="sheet" id="folder-sheet" hidden>
+    <div class="sheet__panel confirm">
+      <h3 class="confirm__title" id="folder-sheet-title" data-i18n="folders.new">Новая папка</h3>
+      <input class="folder-name" id="folder-name" type="text" maxlength="80" autocomplete="off"
+        data-i18n-placeholder="folders.name_placeholder" placeholder="Например, «Звонки клиентам»">
+      <div class="confirm__row">
+        <button class="btn-ghost" type="button" id="folder-cancel" data-i18n="confirm.cancel">Отмена</button>
+        <button class="btn-new" type="button" id="folder-save" data-i18n="folders.save">Сохранить</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Меню встречи или папки: перенести, переименовать, удалить. -->
+  <div class="ctx-menu" id="ctx-menu" role="menu" hidden></div>
 
   <script src="app.js"></script>
 </body>

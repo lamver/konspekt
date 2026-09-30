@@ -557,5 +557,25 @@
         "hint": "SOAP: tegobe, pregled, procena, plan"
       }
     }
+  },
+  "folders": {
+    "new": "Nova fascikla",
+    "rename": "Preimenuj fasciklu",
+    "delete": "Obriši fasciklu",
+    "name_placeholder": "Na primer, „Pozivi klijentima“",
+    "save": "Sačuvaj",
+    "add_meeting": "Novi sastanak u ovoj fascikli",
+    "empty": "Prazno. Prevucite ovde sastanak ili započnite novi.",
+    "move_to": "Premesti u fasciklu",
+    "move_out": "Ukloni iz fascikle",
+    "no_folders": "Još nema fascikli",
+    "new_and_move": "Nova fascikla…",
+    "more": "Još",
+    "meeting_more": "Premesti u fasciklu",
+    "delete_confirm_title": "Obrisati fasciklu „{name}“?",
+    "delete_confirm_text": "Sastanci se neće obrisati: vraćaju se na glavnu listu.",
+    "deleted": "Fascikla obrisana, sastanci su ostali",
+    "moved": "Sastanak premešten u „{name}“",
+    "moved_out": "Sastanak uklonjen iz fascikle"
   }
 }

@@ -557,5 +557,25 @@
         "hint": "SOAP: síntomas, examen, evaluación, plan"
       }
     }
+  },
+  "folders": {
+    "new": "Carpeta nueva",
+    "rename": "Renombrar carpeta",
+    "delete": "Eliminar carpeta",
+    "name_placeholder": "Por ejemplo, «Llamadas a clientes»",
+    "save": "Guardar",
+    "add_meeting": "Nueva reunión en esta carpeta",
+    "empty": "Vacía. Arrastra aquí una reunión o empieza una nueva.",
+    "move_to": "Mover a carpeta",
+    "move_out": "Quitar de la carpeta",
+    "no_folders": "Aún no hay carpetas",
+    "new_and_move": "Carpeta nueva…",
+    "more": "Más",
+    "meeting_more": "Mover a carpeta",
+    "delete_confirm_title": "¿Eliminar la carpeta «{name}»?",
+    "delete_confirm_text": "Las reuniones no se eliminan: vuelven a la lista general.",
+    "deleted": "Carpeta eliminada, las reuniones siguen",
+    "moved": "Reunión movida a «{name}»",
+    "moved_out": "Reunión quitada de la carpeta"
   }
 }

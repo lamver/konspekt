@@ -67,6 +67,12 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "No se pudieron generar las notas",
         "sr": "Beleške nisu mogle da se naprave",
     },
+    "python.folder.new": {
+        "ru": "Новая папка",
+        "en": "New folder",
+        "es": "Carpeta nueva",
+        "sr": "Nova fascikla",
+    },
     "python.trial.record": {
         "ru": "Пробный период закончился: {limit} встреч позади. Все записи на месте, их можно смотреть, искать и копировать. Чтобы записывать дальше, купите лицензию.",
         "en": "The trial is over: {limit} meetings recorded. Everything you recorded stays here to view, search and copy. Buy a license to keep recording.",

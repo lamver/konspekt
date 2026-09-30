@@ -557,5 +557,25 @@
         "hint": "SOAP: complaints, exam, assessment, plan"
       }
     }
+  },
+  "folders": {
+    "new": "New folder",
+    "rename": "Rename folder",
+    "delete": "Delete folder",
+    "name_placeholder": "For example, “Client calls”",
+    "save": "Save",
+    "add_meeting": "New meeting in this folder",
+    "empty": "Empty. Drag a meeting here or start a new one.",
+    "move_to": "Move to folder",
+    "move_out": "Remove from folder",
+    "no_folders": "No folders yet",
+    "new_and_move": "New folder…",
+    "more": "More",
+    "meeting_more": "Move to folder",
+    "delete_confirm_title": "Delete folder “{name}”?",
+    "delete_confirm_text": "Meetings won't be deleted: they return to the main list.",
+    "deleted": "Folder deleted, meetings kept",
+    "moved": "Meeting moved to “{name}”",
+    "moved_out": "Meeting removed from folder"
   }
 }

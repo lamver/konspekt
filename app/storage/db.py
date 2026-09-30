@@ -263,6 +263,29 @@ CREATE TABLE IF NOT EXISTS meeting_analyses (
 );
 """
 
+# Папки встреч. Папка — группа встреч в списке: внутри можно начать
+# встречу как обычно, встречу можно перенести в папку и вынуть обратно.
+# Потом у папки появится источник (своя папка на диске, SFTP, телефония),
+# отсюда поле source: пустое — обычная папка.
+#
+# Привязка отдельной таблицей, а не колонкой встречи: прежняя версия
+# программы поверх такой базы работает как работала, просто не видя
+# папок. Удалили папку — привязки уходят каскадом, встречи остаются и
+# возвращаются в общий список. Удалили встречу — уходит и привязка.
+FOLDERS_SCHEMA = """
+CREATE TABLE IF NOT EXISTS folders (
+    id          TEXT PRIMARY KEY,
+    name        TEXT NOT NULL DEFAULT '',
+    created_at  REAL NOT NULL,
+    source      TEXT NOT NULL DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS meeting_folders (
+    meeting_id  TEXT PRIMARY KEY REFERENCES meetings(id) ON DELETE CASCADE,
+    folder_id   TEXT NOT NULL REFERENCES folders(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_meeting_folders ON meeting_folders(folder_id);
+"""
+
 # Пробный период: первые встречи работают целиком, дальше только просмотр.
 #
 # Считаем встречи, а не дни: поставил и неделю не пользовался — ничего не
@@ -321,6 +344,7 @@ class Store:
             self._conn.executescript(MEANING_SCHEMA)
             self._conn.executescript(ANALYSES_SCHEMA)
             self._conn.executescript(TRIAL_SCHEMA)
+            self._conn.executescript(FOLDERS_SCHEMA)
             self._начать_пробный_период()
             if was < 2:
                 self._add_columns(
@@ -404,6 +428,65 @@ class Store:
             )
             self._conn.commit()
             return int(self._conn.execute("SELECT COUNT(*) FROM trial_counted").fetchone()[0])
+
+    # --- папки ------------------------------------------------------------
+
+    def create_folder(self, name: str) -> dict[str, Any]:
+        folder = {"id": new_id(), "name": name, "created_at": now(), "source": ""}
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO folders(id, name, created_at, source) VALUES (?,?,?,?)",
+                (folder["id"], folder["name"], folder["created_at"], folder["source"]),
+            )
+            self._conn.commit()
+        return folder
+
+    def list_folders(self) -> list[dict[str, Any]]:
+        with self._lock:
+            rows = self._conn.execute(
+                """SELECT f.id, f.name, f.created_at, f.source,
+                          (SELECT COUNT(*) FROM meeting_folders mf WHERE mf.folder_id = f.id) AS count
+                   FROM folders f ORDER BY f.name COLLATE NOCASE, f.created_at"""
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def rename_folder(self, folder_id: str, name: str) -> bool:
+        with self._lock:
+            cur = self._conn.execute("UPDATE folders SET name=? WHERE id=?", (name, folder_id))
+            self._conn.commit()
+        return cur.rowcount > 0
+
+    def delete_folder(self, folder_id: str) -> bool:
+        """Удалить папку. Встречи остаются и возвращаются в общий список."""
+        with self._lock:
+            cur = self._conn.execute("DELETE FROM folders WHERE id=?", (folder_id,))
+            self._conn.commit()
+        return cur.rowcount > 0
+
+    def set_meeting_folder(self, meeting_id: str, folder_id: str | None) -> bool:
+        """Перенести встречу в папку, None — вынуть из папки."""
+        with self._lock:
+            try:
+                if folder_id:
+                    self._conn.execute(
+                        """INSERT INTO meeting_folders(meeting_id, folder_id) VALUES (?,?)
+                           ON CONFLICT(meeting_id) DO UPDATE SET folder_id=excluded.folder_id""",
+                        (meeting_id, folder_id),
+                    )
+                else:
+                    self._conn.execute("DELETE FROM meeting_folders WHERE meeting_id=?", (meeting_id,))
+                self._conn.commit()
+            except sqlite3.IntegrityError:
+                # Встречи или папки уже нет: переносить некуда.
+                self._conn.rollback()
+                return False
+        return True
+
+    def meeting_folders(self) -> dict[str, str]:
+        """Какая встреча в какой папке: {встреча: папка}."""
+        with self._lock:
+            rows = self._conn.execute("SELECT meeting_id, folder_id FROM meeting_folders").fetchall()
+        return {r["meeting_id"]: r["folder_id"] for r in rows}
 
     def trial_legacy(self, meeting_id: str) -> bool:
         """Записана ли встреча до появления пробного периода."""

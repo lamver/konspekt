@@ -1283,13 +1283,69 @@ class AppService:
     # --- встречи ---------------------------------------------------------
 
     def list_meetings(self) -> list[dict[str, Any]]:
-        return [m.to_dict() for m in self.store.list_meetings()]
+        папки = self.store.meeting_folders()
+        out = []
+        for m in self.store.list_meetings():
+            d = m.to_dict()
+            d["folder_id"] = папки.get(m.id)
+            out.append(d)
+        return out
 
-    def create_meeting(self, title: str | None = None) -> dict[str, Any]:
+    def create_meeting(self, title: str | None = None, folder_id: str | None = None) -> dict[str, Any]:
+        """Новая встреча. С folder_id — сразу в папке: «+» у папки."""
         meeting = Meeting(title=title or _default_title())
         self.store.create_meeting(meeting)
+        d = meeting.to_dict()
+        d["folder_id"] = None
+        if folder_id and self.store.set_meeting_folder(meeting.id, folder_id):
+            d["folder_id"] = folder_id
         bus.emit(MEETINGS_CHANGED)
-        return meeting.to_dict()
+        return d
+
+    # --- папки ------------------------------------------------------------
+
+    def list_folders(self) -> list[dict[str, Any]]:
+        return self.store.list_folders()
+
+    @staticmethod
+    def _folder_name(name: str | None) -> str:
+        # Имя не пустое и без переносов: оно стоит строкой в списке.
+        return " ".join((name or "").split())[:80]
+
+    def create_folder(self, name: str | None = None) -> dict[str, Any]:
+        folder = self.store.create_folder(self._folder_name(name) or self._msg("python.folder.new"))
+        folder["count"] = 0
+        bus.emit(MEETINGS_CHANGED)
+        return folder
+
+    def rename_folder(self, folder_id: str, name: str) -> dict[str, Any]:
+        имя = self._folder_name(name)
+        if not имя:
+            return {"ok": False}
+        ok = self.store.rename_folder(folder_id, имя)
+        if ok:
+            bus.emit(MEETINGS_CHANGED)
+        return {"ok": ok, "name": имя}
+
+    def delete_folder(self, folder_id: str) -> dict[str, Any]:
+        """Удалить папку. Встречи не удаляются, а возвращаются в общий список."""
+        ok = self.store.delete_folder(folder_id)
+        if ok:
+            bus.emit(MEETINGS_CHANGED)
+        return {"ok": ok}
+
+    def move_meeting(self, meeting_id: str, folder_id: str | None) -> dict[str, Any]:
+        """Перенести встречу в папку или вынуть из неё (folder_id пустой)."""
+        ok = self.store.set_meeting_folder(meeting_id, folder_id or None)
+        if ok:
+            bus.emit(MEETINGS_CHANGED)
+        return {"ok": ok, "folder_id": folder_id or None}
+
+    def set_collapsed_folders(self, ids: list[str]) -> list[str]:
+        """Какие папки свёрнуты. Помним между запусками, как свёрнутые заметки."""
+        self.settings.collapsed_folders = [str(i) for i in (ids or [])][:500]
+        settings_mod.save(self.settings)
+        return self.settings.collapsed_folders
 
     def get_meeting(self, meeting_id: str) -> dict[str, Any] | None:
         meeting = self.store.get_meeting(meeting_id)
@@ -1302,6 +1358,7 @@ class AppService:
         # этой возможности, звук не сохранялся, и кнопка у их реплик только
         # обманывала бы: нажал, а в ответ «записи нет».
         data["has_audio"] = bool(self.store.list_audio_chunks(meeting_id))
+        data["folder_id"] = self.store.meeting_folders().get(meeting_id)
         return data
 
     def update_meeting(self, meeting_id: str, **fields: Any) -> dict[str, Any] | None:

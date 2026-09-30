@@ -267,6 +267,8 @@ class Settings:
     copy_mode: str = "markdown"
     # Свёрнуты ли заметки над перепиской. Одно положение на все встречи.
     summary_collapsed: bool = False
+    # Какие папки в списке встреч свёрнуты.
+    collapsed_folders: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

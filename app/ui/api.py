@@ -40,8 +40,29 @@ class Api:
     def get_meeting(self, meeting_id: str) -> dict[str, Any] | None:
         return self._service.get_meeting(meeting_id)
 
-    def create_meeting(self, title: str | None = None) -> dict[str, Any]:
-        return self._service.create_meeting(title)
+    def create_meeting(self, title: str | None = None, folder_id: str | None = None) -> dict[str, Any]:
+        return self._service.create_meeting(title, folder_id)
+
+    def list_folders(self) -> list[dict[str, Any]]:
+        """Папки встреч с числом встреч в каждой."""
+        return self._service.list_folders()
+
+    def create_folder(self, name: str | None = None) -> dict[str, Any]:
+        return self._service.create_folder(name)
+
+    def rename_folder(self, folder_id: str, name: str) -> dict[str, Any]:
+        return self._service.rename_folder(folder_id, name)
+
+    def delete_folder(self, folder_id: str) -> dict[str, Any]:
+        """Удалить папку, встречи остаются."""
+        return self._service.delete_folder(folder_id)
+
+    def move_meeting(self, meeting_id: str, folder_id: str | None) -> dict[str, Any]:
+        """Перенести встречу в папку или вынуть из неё."""
+        return self._service.move_meeting(meeting_id, folder_id)
+
+    def set_collapsed_folders(self, ids: list[str]) -> list[str]:
+        return self._service.set_collapsed_folders(ids)
 
     def update_meeting(self, meeting_id: str, fields: dict[str, Any]) -> dict[str, Any] | None:
         return self._service.update_meeting(meeting_id, **(fields or {}))
