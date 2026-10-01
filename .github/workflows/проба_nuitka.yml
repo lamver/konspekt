@@ -1,0 +1,72 @@
+# Опыт: краснеет ли Konspekt.exe, собранный Nuitka, а не PyInstaller.
+#
+# Зачем. Запускатель PyInstaller одинаков у тысяч программ, в том числе
+# вредоносных, и машинное обучение клеймит его сам по себе: 01.10 голый
+# Konspekt.exe получал 3 тревоги в каждой сборке (Microsoft Wacatac!ml,
+# APEX, Bkav). Nuitka переводит наш код в C и собирает свой exe.
+#
+# Это только опыт для антивирусов. Компилируется наш пакет app, сторонние
+# библиотеки не берутся, поэтому собранное не запустится. Переделку
+# сборки затеваем, только если такой exe окажется чистым.
+
+name: Проба Nuitka
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Что собрать (ветка, тег или полный хеш коммита)
+        required: true
+        default: master
+
+jobs:
+  probe:
+    name: Сборка Nuitka и проверка антивирусами
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: astral-sh/setup-uv@v3
+        with:
+          version: latest
+          enable-cache: true
+
+      - name: Установить зависимости
+        run: uv sync --frozen --no-editable
+
+      - name: Собрать Nuitka
+        shell: pwsh
+        run: |
+          $версия = uv run python -c "import app; print(app.__version__)"
+          $четыре = (($версия -split '\.') + @('0', '0', '0', '0'))[0..3] -join '.'
+          uv run --with nuitka --with ordered-set --with zstandard python -m nuitka `
+            --standalone --assume-yes-for-downloads --msvc=latest `
+            --follow-import-to=app --nofollow-imports `
+            --windows-console-mode=disable `
+            --windows-icon-from-ico=packaging/konspekt.ico `
+            --company-name="Valerij Frolov" --product-name=Konspekt `
+            --file-description="Konspekt — meeting transcription and notes" `
+            --copyright="© 2026 Valerij Frolov" `
+            --file-version=$четыре --product-version=$четыре `
+            --output-filename=Konspekt.exe --output-dir=dist-nuitka `
+            packaging/launcher.py
+          $exe = Get-ChildItem dist-nuitka -Recurse -Filter Konspekt.exe | Select-Object -First 1
+          echo "Собрано: $($exe.FullName), $([math]::Round($exe.Length/1MB,1)) МБ"
+
+      - name: Konspekt.exe на антивирусы
+        shell: pwsh
+        env:
+          VT_API_KEY: ${{ secrets.VT_API_KEY }}
+          PYTHONIOENCODING: utf-8
+        run: |
+          $exe = Get-ChildItem dist-nuitka -Recurse -Filter Konspekt.exe | Select-Object -First 1
+          uv run python tools/страж_выпуска.py $exe.FullName | Tee-Object -FilePath страж.txt
+          $код = $LASTEXITCODE
+          Get-Content страж.txt -Encoding utf8 | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
+          exit $код
