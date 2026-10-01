@@ -31,12 +31,26 @@
       "stereo": "2 channels",
       "done": "done",
       "failed": "not audio",
-      "cancelled": "cancelled"
+      "cancelled": "cancelled",
+      "fetching": "getting audio {pct}%",
+      "fetching_start": "opening the link…"
     },
     "file_word": {
       "one": "file",
       "few": "files",
       "many": "files"
+    },
+    "errors": {
+      "unsupported": "Can't take a recording from this page. Download the file and drop it into the window.",
+      "private": "The recording is private: only the owner or invited people can see it.",
+      "login": "The page asks you to sign in. Download the recording and upload it as a file.",
+      "unavailable": "The recording is unavailable: it was removed or the link is wrong.",
+      "live": "This is a live stream. Try again after it ends and the recording appears.",
+      "playlist": "This is a list of recordings; a link to a single recording is needed.",
+      "too_long": "The recording is longer than 6 hours. Download it and upload it as a file in parts.",
+      "network": "The site isn't responding. Check your internet connection and try again.",
+      "no_audio": "No sound found in the recording from the link.",
+      "failed": "Couldn't take the recording from the link. The site may have changed: try later or upload a file."
     }
   },
   "search": {
@@ -577,5 +591,14 @@
     "deleted": "Folder deleted, meetings kept",
     "moved": "Meeting moved to “{name}”",
     "moved_out": "Meeting removed from folder"
+  },
+  "link": {
+    "button": "Transcribe a recording from a link",
+    "title": "Transcribe a recording from a link",
+    "hint": "Paste a link to a page with video or audio. Konspekt takes the sound and transcribes it like an uploaded file.",
+    "placeholder": "https://…",
+    "go": "Transcribe",
+    "added": "Recording from the link is queued",
+    "pasted": "Link pasted: transcribing the recording"
   }
 }

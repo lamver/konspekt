@@ -31,12 +31,26 @@
       "stereo": "2 kanala",
       "done": "gotovo",
       "failed": "nije audio",
-      "cancelled": "otkazano"
+      "cancelled": "otkazano",
+      "fetching": "uzimamo zvuk {pct}%",
+      "fetching_start": "otvaramo link…"
     },
     "file_word": {
       "one": "fajl",
       "few": "fajla",
       "many": "fajlova"
+    },
+    "errors": {
+      "unsupported": "Sa ove stranice ne može da se uzme snimak. Preuzmite datoteku i prevucite je u prozor.",
+      "private": "Snimak je zatvoren: vidi ga samo vlasnik ili pozvani.",
+      "login": "Stranica traži prijavu. Preuzmite snimak i učitajte ga kao datoteku.",
+      "unavailable": "Snimak nije dostupan: obrisan je ili je link pogrešan.",
+      "live": "Ovo je prenos uživo. Pokušajte kada se završi i pojavi snimak.",
+      "playlist": "Ovo je lista snimaka, a potreban je link do jednog snimka.",
+      "too_long": "Snimak je duži od 6 sati. Preuzmite ga i učitajte kao datoteku u delovima.",
+      "network": "Sajt ne odgovara. Proverite vezu sa internetom i pokušajte ponovo.",
+      "no_audio": "U snimku sa linka nema zvuka.",
+      "failed": "Snimak sa linka nije mogao da se uzme. Možda se sajt promenio: pokušajte kasnije ili učitajte datoteku."
     }
   },
   "search": {
@@ -577,5 +591,14 @@
     "deleted": "Fascikla obrisana, sastanci su ostali",
     "moved": "Sastanak premešten u „{name}“",
     "moved_out": "Sastanak uklonjen iz fascikle"
+  },
+  "link": {
+    "button": "Transkribuj snimak sa linka",
+    "title": "Transkribuj snimak sa linka",
+    "hint": "Nalepite link do stranice sa videom ili zvukom. Konspekt uzima zvuk i transkribuje ga kao učitanu datoteku.",
+    "placeholder": "https://…",
+    "go": "Transkribuj",
+    "added": "Snimak sa linka je u redu čekanja",
+    "pasted": "Link je nalepljen: transkribujemo snimak"
   }
 }

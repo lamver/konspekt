@@ -3811,7 +3811,7 @@ function renderImports(tasks) {
 
   ui.imports.hidden = false;
   const left = state.imports.filter(
-    (task) => task.status === 'running' || task.status === 'waiting').length;
+    (task) => task.status === 'running' || task.status === 'waiting' || task.status === 'fetching').length;
   el('imports-title').textContent = left > 0
     ? t('imports.remaining', { left })
     : t('imports.title');
@@ -3842,7 +3842,7 @@ function importRow(task) {
   row.appendChild(label);
 
   // Отменить можно только то, что ещё не доработало.
-  if (task.status === 'waiting' || task.status === 'running') {
+  if (task.status === 'waiting' || task.status === 'running' || task.status === 'fetching') {
     const cancel = document.createElement('button');
     cancel.className = 'import-item__cancel';
     cancel.textContent = '×';
@@ -3857,7 +3857,7 @@ function importRow(task) {
 
   node.appendChild(row);
 
-  if (task.status === 'running') {
+  if (task.status === 'running' || task.status === 'fetching') {
     const bar = document.createElement('div');
     bar.className = 'import-item__bar';
     const fill = document.createElement('div');
@@ -3870,7 +3870,8 @@ function importRow(task) {
   if (task.status === 'failed' && task.error) {
     const err = document.createElement('div');
     err.className = 'import-item__error';
-    err.textContent = task.error;
+    // У ссылки ошибка приходит кодом причины: текст — на языке окна.
+    err.textContent = task.url ? (tЕслиЕсть(`imports.errors.${task.error}`) || t('imports.errors.failed')) : task.error;
     node.appendChild(err);
   }
 
@@ -3892,15 +3893,87 @@ function importStateText(task) {
       const pct = Math.round((task.progress || 0) * 100);
       return `${pct}%${task.stereo_split ? ', ' + t('imports.state.stereo') : ''}`;
     }
+    case 'fetching': {
+      const pct = Math.round((task.progress || 0) * 100);
+      return pct > 0 ? t('imports.state.fetching', { pct }) : t('imports.state.fetching_start');
+    }
     case 'done':
       return t('imports.state.done');
     case 'failed':
-      return t('imports.state.failed');
+      // У записи по ссылке своя причина, у файла — прежняя «не аудио».
+      return task.url ? '' : t('imports.state.failed');
     case 'cancelled':
       return t('imports.state.cancelled');
     default:
       return task.status;
   }
+}
+
+/* --- Запись по ссылке ---------------------------------------------------- */
+
+/** Папка, в которую сейчас кладём новое: папка открытой встречи. */
+function currentFolderId() {
+  const m = (state.meetings || []).find((x) => x.id === state.currentId);
+  return m && m.folder_id ? m.folder_id : null;
+}
+
+async function submitLink(text, folderId) {
+  const res = await api.import_link(text, folderId || null);
+  if (res && res.ok) {
+    if (res.task) onImportProgress(res.task);
+    return true;
+  }
+  return res || { ok: false };
+}
+
+function openLinkSheet(prefill) {
+  ui.linkUrl.value = prefill || '';
+  ui.linkError.hidden = true;
+  ui.linkSheet.hidden = false;
+  ui.linkUrl.focus();
+  ui.linkUrl.select();
+}
+
+function closeLinkSheet() {
+  ui.linkSheet.hidden = true;
+}
+
+async function goLink() {
+  const text = ui.linkUrl.value.trim();
+  if (!text) { ui.linkUrl.focus(); return; }
+  ui.linkGo.disabled = true;
+  try {
+    const res = await submitLink(text, currentFolderId());
+    if (res === true) {
+      closeLinkSheet();
+      showToast(t('link.added'));
+    } else {
+      ui.linkError.textContent = (res && res.error) || t('imports.errors.failed');
+      ui.linkError.hidden = false;
+    }
+  } finally {
+    ui.linkGo.disabled = false;
+  }
+}
+
+/**
+ * Ctrl+V в окне со ссылкой — расшифровать запись, не открывая окна.
+ *
+ * Только когда фокус не в поле ввода: вставка в заметки, вопрос к
+ * встрече или имя встречи остаётся обычной вставкой текста.
+ */
+function onWindowPaste(e) {
+  const цель = e.target;
+  if (цель && (цель.closest('input, textarea, [contenteditable="true"]'))) return;
+  if (!ui.linkSheet.hidden) return;
+  const text = (e.clipboardData && e.clipboardData.getData('text')) || '';
+  const one = text.trim();
+  if (!/^(https?:\/\/)?([\w-]+\.)+[a-z]{2,}([\/?#]\S*)?$/i.test(one)) return;
+  e.preventDefault();
+  submitLink(one, currentFolderId()).then((res) => {
+    if (res === true) showToast(t('link.pasted'));
+    else openLinkSheet(one);
+  });
 }
 
 /** Прогресс одного файла: правим список точечно. */
@@ -3929,6 +4002,10 @@ function bindUi() {
     folderSave: el('folder-save'),
     folderCancel: el('folder-cancel'),
     ctxMenu: el('ctx-menu'),
+    linkSheet: el('link-sheet'),
+    linkUrl: el('link-url'),
+    linkError: el('link-error'),
+    linkGo: el('link-go'),
     sidebar: el('sidebar'),
     sidebarGrip: el('sidebar-grip'),
     search: el('search'),
@@ -4067,6 +4144,15 @@ function bindUi() {
 
   el('btn-new').addEventListener('click', () => createMeeting());
   el('btn-folder').addEventListener('click', createFolder);
+  el('btn-link').addEventListener('click', () => openLinkSheet(''));
+  ui.linkGo.addEventListener('click', goLink);
+  el('link-cancel').addEventListener('click', closeLinkSheet);
+  ui.linkSheet.addEventListener('click', (e) => { if (e.target === ui.linkSheet) closeLinkSheet(); });
+  ui.linkUrl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); goLink(); }
+    if (e.key === 'Escape') { e.stopPropagation(); closeLinkSheet(); }
+  });
+  document.addEventListener('paste', onWindowPaste);
   // Бросить встречу в пустое место списка — вынуть её из папки.
   ui.list.addEventListener('dragover', (e) => {
     if (!draggedMeeting(e)) return;

@@ -33,6 +33,9 @@ dependencies = [
     # поиск просто находит хуже. huggingface-hub, который она тянет, у
     # нас уже стоит ради onnx-asr.
     "tokenizers>=0.20",
+    # Расшифровать запись по ссылке: yt-dlp как библиотека, без
+    # отдельной программы и без ffmpeg (app/core/link.py). Unlicense.
+    "yt-dlp>=2026.8.19",
 ]
 
 [project.scripts]

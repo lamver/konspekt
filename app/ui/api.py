@@ -43,6 +43,10 @@ class Api:
     def create_meeting(self, title: str | None = None, folder_id: str | None = None) -> dict[str, Any]:
         return self._service.create_meeting(title, folder_id)
 
+    def import_link(self, text: str, folder_id: str | None = None) -> dict[str, Any]:
+        """Расшифровать запись по ссылке."""
+        return self._service.import_link(text, folder_id)
+
     def list_folders(self) -> list[dict[str, Any]]:
         """Папки встреч с числом встреч в каждой."""
         return self._service.list_folders()

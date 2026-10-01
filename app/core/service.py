@@ -240,6 +240,7 @@ class AppService:
             finish_meeting=self._import_finished,
             prepare_meeting=self._prepare_voices,
             on_change=self._on_import_change,
+            fetch_link=self._fetch_link,
         )
         self.downloader = ModelDownloader(
             MODEL_REPO, MODEL_FILES, paths.models_dir() / MODEL_DIR_NAME
@@ -2152,17 +2153,43 @@ class AppService:
         self.importer.clear_finished()
         return self.import_status()
 
-    def _import_meeting(self, title: str) -> str:
+    def _import_meeting(self, title: str, url: str = "", folder_id: str | None = None) -> str:
         """Встреча под импортируемый файл.
 
         Помечаем её как идущую обработку: в списке сразу видно, что
-        транскрипт ещё дописывается.
+        транскрипт ещё дописывается. У записи по ссылке ссылка ложится
+        в пометки: откуда запись, должно быть видно и через год.
         """
         meeting = Meeting(title=title or _default_title(), status=MeetingStatus.PROCESSING)
         meeting.started_at = now()
+        if url:
+            meeting.notes = url
         self.store.create_meeting(meeting)
+        if folder_id:
+            self.store.set_meeting_folder(meeting.id, folder_id)
         bus.emit(MEETINGS_CHANGED)
         return meeting.id
+
+    @staticmethod
+    def _fetch_link(url: str, папка, прогресс, стоп):
+        from . import link as link_mod
+
+        return link_mod.fetch(url, папка, прогресс, стоп)
+
+    def import_link(self, text: str, folder_id: str | None = None) -> dict[str, Any]:
+        """Расшифровать запись по ссылке: поставить её в очередь разбора."""
+        from . import link as link_mod
+
+        url = link_mod.normalize(text)
+        if url is None:
+            return {"ok": False, "error": self._msg("python.link.not_link")}
+        if self._trial_left() == 0:
+            сообщение = self._msg("python.trial.record", limit=self._trial_limit())
+            bus.emit(TRIAL_BLOCKED, {"action": "import", "message": сообщение})
+            return {"ok": False, "error": сообщение, "trial": True}
+        task = self.importer.add_link(url, folder_id or None)
+        bus.emit(IMPORT_CHANGED, {"tasks": self.importer.tasks()})
+        return {"ok": True, "task": task}
 
     def _import_chunk(self, meeting_id: str, track: str, pcm, offset: float) -> None:
         """Кусок звука из файла в то же распознавание, что и живая речь.

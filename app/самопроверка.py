@@ -198,6 +198,33 @@ def проверить() -> int:
     except Exception as беда:
         _проверить(False, f"поиск по смыслу не собрался: {беда}")
 
+    # Запись по ссылке. yt-dlp находит разборщик сайта по списку имён во
+    # время работы, статически этих импортов не видно. Забудь сборка их
+    # взять, окно откроется, кнопка будет, а любая ссылка получит
+    # «сайт не поддерживается». Сеть не нужна: спрашиваем только, узнаёт
+    # ли библиотека адреса.
+    try:
+        from yt_dlp.extractor import gen_extractor_classes
+
+        from .core import link as _ссылка  # noqa: F401
+
+        адреса = {
+            "vk": "https://vk.com/video-1_2",
+            "rutube": "https://rutube.ru/video/0123456789abcdef0123456789abcdef/",
+            "youtube": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        }
+        классы = [к for к in gen_extractor_classes() if к.ie_key() != "Generic"]
+        узнаны = [
+            сайт for сайт, адрес in адреса.items()
+            if any(к.suitable(адрес) for к in классы)
+        ]
+        _проверить(
+            len(узнаны) == len(адреса),
+            f"запись по ссылке на месте: сайты узнаются ({', '.join(узнаны) or 'ни один'})",
+        )
+    except Exception as беда:
+        _проверить(False, f"запись по ссылке не собралась: {беда}")
+
     if БЕДЫ:
         СТРОКИ.append(f"Самопроверка не прошла, бед: {len(БЕДЫ)}")
     else:

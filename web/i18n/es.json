@@ -31,12 +31,26 @@
       "stereo": "2 canales",
       "done": "listo",
       "failed": "no es audio",
-      "cancelled": "cancelado"
+      "cancelled": "cancelado",
+      "fetching": "obteniendo audio {pct}%",
+      "fetching_start": "abriendo el enlace…"
     },
     "file_word": {
       "one": "archivo",
       "few": "archivos",
       "many": "archivos"
+    },
+    "errors": {
+      "unsupported": "No se puede tomar la grabación de esta página. Descarga el archivo y arrástralo a la ventana.",
+      "private": "La grabación es privada: solo la ven el dueño o los invitados.",
+      "login": "La página pide iniciar sesión. Descarga la grabación y súbela como archivo.",
+      "unavailable": "La grabación no está disponible: se eliminó o el enlace es incorrecto.",
+      "live": "Es una emisión en directo. Inténtalo cuando termine y aparezca la grabación.",
+      "playlist": "Es una lista de grabaciones; hace falta el enlace a una sola.",
+      "too_long": "La grabación dura más de 6 horas. Descárgala y súbela como archivo por partes.",
+      "network": "El sitio no responde. Comprueba tu conexión a internet e inténtalo de nuevo.",
+      "no_audio": "No hay sonido en la grabación del enlace.",
+      "failed": "No se pudo tomar la grabación del enlace. Puede que el sitio haya cambiado: inténtalo más tarde o sube un archivo."
     }
   },
   "search": {
@@ -577,5 +591,14 @@
     "deleted": "Carpeta eliminada, las reuniones siguen",
     "moved": "Reunión movida a «{name}»",
     "moved_out": "Reunión quitada de la carpeta"
+  },
+  "link": {
+    "button": "Transcribir una grabación desde un enlace",
+    "title": "Transcribir una grabación desde un enlace",
+    "hint": "Pega el enlace a una página con vídeo o audio. Konspekt toma el sonido y lo transcribe como un archivo subido.",
+    "placeholder": "https://…",
+    "go": "Transcribir",
+    "added": "La grabación del enlace está en cola",
+    "pasted": "Enlace pegado: transcribiendo la grabación"
   }
 }

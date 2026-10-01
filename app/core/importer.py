@@ -31,6 +31,7 @@ log = logging.getLogger(__name__)
 
 # Состояния файла в очереди. Ровно то, что видит человек.
 WAITING = "waiting"      # ждёт очереди
+FETCHING = "fetching"    # берём звук по ссылке
 RUNNING = "running"      # разбирается сейчас
 DONE = "done"            # готово
 FAILED = "failed"        # не смогли
@@ -51,6 +52,11 @@ class ImportTask:
     done: float = 0.0         # сколько уже разобрали, секунд
     segments: int = 0         # сколько реплик нашли
     stereo_split: bool = False
+    # Запись по ссылке: звук ещё надо взять со страницы, а уже потом
+    # разбирать как файл. Пока берём — url есть, path пустой.
+    url: str = ""
+    folder_id: str | None = None
+    fetched: float = 0.0      # доля скачанного, 0..1
 
     def to_dict(self) -> dict[str, Any]:
         # Доля прогресса считается здесь, чтобы фронт не повторял эту
@@ -60,9 +66,14 @@ class ImportTask:
             progress = min(1.0, self.done / self.duration)
         elif self.status == DONE:
             progress = 1.0
+        if self.status == FETCHING:
+            progress = self.fetched
         return {
             "id": self.id,
-            "name": self.path.name,
+            # У ссылки название видео, у файла его имя с расширением:
+            # по нему человек узнаёт, что именно бросил в окно.
+            "name": (self.title or self.url) if self.url else self.path.name,
+            "url": self.url,
             "path": str(self.path),
             "title": self.title,
             "meeting_id": self.meeting_id,
@@ -86,12 +97,15 @@ class ImportQueue:
     def __init__(
         self,
         transcribe_chunk: Callable[[str, str, Any, float], None],
-        create_meeting: Callable[[str], str],
+        create_meeting: Callable[..., str],
         finish_meeting: Callable[[str, float], None],
         on_change: Callable[[ImportTask], None] | None = None,
         prepare_meeting: Callable[[str], None] | None = None,
         chunk_seconds: float = 30.0,
+        fetch_link: Callable[..., Any] | None = None,
     ) -> None:
+        self._fetch_link = fetch_link
+        self._stops: dict[str, threading.Event] = {}
         self._transcribe = transcribe_chunk
         self._create_meeting = create_meeting
         self._finish_meeting = finish_meeting
@@ -145,6 +159,22 @@ class ImportQueue:
         self._ensure_worker()
         return added
 
+    def add_link(self, url: str, folder_id: str | None = None) -> dict[str, Any]:
+        """Поставить в очередь запись по ссылке.
+
+        Звук берём уже в очереди, а не здесь: страница может отвечать
+        минуту, и окно всё это время висело бы.
+        """
+        task = ImportTask(url=url, title=url, folder_id=folder_id)
+        with self._lock:
+            self._tasks[task.id] = task
+            self._order.append(task.id)
+            self._stops[task.id] = threading.Event()
+        self._notify(task)
+        self._queue.put(task)
+        self._ensure_worker()
+        return task.to_dict()
+
     def _ensure_worker(self) -> None:
         with self._lock:
             if self._thread is not None and self._thread.is_alive():
@@ -176,6 +206,10 @@ class ImportQueue:
             if task is None or task.status in (DONE, FAILED, CANCELLED):
                 return False
             self._cancelled.add(task_id)
+            стоп = self._stops.get(task_id)
+            if стоп is not None:
+                # Загрузку по ссылке останавливаем сразу, а не после неё.
+                стоп.set()
             if task.status == WAITING:
                 task.status = CANCELLED
         self._notify(task)
@@ -249,12 +283,85 @@ class ImportQueue:
                 self._notify(task)
                 return
             self._current = task.id
-            task.status = RUNNING
+            task.status = FETCHING if task.url else RUNNING
         self._notify(task)
 
+        папка_ссылки = None
+        try:
+            if task.url:
+                папка_ссылки = self._fetch(task)
+                if папка_ссылки is None:
+                    return
+            self._decode_into_meeting(task)
+        finally:
+            if папка_ссылки is not None:
+                # Скачанный звук уже лёг рядом со встречей дорожкой WAV,
+                # временная копия с сайта больше не нужна.
+                from .link import cleanup
+                cleanup(папка_ссылки)
+                with self._lock:
+                    self._stops.pop(task.id, None)
+
+    def _fetch(self, task: ImportTask) -> Path | None:
+        """Взять звук по ссылке. None — не вышло или отменили."""
+        from .link import LinkCancelled, LinkError, temp_dir
+
+        if self._fetch_link is None:
+            task.status = FAILED
+            task.error = "unsupported"
+            self._notify(task)
+            return None
+        папка = temp_dir()
+        стоп = self._stops.get(task.id) or threading.Event()
+        последний = [-1]
+
+        def прогресс(done: int, total: int) -> None:
+            if total > 0:
+                task.fetched = min(1.0, done / total)
+                процент = int(task.fetched * 100)
+                if процент != последний[0]:
+                    последний[0] = процент
+                    self._notify(task)
+
+        try:
+            звук = self._fetch_link(task.url, папка, прогресс, стоп)
+        except LinkCancelled:
+            task.status = CANCELLED
+            self._notify(task)
+            return папка
+        except LinkError as exc:
+            task.status = FAILED
+            task.error = exc.code
+            self._notify(task)
+            return папка
+        task.path = звук.path
+        if звук.title:
+            task.title = звук.title
+        try:
+            info: AudioInfo = probe(звук.path)
+        except Exception as exc:
+            log.warning("Звук по ссылке не читается: %s", exc)
+            task.status = FAILED
+            task.error = "no_audio"
+            self._notify(task)
+            return папка
+        task.duration = info.duration or звук.duration
+        task.stereo_split = False
+        with self._lock:
+            if task.id in self._cancelled:
+                task.status = CANCELLED
+                self._notify(task)
+                return папка
+            task.status = RUNNING
+        self._notify(task)
+        return папка
+
+    def _decode_into_meeting(self, task: ImportTask) -> None:
+        if task.status != RUNNING:
+            return
         # Встречу заводим только теперь, когда точно начали разбор: иначе
         # отменённые файлы оставляли бы после себя пустые встречи.
-        meeting_id = self._create_meeting(task.title)
+        meeting_id = self._create_meeting(task.title, task.url, task.folder_id)
         task.meeting_id = meeting_id
         if self._prepare_meeting is not None:
             self._prepare_meeting(meeting_id)

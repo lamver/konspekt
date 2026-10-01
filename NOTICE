@@ -76,5 +76,6 @@ Qwen3 1.7B (составление заметок и чат по встрече)
 
 Konspekt собран на открытых библиотеках, среди них onnxruntime и numpy
 (MIT и BSD), PyAV (BSD, внутри LGPL-сборка FFmpeg), llama.cpp (MIT),
-pywebview и pystray (BSD), tokenizers (Apache 2.0). Полный список зависимостей с версиями лежит
+pywebview и pystray (BSD), tokenizers (Apache 2.0), yt-dlp (Unlicense,
+запись по ссылке). Полный список зависимостей с версиями лежит
 в uv.lock, лицензии доступны в их репозиториях.

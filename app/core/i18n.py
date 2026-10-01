@@ -67,6 +67,12 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "No se pudieron generar las notas",
         "sr": "Beleške nisu mogle da se naprave",
     },
+    "python.link.not_link": {
+        "ru": "Это не похоже на ссылку. Скопируйте адрес страницы с записью целиком.",
+        "en": "This doesn't look like a link. Copy the full address of the page with the recording.",
+        "es": "Esto no parece un enlace. Copia la dirección completa de la página con la grabación.",
+        "sr": "Ovo ne liči na link. Kopirajte celu adresu stranice sa snimkom.",
+    },
     "python.folder.new": {
         "ru": "Новая папка",
         "en": "New folder",
