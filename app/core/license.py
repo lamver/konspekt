@@ -49,7 +49,9 @@ PUBLIC_KEYS: tuple[bytes, ...] = (
 
 # Куда ведёт кнопка «Купить». Метки нужны, чтобы отличить покупки из
 # программы от покупок с сайта.
-BUY_URL = "https://konspekt.aisearch.ru/buy/?utm_source=app&utm_medium=banner"
+# Прямо на страницу продажи, без переадресации с konspekt.aisearch.ru:
+# лишний шаг — лишнее место, где покупка может сломаться (решение 02.10).
+BUY_URL = "https://aisearch.ru/pricing/license/konspekt?utm_source=app&utm_medium=banner"
 
 # Пробный период: столько встреч программа работает целиком без лицензии.
 # Считаются встречи, а не дни (решение 30.09): человек, который поставил
