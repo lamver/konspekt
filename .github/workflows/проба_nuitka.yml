@@ -6,7 +6,9 @@
 # APEX, Bkav). Nuitka переводит наш код в C и собирает свой exe.
 #
 # Это только опыт для антивирусов. Компилируется наш пакет app, сторонние
-# библиотеки не берутся, поэтому собранное не запустится. Переделку
+# библиотеки не берутся, поэтому собранное не запустится. yt-dlp Nuitka
+# тянет и мимо --nofollow-imports, а его список сайтов (230 тысяч строк C)
+# не помещается в память компилятора: запрещён отдельно. Переделку
 # сборки затеваем, только если такой exe окажется чистым.
 
 name: Проба Nuitka
@@ -48,6 +50,7 @@ jobs:
           uv run --with nuitka --with ordered-set --with zstandard python -m nuitka `
             --standalone --assume-yes-for-downloads --msvc=latest `
             --follow-import-to=app --nofollow-imports `
+            --nofollow-import-to=yt_dlp --low-memory `
             --windows-console-mode=disable `
             --windows-icon-from-ico=packaging/konspekt.ico `
             --company-name="Valerij Frolov" --product-name=Konspekt `
