@@ -19,7 +19,18 @@ AppId={{8C4A6F42-6E0B-4F0E-9E0E-6D1B3B5B7A21}
 AppName={#AppName}
 AppVersion={#AppVersion}
 AppVerName={#AppName} {#AppVersion}
-AppPublisher=Konspekt
+AppPublisher=Valerij Frolov
+AppPublisherURL=https://konspekt.aisearch.ru
+AppSupportURL=https://github.com/lamver/konspekt-releases/issues
+AppCopyright=© 2026 Valerij Frolov
+; Сведения о файле установщика. Без версии Inno пишет 0.0.0.0, а
+; безымянный установщик антивирусы с машинным обучением любят меньше.
+VersionInfoVersion={#AppVersion}
+VersionInfoCompany=Valerij Frolov
+VersionInfoDescription=Konspekt Setup
+VersionInfoProductName={#AppName}
+VersionInfoProductVersion={#AppVersion}
+VersionInfoCopyright=© 2026 Valerij Frolov
 DefaultDirName={localappdata}\{#AppName}
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes

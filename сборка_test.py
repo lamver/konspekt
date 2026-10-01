@@ -22,6 +22,7 @@ huggingface_hub, и однажды уедет вместе с ним.
 import io
 import re
 import sys
+from pathlib import Path
 
 import testenv  # noqa: F401  русский вывод в консоли Windows
 
@@ -69,6 +70,15 @@ if выпускной:
 # Повторная заливка того же файла — ровно то, на чём упала 0.11.0.
 проверить("ghaction-virustotal" not in текст,
           "файл не отправляется в VirusTotal второй раз: тот ответит 409 и уронит выпуск")
+
+# Безымянный exe без издателя и версии машинное обучение антивирусов
+# принимает за сброшенный загрузчик. Сведения о файле у обоих exe.
+_спек = (Path(__file__).resolve().parent / "packaging" / "konspekt.spec").read_text(encoding="utf-8")
+_исс = (Path(__file__).resolve().parent / "packaging" / "konspekt.iss").read_text(encoding="utf-8-sig")
+проверить("version=версия_файла" in _спек and "CompanyName" in _спек,
+          "у Konspekt.exe есть сведения о файле: издатель, описание, версия")
+проверить("VersionInfoVersion={#AppVersion}" in _исс and "VersionInfoCompany=" in _исс,
+          "у установщика есть сведения о файле, а не 0.0.0.0")
 
 print()
 if ошибки:

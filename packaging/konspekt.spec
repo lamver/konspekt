@@ -131,6 +131,40 @@ else:
 
 icon = ROOT / "packaging" / ("konspekt.icns" if MACOS else "konspekt.ico")
 
+# Сведения о файле: издатель, описание, версия (Свойства → Подробно).
+# Без них exe безымянный, а для машинного обучения антивирусов это
+# одна из главных примет вредоноса: так выглядит сброшенный на диск
+# загрузчик, а не программа с автором. Microsoft на сборках без них
+# ставил `Wacatac!ml`.
+версия_файла = None
+if WINDOWS:
+    from PyInstaller.utils.win32.versioninfo import (
+        FixedFileInfo, StringFileInfo, StringStruct, StringTable,
+        VarFileInfo, VarStruct, VSVersionInfo,
+    )
+
+    _текст = re.search(
+        r'__version__\s*=\s*"([^"]+)"', (ROOT / "app" / "__init__.py").read_text(encoding="utf-8")
+    ).group(1)
+    _числа = tuple((list(map(int, re.findall(r"\d+", _текст))) + [0, 0, 0, 0])[:4])
+    версия_файла = VSVersionInfo(
+        ffi=FixedFileInfo(filevers=_числа, prodvers=_числа),
+        kids=[
+            StringFileInfo([StringTable("040904B0", [
+                StringStruct("CompanyName", "Valerij Frolov"),
+                StringStruct("FileDescription", "Konspekt — meeting transcription and notes"),
+                StringStruct("FileVersion", _текст),
+                StringStruct("InternalName", "Konspekt"),
+                StringStruct("LegalCopyright", "© 2026 Valerij Frolov"),
+                StringStruct("OriginalFilename", "Konspekt.exe"),
+                StringStruct("ProductName", "Konspekt"),
+                StringStruct("ProductVersion", _текст),
+                StringStruct("Comments", "https://konspekt.aisearch.ru"),
+            ])]),
+            VarFileInfo([VarStruct("Translation", [0x0409, 1200])]),
+        ],
+    )
+
 a = Analysis(
     # Не app/__main__.py: PyInstaller запускает указанный файл как скрипт,
     # без пакета вокруг, и относительные импорты внутри него падают.
@@ -168,6 +202,7 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
     icon=str(icon) if icon.exists() else None,
+    version=версия_файла,
 )
 
 coll = COLLECT(
