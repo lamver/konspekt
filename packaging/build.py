@@ -146,7 +146,13 @@ def main() -> int:
         print("  winget install --id JRSoftware.InnoSetup -e")
         return 0
 
-    run([str(iscc), f"/DAppVersion={__version__}", str(ISS)])
+    ключи = [f"/DAppVersion={__version__}"]
+    # Опыты с антивирусами: сжатие установщика задаётся снаружи, по
+    # умолчанию прежнее (konspekt.iss).
+    сжатие = os.environ.get("KONSPEKT_SETUP_COMPRESSION", "").strip()
+    if сжатие:
+        ключи.append(f"/DSetupCompression={сжатие}")
+    run([str(iscc), *ключи, str(ISS)])
     setup = DIST / f"konspekt-{__version__}-setup.exe"
     if setup.exists():
         print(f"установщик: {setup} ({setup.stat().st_size / 1024 / 1024:.0f} МБ)")

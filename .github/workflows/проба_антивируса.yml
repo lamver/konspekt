@@ -25,6 +25,13 @@ on:
         description: Собрать запускатель PyInstaller из исходников (yes/no)
         required: false
         default: 'no'
+      compression:
+        # Сжатие установщика. Пусто — как в выпуске (lzma2/max). Сильно
+        # сжатый файл похож на упакованный вредонос, и машинное обучение
+        # антивирусов это замечает: «zip» или «none» проверяют догадку.
+        description: Сжатие установщика (пусто, lzma2/normal, zip, none)
+        required: false
+        default: ''
 
 jobs:
   probe:
@@ -59,6 +66,8 @@ jobs:
           uv run python -c "import PyInstaller, pathlib; p = pathlib.Path(PyInstaller.__file__).parent / 'bootloader' / 'Windows-64bit-intel' / 'runw.exe'; print(p, p.stat().st_size)"
 
       - name: Собрать установщик
+        env:
+          KONSPEKT_SETUP_COMPRESSION: ${{ inputs.compression }}
         run: uv run python packaging/build.py
 
       - name: Посчитать сумму
@@ -89,3 +98,15 @@ jobs:
           $код = $LASTEXITCODE
           Get-Content страж.txt -Encoding utf8 | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
           exit $код
+
+      # Отдельно сама программа, без установщика: понять, кто краснеет.
+      # Тревога здесь пробу не роняет, она лишь сообщает.
+      - name: Отдельно Konspekt.exe
+        if: always()
+        continue-on-error: true
+        shell: pwsh
+        env:
+          VT_API_KEY: ${{ secrets.VT_API_KEY }}
+          PYTHONIOENCODING: utf-8
+        run: |
+          uv run python tools/страж_выпуска.py (Get-Item dist/Konspekt/Konspekt.exe).FullName

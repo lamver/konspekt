@@ -11,6 +11,10 @@
   #define AppVersion "0.0.0"
 #endif
 
+#ifndef SetupCompression
+  #define SetupCompression "lzma2/max"
+#endif
+
 #define AppName "Konspekt"
 #define AppExe "Konspekt.exe"
 
@@ -42,8 +46,10 @@ SetupIconFile=konspekt.ico
 UninstallDisplayIcon={app}\{#AppExe}
 ; LZMA2 с большим словарём: дистрибутив в основном это уже сжатые .pyd и
 ; .dll, но словарь в 128 МБ забирает ещё десятки мегабайт.
-Compression=lzma2/max
+Compression={#SetupCompression}
+#if Pos("lzma", SetupCompression) > 0
 LZMADictionarySize=131072
+#endif
 SolidCompression=yes
 WizardStyle=modern
 ; Windows 10 и новее: WebView2 на более старых недоступен.
