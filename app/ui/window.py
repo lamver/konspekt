@@ -125,7 +125,7 @@ class MainWindow:
         x, y = self._исправить_положение(geom)
 
         self.window = webview.create_window(
-            title="Konspekt",
+            title=self.service._msg("python.app.name"),
             url=index,
             js_api=self.api,
             width=geom.width,

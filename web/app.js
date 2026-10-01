@@ -3263,6 +3263,14 @@ async function showVersion() {
   if (version) ui.appVersion.textContent = t('about.version_prefix') + version;
 }
 
+/** Версия в заголовке окна, рядом с названием. */
+async function showBrandVersion() {
+  const место = el('brand-version');
+  if (!место || место.textContent) return;
+  const version = await api.app_version();
+  if (version) место.textContent = version;
+}
+
 /* --- Когда программа подаёт голос сама ------------------------------------
 
    Две галочки про одно: как Konspekt лезет к человеку. Слежка за звуком
@@ -4666,6 +4674,7 @@ async function init() {
   // загрузки окна). Флаг — способ дождаться этого явно, а не гадать.
   window.__konspekt_i18n_ready = true;
 
+  showBrandVersion();
   await loadMeetings();
   refreshLicense();
   // Подпись «какая модель отвечает» у переписки видна сразу, а не только

@@ -13,6 +13,14 @@
 from __future__ import annotations
 
 MESSAGES: dict[str, dict[str, str]] = {
+    # Название в заголовке окна и на панели задач. По-русски по-русски:
+    # человек с русским интерфейсом видит «Конспект», а не латиницу.
+    "python.app.name": {
+        "ru": "Конспект",
+        "en": "Konspekt",
+        "es": "Konspekt",
+        "sr": "Konspekt",
+    },
     "python.model.other_instance": {
         "ru": "Модель уже качает другое окно Konspekt. Закройте лишнее окно и попробуйте снова.",
         "en": "Another Konspekt window is already downloading the model. Close the extra window and try again.",

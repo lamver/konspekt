@@ -451,7 +451,14 @@ class Api:
 
     def set_language(self, language: str) -> str:
         """Запомнить выбранный язык интерфейса. Применяет его сам фронт."""
-        return self._service.set_language(language)
+        итог = self._service.set_language(language)
+        # Название на панели задач фронту недоступно: меняем его отсюда.
+        if self._window is not None:
+            try:
+                self._window.set_title(self._service._msg("python.app.name"))
+            except Exception:
+                log.debug("Название окна не сменилось", exc_info=True)
+        return итог
 
     def get_i18n_dict(self, language: str) -> dict[str, Any]:
         """Отдать словарь переводов интерфейса для выбранного языка."""
