@@ -79,6 +79,9 @@ _исс = (Path(__file__).resolve().parent / "packaging" / "konspekt.iss").read_
           "у Konspekt.exe есть сведения о файле: издатель, описание, версия")
 проверить("VersionInfoVersion={#AppVersion}" in _исс and "VersionInfoCompany=" in _исс,
           "у установщика есть сведения о файле, а не 0.0.0.0")
+# 01.10: с lzma2/max Microsoft клеймил каждую сборку, с zip ни одну.
+проверить('#define SetupCompression "zip"' in _исс,
+          "установщик сжат zip: сильное сжатие антивирусы принимают за упаковщик")
 
 print()
 if ошибки:

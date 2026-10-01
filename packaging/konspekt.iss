@@ -12,7 +12,7 @@
 #endif
 
 #ifndef SetupCompression
-  #define SetupCompression "lzma2/max"
+  #define SetupCompression "zip"
 #endif
 
 #define AppName "Konspekt"
@@ -44,8 +44,10 @@ OutputDir=..\dist
 OutputBaseFilename=konspekt-{#AppVersion}-setup
 SetupIconFile=konspekt.ico
 UninstallDisplayIcon={app}\{#AppExe}
-; LZMA2 с большим словарём: дистрибутив в основном это уже сжатые .pyd и
-; .dll, но словарь в 128 МБ забирает ещё десятки мегабайт.
+; Сжатие zip, а не lzma2/max, хотя установщик выходит 89 МБ вместо 61.
+; 01.10: с lzma2/max Microsoft ставил Wacatac!ml каждой сборке подряд при
+; любом коде, а с zip четыре сборки из четырёх чистые. Сильно сжатый
+; файл машинное обучение антивирусов принимает за упакованный вредонос.
 Compression={#SetupCompression}
 #if Pos("lzma", SetupCompression) > 0
 LZMADictionarySize=131072
