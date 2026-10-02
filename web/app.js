@@ -919,6 +919,32 @@ function copySummary(mode) {
  * Не вышло скрыть — не копируем вовсе: положить в буфер нескрытый текст
  * под видом скрытого хуже, чем честно отказать.
  */
+/**
+ * Отправить заметки в Telegram: программа открывает Telegram на этом
+ * компьютере с готовым текстом, чат человек выбирает сам. Ни бота, ни
+ * нашего сервера. Текст идёт без разметки: звёздочки Telegram при
+ * пересылке показал бы как есть. Заодно кладём его в буфер: если заметки
+ * длиннее одного сообщения, в Telegram уйдёт начало, а целиком их можно
+ * вставить Ctrl+V.
+ */
+async function отправитьВТелеграм() {
+  closeCopyMenu();
+  const текст = markdownToPlain(lensText(state.openLens || 'summary') || '').trim();
+  if (!текст) {
+    showToast(t('copy.nothing'));
+    return false;
+  }
+  try { await navigator.clipboard.writeText(текст); } catch (e) { /* буфер занят — не беда */ }
+  let ответ = null;
+  try { ответ = await api.share_telegram(текст); } catch (e) { ответ = null; }
+  if (!ответ || !ответ.ok) {
+    showToast(t(ответ && ответ.error === 'no_telegram' ? 'telegram.no_app' : 'telegram.failed'));
+    return false;
+  }
+  showToast(t(ответ.целиком ? 'telegram.opened' : 'telegram.opened_long'));
+  return true;
+}
+
 async function копироватьБезЛичного(текст) {
   let скрытый = null;
   try {
@@ -4176,6 +4202,7 @@ function bindUi() {
     summaryCopyPlain: el('summary-copy-plain'),
     summaryCopyMd: el('summary-copy-md'),
     summaryCopyMasked: el('summary-copy-masked'),
+    summarySendTelegram: el('summary-send-telegram'),
     personalBar: el('personal-bar'),
     personalFind: el('personal-find'),
     personalResult: el('personal-result'),
@@ -4343,6 +4370,7 @@ function bindUi() {
   for (const item of [ui.summaryCopyMd, ui.summaryCopyPlain, ui.summaryCopyMasked]) {
     if (item) item.addEventListener('click', () => copySummary(item.dataset.copyMode));
   }
+  if (ui.summarySendTelegram) ui.summarySendTelegram.addEventListener('click', отправитьВТелеграм);
   if (ui.personalFind) ui.personalFind.addEventListener('click', togglePersonal);
   if (ui.chatModel) {
     ui.chatModel.addEventListener('click', async () => {

@@ -126,7 +126,9 @@
     "collapse": "Skupi beleške",
     "expand": "Raširi beleške",
     "copy_masked": "Bez ličnih podataka",
-    "copy_masked_hint": "Brojevi kartica, telefoni, pasoši, puna imena i adrese zamenjeni oznakama"
+    "copy_masked_hint": "Brojevi kartica, telefoni, pasoši, puna imena i adrese zamenjeni oznakama",
+    "send_telegram": "Pošalji u Telegram",
+    "send_telegram_hint": "Otvara Telegram, čet birate sami"
   },
   "chat": {
     "title": "Pitanja o sastanku",
@@ -603,5 +605,11 @@
     "go": "Transkribuj",
     "added": "Snimak sa linka je u redu čekanja",
     "pasted": "Link je nalepljen: transkribujemo snimak"
+  },
+  "telegram": {
+    "opened": "Telegram je otvoren: izaberite čet",
+    "opened_long": "Beleške su duge: u Telegram je otišao početak, ceo tekst je u međuspremniku — nalepite ga sa Ctrl+V",
+    "no_app": "Telegram nije instaliran na ovom računaru. Beleške su u međuspremniku: nalepite ih u bilo koji čet",
+    "failed": "Telegram nije mogao da se otvori"
   }
 }

@@ -126,7 +126,9 @@
     "collapse": "Collapse notes",
     "expand": "Expand notes",
     "copy_masked": "Without personal data",
-    "copy_masked_hint": "Card numbers, phones, passports, full names and addresses replaced with labels"
+    "copy_masked_hint": "Card numbers, phones, passports, full names and addresses replaced with labels",
+    "send_telegram": "Send to Telegram",
+    "send_telegram_hint": "Opens Telegram, you pick the chat"
   },
   "chat": {
     "title": "Ask about the meeting",
@@ -603,5 +605,11 @@
     "go": "Transcribe",
     "added": "Recording from the link is queued",
     "pasted": "Link pasted: transcribing the recording"
+  },
+  "telegram": {
+    "opened": "Telegram is open: pick a chat",
+    "opened_long": "The notes are long: Telegram got the beginning, the full text is in the clipboard — paste with Ctrl+V",
+    "no_app": "Telegram isn't installed on this computer. The notes are in the clipboard: paste them into any chat",
+    "failed": "Couldn't open Telegram"
   }
 }

@@ -518,6 +518,10 @@ class Api:
         """Убрать ключ с этого компьютера."""
         return self._service.remove_license()
 
+    def share_telegram(self, text: str) -> dict[str, Any]:
+        """Открыть Telegram с готовым текстом заметок."""
+        return self._service.share_telegram(text)
+
     def open_buy_page(self) -> bool:
         """Открыть страницу покупки в браузере."""
         return self._service.open_buy_page()

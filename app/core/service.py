@@ -3037,6 +3037,12 @@ class AppService:
         log.info("Ключ лицензии убран")
         return self.license_state()
 
+    def share_telegram(self, text: str) -> dict[str, Any]:
+        """Открыть Telegram с заметками: человек сам выберет, кому отправить."""
+        from . import telegram as telegram_mod
+
+        return telegram_mod.открыть(text)
+
     def open_buy_page(self) -> bool:
         """Открыть страницу покупки в браузере человека.
 

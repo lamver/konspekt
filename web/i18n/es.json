@@ -126,7 +126,9 @@
     "collapse": "Contraer notas",
     "expand": "Expandir notas",
     "copy_masked": "Sin datos personales",
-    "copy_masked_hint": "Tarjetas, teléfonos, pasaportes, nombres completos y direcciones sustituidos por etiquetas"
+    "copy_masked_hint": "Tarjetas, teléfonos, pasaportes, nombres completos y direcciones sustituidos por etiquetas",
+    "send_telegram": "Enviar a Telegram",
+    "send_telegram_hint": "Abre Telegram, tú eliges el chat"
   },
   "chat": {
     "title": "Preguntas sobre la reunión",
@@ -603,5 +605,11 @@
     "go": "Transcribir",
     "added": "La grabación del enlace está en cola",
     "pasted": "Enlace pegado: transcribiendo la grabación"
+  },
+  "telegram": {
+    "opened": "Telegram abierto: elige un chat",
+    "opened_long": "Las notas son largas: a Telegram fue el comienzo, el texto completo está en el portapapeles — pégalo con Ctrl+V",
+    "no_app": "Telegram no está instalado en este ordenador. Las notas están en el portapapeles: pégalas en cualquier chat",
+    "failed": "No se pudo abrir Telegram"
   }
 }
