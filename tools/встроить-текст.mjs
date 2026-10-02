@@ -87,6 +87,7 @@ const простые = [
   ['t-license-title', d.licenseTitle],
   ['t-license-text', d.licenseText],
   ['t-license-link', d.licenseLink],
+  ['t-buy-link', d.buyLink],
 ];
 
 for (const [id, текст] of простые) html = вставить(html, id, текст);

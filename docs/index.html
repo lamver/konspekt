@@ -3,8 +3,45 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- Русская страница Конспекта переехала на aisearch.ru/programmy/konspekt
+     (решение владельца 02.10): там продаются лицензии, и там русский
+     покупатель. Сюда приходят по старым ссылкам на konspekt.aisearch.ru
+     и /ru/. Уводим их до отрисовки, первым скриптом. Английскую,
+     испанскую и сербскую версии не трогаем: konspekt.aisearch.tech живёт
+     как жил.
+
+     Язык выбирается так же, как ниже в pickLang(): ?lang, путь /ru/,
+     прошлый выбор в localStorage, домен, язык браузера. Копия упрощена:
+     здесь нужен только ответ «русский или нет». -->
+<script>
+  (function () {
+    var цель = 'https://aisearch.ru/programmy/konspekt';
+    var хост = (location.hostname || '').toLowerCase();
+    var язык = null;
+    try { язык = new URLSearchParams(location.search).get('lang'); } catch (e) { /* старый браузер */ }
+    if (!язык) {
+      var путь = ((location && location.pathname) || '').match(/\/(en|es|sr|ru)(\/index\.html)?\/?$/i);
+      if (путь) язык = путь[1].toLowerCase();
+    }
+    if (!язык) {
+      try { язык = localStorage.getItem('konspekt-lang'); } catch (e) { /* приватный режим */ }
+    }
+    if (!язык && хост === 'konspekt.aisearch.tech') язык = 'en';
+    if (!язык) {
+      var свои = navigator.languages || [navigator.language || ''];
+      for (var i = 0; i < свои.length; i++) {
+        var кратко = String(свои[i]).slice(0, 2).toLowerCase();
+        if (кратко === 'sh') { язык = 'sr'; break; }
+        if (['en', 'es', 'sr', 'ru'].indexOf(кратко) >= 0) { язык = кратко; break; }
+      }
+    }
+    if (хост === 'konspekt.aisearch.ru' || язык === 'ru') {
+      location.replace(цель + location.hash);
+    }
+  })();
+</script>
 <title>Konspekt — meeting notes that never leave your computer</title>
-<meta name="description" content="A smart notepad for meetings. Records, transcribes and summarises entirely on your own computer. Free, open source, works offline.">
+<meta name="description" content="A smart notepad for meetings. Records, transcribes and summarises entirely on your own computer. Works offline, source code is open.">
 
 <!-- Три адреса, одна страница.
 
@@ -26,7 +63,7 @@
 <link rel="alternate" hreflang="en" href="https://konspekt.aisearch.tech/">
 <link rel="alternate" hreflang="es" href="https://konspekt.aisearch.tech/es/">
 <link rel="alternate" hreflang="sr" href="https://konspekt.aisearch.tech/sr/">
-<link rel="alternate" hreflang="ru" href="https://konspekt.aisearch.ru/ru/">
+<link rel="alternate" hreflang="ru" href="https://aisearch.ru/programmy/konspekt">
 <link rel="alternate" hreflang="x-default" href="https://konspekt.aisearch.tech/">
 <!-- Русская копия должна быть канонической сама для себя, иначе поиск
      склеит её с английской и по-русски нас не найдут. Файл один на все
@@ -67,8 +104,8 @@
 
      Без него поисковик видит обычную страницу с текстом и не знает, что
      за ней стоит программа: какая цена, под какую систему, откуда
-     скачать. Цена указана нулём явно — «бесплатно» в тексте машина не
-     прочитает, а поле offers прочитает.
+     скачать. Цен здесь нет намеренно: цена живёт в одном месте, в
+     каталоге aisearch.ru, и покупка идёт там (решение владельца 02.10).
 
      Снимки перечислены здесь же: по ним нас находят в поиске картинок,
      а сами они грузятся отложенно и роботу-сборщику могут не достаться. -->
@@ -84,12 +121,6 @@
   "downloadUrl": "https://github.com/lamver/konspekt-releases/releases/latest",
   "description": "A smart notepad for meetings. Records the conversation, transcribes it and turns it into notes entirely on your own computer. Nothing is uploaded anywhere.",
   "inLanguage": ["en", "es", "sr", "ru"],
-  "isAccessibleForFree": true,
-  "offers": {
-    "@type": "Offer",
-    "price": "0",
-    "priceCurrency": "USD"
-  },
   "license": "https://github.com/lamver/konspekt/blob/master/LICENSE.md",
   "featureList": [
     "Records microphone and system audio",
@@ -337,7 +368,7 @@
       <a class="download" id="t-download" data-track="download_click" data-lang="en"
          href="https://github.com/lamver/konspekt-releases/releases/latest">Download for Windows</a>
     </p>
-    <p class="download-note" id="t-download-note">Free. Installs in a minute and works offline afterwards.</p>
+    <p class="download-note" id="t-download-note">The first 10 meetings are free, then a license is needed. Installs in a minute and works offline afterwards.</p>
     <!-- Номер выложенной версии и ссылка на список изменений.
          Скрыт, пока GitHub не ответил: см. показатьВыпуск(). -->
     <p class="release" id="t-release" hidden></p>
@@ -398,9 +429,9 @@
 
 <section>
   <div class="wrap">
-    <h2 id="t-license-title">Open source</h2>
+    <h2 id="t-license-title">Source code is open</h2>
     <p class="prose" id="t-license-text">Konspekt is distributed under FSL-1.1-MIT: read the code, change it, use it. The single restriction is repackaging it as a competing commercial product. Every release becomes plain MIT two years after it ships.</p>
-    <p><a id="t-license-link" href="https://github.com/lamver/konspekt/blob/master/LICENSE.md">Read the license</a></p>
+    <p><a id="t-license-link" href="https://github.com/lamver/konspekt/blob/master/LICENSE.md">Read the license</a> · <a id="t-buy-link" href="https://aisearch.ru/pricing/license/konspekt">Licenses are sold at aisearch.ru</a></p>
   </div>
 </section>
 
@@ -587,6 +618,7 @@ function render(lang) {
   setText('t-license-title', d.licenseTitle);
   setText('t-license-text', d.licenseText);
   setText('t-license-link', d.licenseLink);
+  setText('t-buy-link', d.buyLink);
 
   // Подпись у виджета проверки на языке страницы, поэтому обновляем его
   // при каждой отрисовке, а не один раз при загрузке.
