@@ -55,7 +55,9 @@ jobs:
         run: |
           $exe = Get-Item dist/konspekt-*-setup.exe
           if ($exe.Length -lt 50MB) { throw "Установщик слишком маленький: $($exe.Length/1MB) МБ" }
-          if ($exe.Length -gt 70MB) { throw "Установщик слишком большой: $($exe.Length/1MB) МБ" }
+          # Сжатие zip, а не lzma2/max (01.10, иначе Microsoft клеймит
+          # установщик трояном): законный размер около 89 МБ.
+          if ($exe.Length -gt 110MB) { throw "Установщик слишком большой: $($exe.Length/1MB) МБ" }
           echo "Установщик собран: $($exe.Name), $($exe.Length/1MB) МБ"
 
       # Страж: установщик с тревогой антивируса к людям не уходит.
