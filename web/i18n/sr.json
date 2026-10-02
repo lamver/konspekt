@@ -478,7 +478,7 @@
     "owned_title": "Licenca je aktivna",
     "owned_hint": "Hvala što podržavate Konspekt. Ključ se proverava na ovom računaru, bez interneta.",
     "missing_title": "Nema licence",
-    "missing_hint": "Prvih {limit} sastanaka radi u potpunosti. Posle toga snimke možete da gledate i kopirate, a nove snimate i analizirate uz licencu. Jednokratna kupovina, besplatna ažuriranja. Ključ stiže na mejl posle plaćanja.",
+    "missing_hint": "Prvih {limit} sastanaka radi u potpunosti. Posle toga snimke možete da gledate i kopirate, a nove snimate i analizirate uz licencu. Jednokratna kupovina: 3 godine ažuriranja ili zauvek. Ključ stiže na mejl posle plaćanja.",
     "key_label": "Ključ iz mejla",
     "key_placeholder": "Nalepite ceo ključ, počinje sa KSPK1.",
     "activate": "Aktiviraj",
