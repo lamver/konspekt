@@ -11,6 +11,7 @@ JS-обёртку. Ссылки на окно и сервис поэтому с�
 from __future__ import annotations
 
 import logging
+import threading
 from typing import Any
 
 from ..core.events import APP_QUIT, WINDOW_HIDE, bus
@@ -381,6 +382,16 @@ class Api:
         bus.emit(APP_QUIT)
         return True
 
+    def _запомнить_позже(self, x: int, y: int, width: int, height: int) -> None:
+        """Записать место окна через паузу после последнего шага растягивания."""
+        старый = getattr(self, "_геометрия_таймер", None)
+        if старый is not None:
+            старый.cancel()
+        будильник = threading.Timer(0.4, self._service.save_window_geometry, (x, y, width, height))
+        будильник.daemon = True
+        self._геометрия_таймер = будильник
+        будильник.start()
+
     def resize_window(self, dx: int, dy: int, edge: str = "se") -> dict[str, Any]:
         """Растянуть окно за край.
 
@@ -422,7 +433,10 @@ class Api:
                 self._window.resize(width, height)
                 if "w" in edge or "n" in edge:
                     self._window.move(x, y)
-            self._service.save_window_geometry(x, y, width, height)
+            # Размер не записываем сразу: вызов идёт на каждом кадре движения
+            # мыши, и запись settings.json на каждом кадре тормозила окно во
+            # время записи звука. Запоминаем один раз, когда мышь отпустили.
+            self._запомнить_позже(x, y, width, height)
             return {"width": width, "height": height}
         except Exception:
             log.debug("Не удалось изменить размер окна", exc_info=True)
