@@ -35,6 +35,11 @@ def проверить(ок: bool, что: str) -> None:
 
 
 def найти_edge() -> str | None:
+    # Свой браузер вместо Edge: Edge, скачавший обновление, до перезапуска
+    # молча отдаёт пустую страницу, и все проверки окна падают разом.
+    свой = os.environ.get("KONSPEKT_BROWSER")
+    if свой:
+        return свой
     for путь in (
         os.path.expandvars(r"%ProgramFiles(x86)%\\Microsoft\\Edge\\Application\\msedge.exe"),
         os.path.expandvars(r"%ProgramFiles%\\Microsoft\\Edge\\Application\\msedge.exe"),
