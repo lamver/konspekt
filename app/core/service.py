@@ -11,6 +11,7 @@ import base64
 import io
 import logging
 import os
+import re
 import shutil
 import threading
 import time
@@ -74,6 +75,7 @@ from ..core.events import (
     IMPORT_CHANGED,
     LLM_DOWNLOAD,
     IMPORT_PROGRESS,
+    TELEGRAM_CHANGED,
     MEETINGS_CHANGED,
     MEETING_UPDATED,
     MEANING_STATE,
@@ -2116,7 +2118,7 @@ class AppService:
 
     # --- импорт файлов ----------------------------------------------------
 
-    def import_files(self, paths: list[str]) -> list[dict[str, Any]]:
+    def import_files(self, paths: list[str], folder_id: str | None = None) -> list[dict[str, Any]]:
         """Поставить готовые записи в очередь разбора.
 
         На каждый файл заводится своя встреча, названная по имени файла:
@@ -2138,7 +2140,7 @@ class AppService:
             })
             if not paths:
                 return []
-        tasks = self.importer.add(paths)
+        tasks = self.importer.add(paths, folder_id)
         bus.emit(IMPORT_CHANGED, {"tasks": self.importer.tasks()})
         return tasks
 
@@ -3037,6 +3039,118 @@ class AppService:
         log.info("Ключ лицензии убран")
         return self.license_state()
 
+    # --- свой бот в Telegram ----------------------------------------------
+
+    _бот = None
+
+    def telegram_folder_id(self) -> str | None:
+        """Папка «Telegram» для встреч из бота: найти или завести."""
+        for папка in self.store.list_folders():
+            if папка.get("name") == "Telegram":
+                return папка["id"]
+        return self.create_folder("Telegram").get("id")
+
+    def telegram_can_summarize(self) -> bool:
+        """Сделает ли модель итоги прямо сейчас, ничего не скачивая молча."""
+        if not self.llm.enabled:
+            return False
+        состояние = self.llm.status()
+        return состояние.get("backend") != "local" or bool(состояние.get("model_ready"))
+
+    def _собрать_бота(self, токен: str):
+        from . import telegram_bot as бот_mod
+
+        def привязали(chat_id: int, имя: str) -> None:
+            self.settings.telegram.chat_id = int(chat_id)
+            self.settings.telegram.chat_name = имя
+            settings_mod.save(self.settings)
+            bus.emit(TELEGRAM_CHANGED, self.telegram_state())
+
+        return бот_mod.ТелеграмБот(
+            self, токен, хозяин=self.settings.telegram.chat_id,
+            при_привязке=привязали, папка=paths.data_dir() / "telegram",
+        )
+
+    def запустить_телеграм(self) -> None:
+        """Поднять бота, если он включён и токен есть. Зовётся при старте."""
+        from . import секрет
+
+        настройки = self.settings.telegram
+        if not настройки.enabled or self._бот is not None:
+            return
+        токен = секрет.достать(настройки.token)
+        if not токен:
+            return
+        try:
+            self._бот = self._собрать_бота(токен)
+            self._бот.запустить()
+        except Exception:
+            log.exception("Не удалось поднять бота Telegram")
+            self._бот = None
+
+    def остановить_телеграм(self) -> None:
+        бот, self._бот = self._бот, None
+        if бот is not None:
+            бот.остановить()
+
+    def telegram_state(self) -> dict[str, Any]:
+        настройки = self.settings.telegram
+        бот = self._бот.состояние() if self._бот is not None else {}
+        return {
+            "enabled": настройки.enabled,
+            "has_token": bool(настройки.token),
+            "linked": bool(настройки.chat_id),
+            "chat_name": настройки.chat_name,
+            "bot_name": бот.get("имя", ""),
+            "running": бот.get("работает", False),
+            "error": бот.get("ошибка", ""),
+            "code": бот.get("код", ""),
+        }
+
+    def telegram_set_token(self, token: str) -> dict[str, Any]:
+        """Проверить токен у Telegram и, если подошёл, включить бота."""
+        from . import секрет
+        from . import telegram_bot as бот_mod
+
+        токен = "".join((token or "").split())
+        if not re.fullmatch(r"\d{5,}:[A-Za-z0-9_-]{30,}", токен):
+            return {"ok": False, "error": "format"}
+        проба = бот_mod.ТелеграмБот(self, токен)
+        try:
+            имя = проба.проверить_токен()
+        except бот_mod.ОшибкаТелеграма as беда:
+            return {"ok": False, "error": "bad_token" if беда.код in (401, 404) else "api"}
+        except Exception:
+            return {"ok": False, "error": "network"}
+        finally:
+            проба.остановить()
+        self.остановить_телеграм()
+        настройки = self.settings.telegram
+        настройки.token = секрет.спрятать(токен)
+        настройки.enabled = True
+        # Новый бот — новая привязка: прежний хозяин мог быть у другого бота.
+        настройки.chat_id = 0
+        настройки.chat_name = ""
+        settings_mod.save(self.settings)
+        self.запустить_телеграм()
+        return {"ok": True, "bot_name": имя, **self.telegram_state()}
+
+    def telegram_set_enabled(self, enabled: bool) -> dict[str, Any]:
+        self.settings.telegram.enabled = bool(enabled)
+        settings_mod.save(self.settings)
+        if enabled:
+            self.запустить_телеграм()
+        else:
+            self.остановить_телеграм()
+        return self.telegram_state()
+
+    def telegram_forget(self) -> dict[str, Any]:
+        """Отключить бота от программы: токен и привязка стираются."""
+        self.остановить_телеграм()
+        self.settings.telegram = settings_mod.TelegramSettings()
+        settings_mod.save(self.settings)
+        return self.telegram_state()
+
     def share_telegram(self, text: str) -> dict[str, Any]:
         """Открыть Telegram с заметками: человек сам выберет, кому отправить."""
         from . import telegram as telegram_mod
@@ -3124,6 +3238,9 @@ class AppService:
         # Разбор файлов может идти долго: при выходе бросаем его, а
         # недоделанные встречи остаются с тем, что успели распознать.
         self.importer.stop()
+        # Бот спрашивает Telegram в своём потоке: без остановки соединение
+        # висело бы ещё до 25 секунд после выхода.
+        self.остановить_телеграм()
         # Перепроверка версии больше не нужна: программа закрывается.
         self._version_checker.stop()
         # Пересчёт указателя пишет в базу, а её мы сейчас закроем.

@@ -343,6 +343,9 @@ window.__konspekt_event = function (payload) {
       // человек не согласится: это предложение, а не действие.
       showNoticedTalkAsk(payload);
       break;
+    case 'telegram.changed':
+      renderTelegram(payload);
+      break;
     case 'trial.blocked':
       // Пробный период кончился: объясняем, почему «Запись» или файл не
       // сработали, и показываем плашку с покупкой.
@@ -3410,6 +3413,7 @@ const PREFS_TITLES = {
   look: () => t('prefs.tab.look'),
   data: () => t('prefs.tab.data'),
   license: () => t('prefs.tab.license'),
+  telegram: () => t('prefs.tab.telegram'),
   about: () => t('prefs.tab.about'),
 };
 
@@ -3428,9 +3432,62 @@ function showPrefsTab(tab) {
   ui.prefsTitle.textContent = PREFS_TITLES[tab]();
   if (tab === 'about') loadAbout();
   if (tab === 'license') refreshLicense();
+  if (tab === 'telegram') loadTelegram(); else stopTelegramPoll();
   if (tab === 'data') loadUsage();
   if (tab === 'speech') loadAsrSettings();
   if (tab === 'dictation') loadDictation();
+}
+
+/* --- Свой бот в Telegram ------------------------------------------------ */
+
+let tgPoll = null;
+
+/** Пока вкладка открыта, спрашиваем состояние: код привязки и ошибки меняются сами. */
+async function loadTelegram() {
+  stopTelegramPoll();
+  renderTelegram(await api.telegram_state());
+  tgPoll = setInterval(async () => {
+    if (!ui.audioSheet || ui.audioSheet.hidden) return stopTelegramPoll();
+    renderTelegram(await api.telegram_state());
+  }, 2000);
+}
+
+function stopTelegramPoll() {
+  if (tgPoll) clearInterval(tgPoll);
+  tgPoll = null;
+}
+
+function renderTelegram(s) {
+  if (!s) return;
+  const есть = !!s.has_token;
+  el('tg-setup').hidden = есть;
+  el('tg-status').hidden = !есть;
+  if (!есть) return;
+  el('tg-name').textContent = s.bot_name || t('telegram.bot_unnamed');
+  el('tg-enabled').checked = !!s.enabled;
+  let состояние;
+  if (!s.enabled) состояние = t('telegram.state_off');
+  else if (s.error) состояние = tЕслиЕсть(`telegram.error.${s.error}`) || t('telegram.error.api');
+  else if (s.linked) состояние = t('telegram.state_linked', { name: s.chat_name || '—' });
+  else состояние = t('telegram.state_waiting');
+  el('tg-state').textContent = состояние;
+  const ждём = s.enabled && !s.linked && !!s.code;
+  el('tg-pair').hidden = !ждём;
+  el('tg-code').textContent = ждём ? s.code : '';
+}
+
+async function connectTelegram() {
+  const поле = el('tg-token');
+  const итог = el('tg-result');
+  итог.textContent = t('telegram.checking');
+  const r = await api.telegram_set_token(поле.value || '');
+  if (!r || !r.ok) {
+    итог.textContent = tЕслиЕсть(`telegram.connect_error.${(r && r.error) || 'api'}`) || t('telegram.connect_error.api');
+    return;
+  }
+  поле.value = '';
+  итог.textContent = '';
+  renderTelegram(r);
 }
 
 /* --- Диктовка ------------------------------------------------------------ */
@@ -4371,6 +4428,11 @@ function bindUi() {
     if (item) item.addEventListener('click', () => copySummary(item.dataset.copyMode));
   }
   if (ui.summarySendTelegram) ui.summarySendTelegram.addEventListener('click', отправитьВТелеграм);
+  el('tg-connect').addEventListener('click', connectTelegram);
+  el('tg-token').addEventListener('keydown', (e) => { if (e.key === 'Enter') connectTelegram(); });
+  el('tg-botfather').addEventListener('click', () => api.telegram_open_botfather());
+  el('tg-enabled').addEventListener('change', async (e) => renderTelegram(await api.telegram_set_enabled(e.target.checked)));
+  el('tg-forget').addEventListener('click', async () => renderTelegram(await api.telegram_forget()));
   if (ui.personalFind) ui.personalFind.addEventListener('click', togglePersonal);
   if (ui.chatModel) {
     ui.chatModel.addEventListener('click', async () => {

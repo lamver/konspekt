@@ -369,6 +369,7 @@
         <button type="button" class="prefs__tab" data-tab="speech" data-i18n="prefs.tab.speech">Распознавание</button>
         <button type="button" class="prefs__tab" data-tab="dictation" data-i18n="prefs.tab.dictation">Диктовка</button>
         <button type="button" class="prefs__tab" data-tab="notes" data-i18n="prefs.tab.notes">Заметки</button>
+        <button type="button" class="prefs__tab" data-tab="telegram" data-i18n="prefs.tab.telegram">Telegram</button>
         <button type="button" class="prefs__tab" data-tab="look" data-i18n="prefs.tab.look">Оформление</button>
         <button type="button" class="prefs__tab" data-tab="data" data-i18n="prefs.tab.data">Данные</button>
         <button type="button" class="prefs__tab" data-tab="license" data-i18n="prefs.tab.license">Лицензия</button>
@@ -632,6 +633,51 @@
         </section>
 
         <!-- Лицензия -->
+        <!-- Свой бот в Telegram: живёт в программе, а не на нашем сервере. -->
+        <section class="prefs__page" data-page="telegram" hidden>
+          <div class="card">
+            <p class="card__title" data-i18n="telegram.title">Свой бот в Telegram</p>
+            <p class="hint" data-i18n="telegram.intro">Перешлите боту голосовое, кружок или аудио — Конспект расшифрует его на этом компьютере и пришлёт текст, а если есть модель для заметок, то и итоги. Бот ваш собственный: вы создаёте его сами, и отвечает он только вам.</p>
+          </div>
+
+          <div class="card" id="tg-setup">
+            <p class="card__title" data-i18n="telegram.setup_title">Подключить бота</p>
+            <ol class="tg-steps">
+              <li><span data-i18n="telegram.step1">Откройте в Telegram</span> <button class="btn-link" type="button" id="tg-botfather">@BotFather</button> <span data-i18n="telegram.step1_tail">и отправьте ему /newbot.</span></li>
+              <li data-i18n="telegram.step2">Придумайте боту имя. BotFather пришлёт токен — строку вида 123456789:AAH…</li>
+              <li data-i18n="telegram.step3">Вставьте токен сюда и нажмите «Подключить».</li>
+            </ol>
+            <label class="field">
+              <span class="field__label" data-i18n="telegram.token_label">Токен бота</span>
+              <input type="password" id="tg-token" autocomplete="off" spellcheck="false" placeholder="123456789:AAH…">
+            </label>
+            <div class="voice-enroll__row">
+              <button class="btn-secondary" type="button" id="tg-connect" data-i18n="telegram.connect">Подключить</button>
+              <span class="hint" id="tg-result"></span>
+            </div>
+          </div>
+
+          <div class="card" id="tg-status" hidden>
+            <p class="card__title" id="tg-name"></p>
+            <p class="hint" id="tg-state"></p>
+            <div id="tg-pair" hidden>
+              <p class="hint" data-i18n="telegram.pair_hint">Чтобы бот слушался только вас, откройте его в Telegram и пришлите этот код:</p>
+              <p class="tg-code" id="tg-code"></p>
+            </div>
+            <label class="check">
+              <input type="checkbox" id="tg-enabled">
+              <span data-i18n="telegram.enabled">Бот работает</span>
+            </label>
+            <div class="voice-enroll__row">
+              <button class="btn-ghost" type="button" id="tg-forget" data-i18n="telegram.forget">Отключить бота от Конспекта</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <p class="hint" data-i18n="telegram.privacy">Расшифровка и итоги делаются на этом компьютере. Текст бот отправляет вам в Telegram через серверы Telegram, как любое сообщение; нашего сервера в этой цепочке нет. Бот работает, пока Конспект запущен, а сообщения, присланные без него, Telegram отдаст при следующем запуске. Файлы больше 20 МБ Telegram ботам не отдаёт.</p>
+          </div>
+        </section>
+
         <section class="prefs__page" data-page="license" hidden>
           <div class="card" id="license-owned" hidden>
             <p class="card__title" data-i18n="license.owned_title">Лицензия активна</p>

@@ -188,7 +188,8 @@
       "look": "Appearance",
       "data": "Data",
       "about": "About",
-      "license": "License"
+      "license": "License",
+      "telegram": "Telegram"
     }
   },
   "audio": {
@@ -610,6 +611,36 @@
     "opened": "Telegram is open: pick a chat",
     "opened_long": "The notes are long: Telegram got the beginning, the full text is in the clipboard — paste with Ctrl+V",
     "no_app": "Telegram isn't installed on this computer. The notes are in the clipboard: paste them into any chat",
-    "failed": "Couldn't open Telegram"
+    "failed": "Couldn't open Telegram",
+    "title": "Your own Telegram bot",
+    "intro": "Forward a voice message, video note or audio to the bot — Konspekt transcribes it on this computer and sends back the text, plus a summary if a notes model is available. The bot is your own: you create it yourself, and it answers only you.",
+    "setup_title": "Connect a bot",
+    "step1": "In Telegram, open",
+    "step1_tail": "and send it /newbot.",
+    "step2": "Give the bot a name. BotFather will send a token — a string like 123456789:AAH…",
+    "step3": "Paste the token here and click “Connect”.",
+    "token_label": "Bot token",
+    "connect": "Connect",
+    "checking": "Checking the token with Telegram…",
+    "pair_hint": "So the bot obeys only you, open it in Telegram and send this code:",
+    "enabled": "Bot is on",
+    "forget": "Disconnect the bot from Konspekt",
+    "privacy": "Transcription and summaries happen on this computer. The bot sends the text to you in Telegram via Telegram's servers, like any message; our server is not involved. The bot works while Konspekt is running, and messages sent while it's off are delivered by Telegram on the next start. Telegram doesn't give bots files over 20 MB.",
+    "bot_unnamed": "Bot connected",
+    "state_off": "Off: messages to the bot wait until you turn it on.",
+    "state_waiting": "Running and waiting to be linked to your chat.",
+    "state_linked": "Running. Answers only you: {name}.",
+    "error": {
+      "bad_token": "Telegram rejects the token: it was revoked in @BotFather. Disconnect the bot and connect it again.",
+      "conflict": "Another copy of Konspekt is already using this bot. Close it, and the bot will continue here.",
+      "network": "Telegram is unreachable right now. The bot will retry by itself.",
+      "api": "Telegram returned an error. The bot will retry by itself."
+    },
+    "connect_error": {
+      "format": "That doesn't look like a token: copy it from BotFather's message in full.",
+      "bad_token": "Telegram doesn't know this token. Check that you copied it in full.",
+      "network": "Couldn't reach Telegram. Check your internet connection.",
+      "api": "Telegram returned an error. Please try again."
+    }
   }
 }

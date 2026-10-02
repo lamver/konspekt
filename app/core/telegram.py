@@ -55,6 +55,17 @@ def ссылка(текст: str) -> Ссылка | None:
     return Ссылка(адрес=адрес, целиком=целиком)
 
 
+def открыть_ботфазера() -> bool:
+    """Открыть @BotFather: в Telegram на компьютере, а нет его — в браузере."""
+    try:
+        if sys.platform == "win32":
+            os.startfile("tg://resolve?domain=BotFather")  # noqa: S606
+            return True
+    except OSError:
+        pass
+    return bool(webbrowser.open("https://t.me/BotFather"))
+
+
 def открыть(текст: str) -> dict:
     """Открыть Telegram с текстом. Ответ для окна: ok, целиком, нет_телеграма."""
     с = ссылка(текст)

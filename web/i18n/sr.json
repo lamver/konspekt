@@ -188,7 +188,8 @@
       "look": "Izgled",
       "data": "Podaci",
       "about": "O aplikaciji",
-      "license": "Licenca"
+      "license": "Licenca",
+      "telegram": "Telegram"
     }
   },
   "audio": {
@@ -610,6 +611,36 @@
     "opened": "Telegram je otvoren: izaberite čet",
     "opened_long": "Beleške su duge: u Telegram je otišao početak, ceo tekst je u međuspremniku — nalepite ga sa Ctrl+V",
     "no_app": "Telegram nije instaliran na ovom računaru. Beleške su u međuspremniku: nalepite ih u bilo koji čet",
-    "failed": "Telegram nije mogao da se otvori"
+    "failed": "Telegram nije mogao da se otvori",
+    "title": "Sopstveni Telegram bot",
+    "intro": "Prosledite botu glasovnu poruku, kružić ili audio — Konspekt će ga prepisati na ovom računaru i poslati tekst, a ako postoji model za beleške, i rezime. Bot je vaš: sami ga pravite i odgovara samo vama.",
+    "setup_title": "Poveži bota",
+    "step1": "U Telegramu otvorite",
+    "step1_tail": "i pošaljite mu /newbot.",
+    "step2": "Smislite ime za bota. BotFather će poslati token — niz poput 123456789:AAH…",
+    "step3": "Nalepite token ovde i kliknite „Poveži“.",
+    "token_label": "Token bota",
+    "connect": "Poveži",
+    "checking": "Proveravamo token kod Telegrama…",
+    "pair_hint": "Da bi bot slušao samo vas, otvorite ga u Telegramu i pošaljite ovaj kod:",
+    "enabled": "Bot radi",
+    "forget": "Odvoji bota od Konspekta",
+    "privacy": "Prepis i rezime se rade na ovom računaru. Bot vam šalje tekst u Telegram preko Telegramovih servera, kao svaku poruku; naš server nije uključen. Bot radi dok je Konspekt pokrenut, a poruke poslate bez njega Telegram će isporučiti pri sledećem pokretanju. Telegram botovima ne daje fajlove veće od 20 MB.",
+    "bot_unnamed": "Bot je povezan",
+    "state_off": "Isključen: poruke botu čekaju dok ga ne uključite.",
+    "state_waiting": "Radi i čeka povezivanje sa vašim četom.",
+    "state_linked": "Radi. Odgovara samo vama: {name}.",
+    "error": {
+      "bad_token": "Telegram ne prihvata token: opozvan je u @BotFather. Odvojite bota i povežite ga ponovo.",
+      "conflict": "Drugi primerak Konspekta već koristi ovog bota. Zatvorite ga i bot će nastaviti ovde.",
+      "network": "Telegram trenutno nije dostupan. Bot će sam pokušati ponovo.",
+      "api": "Telegram je vratio grešku. Bot će sam pokušati ponovo."
+    },
+    "connect_error": {
+      "format": "Ovo ne liči na token: kopirajte ga celog iz poruke BotFather-a.",
+      "bad_token": "Telegram ne zna ovaj token. Proverite da ste ga kopirali celog.",
+      "network": "Telegram nije dostupan. Proverite internet vezu.",
+      "api": "Telegram je vratio grešku. Pokušajte ponovo."
+    }
   }
 }

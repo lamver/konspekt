@@ -13,6 +13,103 @@
 from __future__ import annotations
 
 MESSAGES: dict[str, dict[str, str]] = {
+    # Ответы своего бота в Telegram (core/telegram_bot.py).
+    "python.telegram.paired": {
+        "ru": "Готово, бот привязан к этому чату. Пересылайте голосовые, кружки или аудио — пришлю расшифровку, а если в Конспекте есть модель для заметок, то и итоги. Ссылку на видео тоже можно прислать.",
+        "en": "Done, the bot is linked to this chat. Forward voice messages, video notes or audio — I'll send back the transcript, and the summary too if Konspekt has a notes model. You can also send a video link.",
+        "es": "Listo, el bot está vinculado a este chat. Reenvía mensajes de voz, videonotas o audio: te enviaré la transcripción, y el resumen si Konspekt tiene un modelo de notas. También puedes enviar un enlace de vídeo.",
+        "sr": "Gotovo, bot je povezan sa ovim četom. Prosleđujte glasovne poruke, kružiće ili audio — poslaću transkript, a ako Konspekt ima model za beleške, i rezime. Možete poslati i link na video.",
+    },
+    "python.telegram.need_code": {
+        "ru": "Это бот Конспекта. Чтобы привязать его, пришлите код из программы: Настройки → Telegram.",
+        "en": "This is a Konspekt bot. To link it, send the code from the app: Settings → Telegram.",
+        "es": "Este es un bot de Konspekt. Para vincularlo, envía el código de la aplicación: Ajustes → Telegram.",
+        "sr": "Ovo je Konspekt bot. Da biste ga povezali, pošaljite kod iz programa: Podešavanja → Telegram.",
+    },
+    "python.telegram.foreign": {
+        "ru": "Этот бот работает только для своего владельца.",
+        "en": "This bot only works for its owner.",
+        "es": "Este bot solo funciona para su propietario.",
+        "sr": "Ovaj bot radi samo za svog vlasnika.",
+    },
+    "python.telegram.help": {
+        "ru": "Пришлите голосовое, кружок, аудио или видео (до 20 МБ) либо ссылку на запись — расшифрую на компьютере и пришлю текст.",
+        "en": "Send a voice message, video note, audio or video (up to 20 MB) or a link to a recording — I'll transcribe it on the computer and send the text.",
+        "es": "Envía un mensaje de voz, videonota, audio o vídeo (hasta 20 MB) o un enlace a una grabación: lo transcribiré en el ordenador y te enviaré el texto.",
+        "sr": "Pošaljite glasovnu poruku, kružić, audio ili video (do 20 MB) ili link na snimak — prepisaću ga na računaru i poslati tekst.",
+    },
+    "python.telegram.too_big": {
+        "ru": "Файл больше 20 МБ: такие Telegram ботам не отдаёт. Перетащите запись в окно Конспекта или пришлите ссылку.",
+        "en": "The file is over 20 MB: Telegram doesn't give such files to bots. Drop the recording into the Konspekt window or send a link.",
+        "es": "El archivo supera los 20 MB: Telegram no entrega archivos así a los bots. Arrastra la grabación a la ventana de Konspekt o envía un enlace.",
+        "sr": "Fajl je veći od 20 MB: Telegram takve fajlove ne daje botovima. Prevucite snimak u prozor Konspekta ili pošaljite link.",
+    },
+    "python.telegram.download_failed": {
+        "ru": "Не получилось скачать файл из Telegram. Попробуйте прислать ещё раз.",
+        "en": "Couldn't download the file from Telegram. Please try sending it again.",
+        "es": "No se pudo descargar el archivo de Telegram. Intenta enviarlo de nuevo.",
+        "sr": "Fajl nije mogao da se preuzme iz Telegrama. Pokušajte da ga pošaljete ponovo.",
+    },
+    "python.telegram.trial_over": {
+        "ru": "Пробные встречи закончились: новые записи расшифровываются с лицензией. Купить: https://aisearch.ru/pricing/license/konspekt",
+        "en": "The trial meetings are used up: new recordings are transcribed with a license. Buy: https://aisearch.ru/pricing/license/konspekt",
+        "es": "Las reuniones de prueba se han agotado: las grabaciones nuevas se transcriben con licencia. Comprar: https://aisearch.ru/pricing/license/konspekt",
+        "sr": "Probni sastanci su potrošeni: novi snimci se prepisuju uz licencu. Kupi: https://aisearch.ru/pricing/license/konspekt",
+    },
+    "python.telegram.not_audio": {
+        "ru": "В этом файле не нашлось звука.",
+        "en": "No audio found in this file.",
+        "es": "No se encontró audio en este archivo.",
+        "sr": "U ovom fajlu nije pronađen zvuk.",
+    },
+    "python.telegram.accepted": {
+        "ru": "Принял, расшифровываю.",
+        "en": "Got it, transcribing.",
+        "es": "Recibido, transcribiendo.",
+        "sr": "Primljeno, prepisujem.",
+    },
+    "python.telegram.accepted_link": {
+        "ru": "Принял ссылку: скачаю звук и расшифрую.",
+        "en": "Got the link: I'll download the audio and transcribe it.",
+        "es": "Enlace recibido: descargaré el audio y lo transcribiré.",
+        "sr": "Link primljen: preuzeću zvuk i prepisati ga.",
+    },
+    "python.telegram.failed": {
+        "ru": "Не получилось расшифровать. Подробности — в окне Конспекта, в очереди разбора.",
+        "en": "Couldn't transcribe it. Details are in the Konspekt window, in the import queue.",
+        "es": "No se pudo transcribir. Los detalles están en la ventana de Konspekt, en la cola de importación.",
+        "sr": "Prepis nije uspeo. Detalji su u prozoru Konspekta, u redu za obradu.",
+    },
+    "python.telegram.empty": {
+        "ru": "Речи в записи не нашлось.",
+        "en": "No speech found in the recording.",
+        "es": "No se encontró voz en la grabación.",
+        "sr": "U snimku nije pronađen govor.",
+    },
+    "python.telegram.transcript": {
+        "ru": "Расшифровка:",
+        "en": "Transcript:",
+        "es": "Transcripción:",
+        "sr": "Transkript:",
+    },
+    "python.telegram.summary": {
+        "ru": "Итоги:",
+        "en": "Summary:",
+        "es": "Resumen:",
+        "sr": "Rezime:",
+    },
+    "python.telegram.no_model": {
+        "ru": "Итоги делает модель для заметок, а её в Конспекте пока нет. Скачайте её в Настройки → Заметки, и итоги будут приходить сами.",
+        "en": "Summaries are written by the notes model, which Konspekt doesn't have yet. Download it in Settings → Notes, and summaries will arrive automatically.",
+        "es": "Los resúmenes los escribe el modelo de notas, que Konspekt aún no tiene. Descárgalo en Ajustes → Notas y los resúmenes llegarán solos.",
+        "sr": "Rezime piše model za beleške, a Konspekt ga još nema. Preuzmite ga u Podešavanja → Beleške i rezimei će stizati sami.",
+    },
+    "python.telegram.summary_later": {
+        "ru": "Итоги сейчас не сделать: модель занята или недоступна. Их можно сделать позже в окне Конспекта.",
+        "en": "Can't make a summary right now: the model is busy or unavailable. You can make it later in the Konspekt window.",
+        "es": "Ahora no se puede hacer el resumen: el modelo está ocupado o no disponible. Puedes hacerlo luego en la ventana de Konspekt.",
+        "sr": "Rezime sada ne može: model je zauzet ili nedostupan. Možete ga napraviti kasnije u prozoru Konspekta.",
+    },
     # Название в заголовке окна и на панели задач. По-русски по-русски:
     # человек с русским интерфейсом видит «Конспект», а не латиницу.
     "python.app.name": {

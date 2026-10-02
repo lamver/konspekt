@@ -518,6 +518,23 @@ class Api:
         """Убрать ключ с этого компьютера."""
         return self._service.remove_license()
 
+    def telegram_state(self) -> dict[str, Any]:
+        return self._service.telegram_state()
+
+    def telegram_set_token(self, token: str) -> dict[str, Any]:
+        return self._service.telegram_set_token(token)
+
+    def telegram_set_enabled(self, enabled: bool) -> dict[str, Any]:
+        return self._service.telegram_set_enabled(bool(enabled))
+
+    def telegram_forget(self) -> dict[str, Any]:
+        return self._service.telegram_forget()
+
+    def telegram_open_botfather(self) -> bool:
+        from ..core import telegram as telegram_mod
+
+        return telegram_mod.открыть_ботфазера()
+
     def share_telegram(self, text: str) -> dict[str, Any]:
         """Открыть Telegram с готовым текстом заметок."""
         return self._service.share_telegram(text)

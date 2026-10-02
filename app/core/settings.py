@@ -210,6 +210,21 @@ class DictationSettings:
 
 
 @dataclass
+class TelegramSettings:
+    """Свой бот в Telegram: перешли голосовое — получи расшифровку.
+
+    Выключен по умолчанию: бот ходит в интернет, а это человек решает сам.
+    Токен лежит зашифрованным средствами Windows (core/секрет.py): это ключ
+    от бота, ему не место открытым текстом в файле настроек.
+    """
+
+    enabled: bool = False
+    token: str = ""          # спрятанный токен, см. секрет.спрятать
+    chat_id: int = 0         # хозяин бота: отвечаем только ему
+    chat_name: str = ""
+
+
+@dataclass
 class ВниманиеSettings:
     """Когда Konspekt подаёт голос сам.
 
@@ -240,6 +255,7 @@ class Settings:
     llm: LlmSettings = field(default_factory=LlmSettings)
     dictation: DictationSettings = field(default_factory=DictationSettings)
     внимание: ВниманиеSettings = field(default_factory=ВниманиеSettings)
+    telegram: TelegramSettings = field(default_factory=TelegramSettings)
     always_on_top: bool = True
     theme: str = "system"          # system | light | dark
     hotkey: str = "<ctrl>+<shift>+k"
@@ -294,10 +310,11 @@ def load() -> Settings:
         llm = _section(LlmSettings, raw.pop("llm", {}))
         dictation = _section(DictationSettings, raw.pop("dictation", {}))
         внимание = _section(ВниманиеSettings, raw.pop("внимание", {}))
+        telegram = _section(TelegramSettings, raw.pop("telegram", {}))
         known = {k: v for k, v in raw.items() if k in Settings.__dataclass_fields__}
         return Settings(
             window=window, audio=audio, asr=asr, llm=llm,
-            dictation=dictation, внимание=внимание, **known,
+            dictation=dictation, внимание=внимание, telegram=telegram, **known,
         )
     except Exception:
         # Битый конфиг не повод не запуститься.

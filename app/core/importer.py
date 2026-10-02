@@ -123,7 +123,7 @@ class ImportQueue:
 
     # --- постановка в очередь --------------------------------------------
 
-    def add(self, paths: list[str] | list[Path]) -> list[dict[str, Any]]:
+    def add(self, paths: list[str] | list[Path], folder_id: str | None = None) -> list[dict[str, Any]]:
         """Поставить файлы в очередь.
 
         Проверяем их сразу, ещё до разбора: человек бросил пачку и должен
@@ -133,7 +133,7 @@ class ImportQueue:
         added: list[dict[str, Any]] = []
         for raw in paths:
             path = Path(raw)
-            task = ImportTask(path=path, title=path.stem or path.name)
+            task = ImportTask(path=path, title=path.stem or path.name, folder_id=folder_id)
             try:
                 info: AudioInfo = probe(path)
                 task.duration = info.duration

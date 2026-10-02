@@ -188,7 +188,8 @@
       "look": "Apariencia",
       "data": "Datos",
       "about": "Acerca de",
-      "license": "Licencia"
+      "license": "Licencia",
+      "telegram": "Telegram"
     }
   },
   "audio": {
@@ -610,6 +611,36 @@
     "opened": "Telegram abierto: elige un chat",
     "opened_long": "Las notas son largas: a Telegram fue el comienzo, el texto completo está en el portapapeles — pégalo con Ctrl+V",
     "no_app": "Telegram no está instalado en este ordenador. Las notas están en el portapapeles: pégalas en cualquier chat",
-    "failed": "No se pudo abrir Telegram"
+    "failed": "No se pudo abrir Telegram",
+    "title": "Tu propio bot de Telegram",
+    "intro": "Reenvía al bot un mensaje de voz, una videonota o un audio: Konspekt lo transcribe en este ordenador y te envía el texto, y también el resumen si hay un modelo de notas. El bot es tuyo: lo creas tú y solo te responde a ti.",
+    "setup_title": "Conectar un bot",
+    "step1": "En Telegram, abre",
+    "step1_tail": "y envíale /newbot.",
+    "step2": "Ponle un nombre al bot. BotFather te enviará un token: una cadena como 123456789:AAH…",
+    "step3": "Pega el token aquí y pulsa «Conectar».",
+    "token_label": "Token del bot",
+    "connect": "Conectar",
+    "checking": "Comprobando el token con Telegram…",
+    "pair_hint": "Para que el bot solo te obedezca a ti, ábrelo en Telegram y envía este código:",
+    "enabled": "El bot está activo",
+    "forget": "Desconectar el bot de Konspekt",
+    "privacy": "La transcripción y los resúmenes se hacen en este ordenador. El bot te envía el texto en Telegram a través de los servidores de Telegram, como cualquier mensaje; nuestro servidor no interviene. El bot funciona mientras Konspekt está abierto, y Telegram entregará los mensajes enviados sin él en el siguiente inicio. Telegram no entrega a los bots archivos de más de 20 MB.",
+    "bot_unnamed": "Bot conectado",
+    "state_off": "Apagado: los mensajes al bot esperan hasta que lo actives.",
+    "state_waiting": "Activo y esperando a vincularse a tu chat.",
+    "state_linked": "Activo. Solo te responde a ti: {name}.",
+    "error": {
+      "bad_token": "Telegram rechaza el token: fue revocado en @BotFather. Desconecta el bot y vuelve a conectarlo.",
+      "conflict": "Otra copia de Konspekt ya usa este bot. Ciérrala y el bot seguirá aquí.",
+      "network": "Telegram no está disponible ahora. El bot lo volverá a intentar solo.",
+      "api": "Telegram devolvió un error. El bot lo volverá a intentar solo."
+    },
+    "connect_error": {
+      "format": "No parece un token: cópialo completo del mensaje de BotFather.",
+      "bad_token": "Telegram no conoce este token. Comprueba que lo copiaste completo.",
+      "network": "No se pudo contactar con Telegram. Comprueba tu conexión.",
+      "api": "Telegram devolvió un error. Inténtalo de nuevo."
+    }
   }
 }
