@@ -17,13 +17,13 @@ const I18N = {
   en: {
     label: 'English',
     htmlLang: 'en',
-    description: 'A smart notepad for meetings. Records, transcribes and summarises entirely on your own computer. Free, open source, works offline.',
+    description: 'A smart notepad for meetings. Records, transcribes and summarises entirely on your own computer. Works offline, source code is open.',
     ogDescription: 'Records the conversation, transcribes it and turns it into notes, entirely on your own machine.',
     title: 'Konspekt — meeting notes that never leave your computer',
     tagline: 'A smart notepad for meetings. Konspekt records the conversation, transcribes it and turns it into notes — entirely on your own machine.',
     lead: 'A local, privacy-first alternative to Granola. Nothing is uploaded anywhere: not the audio, not the transcript, not your notes.',
     download: 'Download for Windows',
-    downloadNote: 'Free. Installs in a minute and works offline afterwards.',
+    downloadNote: 'The first 10 meetings are free, then a license is needed. Installs in a minute and works offline afterwards.',
     vtNote: 'engines flag this file',
     releaseVersion: 'Version %s',
     releaseChanges: 'What changed',
@@ -53,7 +53,7 @@ const I18N = {
     langsTitle: 'Speaks your language',
     langsText: 'The interface is available in English, Spanish, Serbian and Russian. Speech recognition handles Russian particularly well: it runs on GigaAM, a model built for it, rather than on a translation of an English-first tool.',
 
-    licenseTitle: 'Open source',
+    licenseTitle: 'Source code is open',
     licenseText: 'Konspekt is distributed under FSL-1.1-MIT: read the code, change it, use it. The single restriction is repackaging it as a competing commercial product. Every release becomes plain MIT two years after it ships.',
     licenseLink: 'Read the license',
 
@@ -64,13 +64,13 @@ const I18N = {
   es: {
     label: 'Español',
     htmlLang: 'es',
-    description: 'Un bloc de notas inteligente para reuniones. Graba, transcribe y resume entero en tu propio ordenador. Gratis, código abierto, funciona sin conexión.',
+    description: 'Un bloc de notas inteligente para reuniones. Graba, transcribe y resume entero en tu propio ordenador. Funciona sin conexión, el código fuente es abierto.',
     ogDescription: 'Graba la conversación, la transcribe y la convierte en notas, entero en tu propio ordenador.',
     title: 'Konspekt — notas de reuniones que nunca salen de tu ordenador',
     tagline: 'Un cuaderno inteligente para reuniones. Konspekt graba la conversación, la transcribe y la convierte en notas, todo en tu propio ordenador.',
     lead: 'Una alternativa local y privada a Granola. No se sube nada a ningún sitio: ni el audio, ni la transcripción, ni tus notas.',
     download: 'Descargar para Windows',
-    downloadNote: 'Gratis. Se instala en un minuto y luego funciona sin conexión.',
+    downloadNote: 'Las primeras 10 reuniones son gratis, después se necesita una licencia. Se instala en un minuto y luego funciona sin conexión.',
     vtNote: 'antivirus marcan este archivo',
     releaseVersion: 'Versión %s',
     releaseChanges: 'Qué cambió',
@@ -100,7 +100,7 @@ const I18N = {
     langsTitle: 'Habla tu idioma',
     langsText: 'La interfaz está disponible en inglés, español, serbio y ruso. El reconocimiento de voz funciona especialmente bien en ruso: usa GigaAM, un modelo creado para ese idioma, y no la adaptación de una herramienta pensada en inglés.',
 
-    licenseTitle: 'Código abierto',
+    licenseTitle: 'El código fuente es abierto',
     licenseText: 'Konspekt se distribuye bajo FSL-1.1-MIT: puedes leer el código, modificarlo y usarlo. La única restricción es reempaquetarlo como producto comercial competidor. Cada versión pasa a ser MIT normal dos años después de publicarse.',
     licenseLink: 'Leer la licencia',
 
@@ -111,13 +111,13 @@ const I18N = {
   sr: {
     label: 'Srpski',
     htmlLang: 'sr-Latn',
-    description: 'Pametna beležnica za sastanke. Snima, transkribuje i sažima u celosti na tvom računaru. Besplatno, otvoren kod, radi bez interneta.',
+    description: 'Pametna beležnica za sastanke. Snima, transkribuje i sažima u celosti na tvom računaru. Radi bez interneta, izvorni kod je otvoren.',
     ogDescription: 'Snima razgovor, transkribuje ga i pretvara u beleške, u celosti na tvom računaru.',
     title: 'Konspekt — beleške sa sastanaka koje ne napuštaju tvoj računar',
     tagline: 'Pametna beležnica za sastanke. Konspekt snima razgovor, prepisuje ga i pretvara u beleške — sve na tvom računaru.',
     lead: 'Lokalna alternativa Granoli, sa privatnošću na prvom mestu. Ništa se nigde ne šalje: ni zvuk, ni transkript, ni tvoje beleške.',
     download: 'Preuzmi za Windows',
-    downloadNote: 'Besplatno. Instalira se za minut i posle radi bez interneta.',
+    downloadNote: 'Prvih 10 sastanaka je besplatno, posle je potrebna licenca. Instalira se za minut i posle radi bez interneta.',
     vtNote: 'antivirusa prijavljuje ovaj fajl',
     releaseVersion: 'Verzija %s',
     releaseChanges: 'Šta je novo',
@@ -147,7 +147,7 @@ const I18N = {
     langsTitle: 'Govori tvoj jezik',
     langsText: 'Interfejs postoji na engleskom, španskom, srpskom i ruskom. Prepoznavanje govora posebno dobro radi na ruskom: koristi GigaAM, model napravljen za taj jezik, a ne prilagođenu alatku smišljenu na engleskom.',
 
-    licenseTitle: 'Otvoren kod',
+    licenseTitle: 'Izvorni kod je otvoren',
     licenseText: 'Konspekt se objavljuje pod FSL-1.1-MIT: kod možeš čitati, menjati i koristiti. Jedino ograničenje je pakovanje u konkurentski komercijalni proizvod. Svaka verzija dve godine nakon izdanja postaje obična MIT.',
     licenseLink: 'Pročitaj licencu',
 
@@ -158,13 +158,13 @@ const I18N = {
   ru: {
     label: 'Русский',
     htmlLang: 'ru',
-    description: 'Умный блокнот для встреч. Записывает, расшифровывает и делает заметки целиком на вашем компьютере. Бесплатно, открытый код, работает без интернета.',
+    description: 'Умный блокнот для встреч. Записывает, расшифровывает и делает заметки целиком на вашем компьютере. Работает без интернета, исходный код открыт.',
     ogDescription: 'Слушает разговор, расшифровывает его и превращает в заметки — целиком на вашем компьютере.',
     title: 'Konspekt — заметки со встреч, которые остаются на вашем компьютере',
     tagline: 'Умный блокнот для встреч. Konspekt слушает разговор, расшифровывает его и превращает в заметки — целиком на вашем компьютере.',
     lead: 'Запись, расшифровка и заметки никуда не уходят: ни звук, ни текст, ни ваши тезисы.',
     download: 'Скачать для Windows',
-    downloadNote: 'Бесплатно. Ставится за минуту, дальше работает без интернета.',
+    downloadNote: 'Первые 10 встреч бесплатно, дальше нужна лицензия. Ставится за минуту, дальше работает без интернета.',
     vtNote: 'антивирусов считают файл опасным',
     releaseVersion: 'Версия %s',
     releaseChanges: 'Что изменилось',
@@ -194,7 +194,7 @@ const I18N = {
     langsTitle: 'Говорит на вашем языке',
     langsText: 'Интерфейс есть на английском, испанском, сербском и русском. С русской речью программа справляется особенно хорошо: она работает на GigaAM, модели, сделанной для этого языка, а не на переделке англоязычного инструмента.',
 
-    licenseTitle: 'Открытый код',
+    licenseTitle: 'Исходный код открыт',
     licenseText: 'Konspekt распространяется по FSL-1.1-MIT: код можно читать, править и использовать. Нельзя одно — собрать из него конкурирующий продукт на продажу. Каждая версия через два года после выпуска становится обычной MIT.',
     licenseLink: 'Прочитать лицензию',
 
