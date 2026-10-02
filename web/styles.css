@@ -576,21 +576,24 @@ body { display: flex; flex-direction: column; }
 }
 .btn-record.is-recording .rec-dot { animation: pulse 1.2s ease-in-out infinite; }
 
-.levels { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+.levels { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
 .level { display: flex; align-items: center; gap: 6px; }
 .level__name { font-size: 10px; color: var(--ink-3); width: 20px; flex-shrink: 0; }
-.level__track {
-  flex: 1; height: 3px;
-  background: var(--paper-3);
-  border-radius: 2px; overflow: hidden;
+/* Волна: последние секунды звука столбиками, новый справа. Столбик
+   растёт от середины в обе стороны, как дорожка в звуковом редакторе:
+   так тихая речь видна, а громкая не упирается в край. */
+.level__wave {
+  flex: 1; min-width: 0; height: 16px;
+  display: flex; align-items: center; justify-content: flex-end; gap: 2px;
+  overflow: hidden;
 }
-.level__fill {
-  height: 100%; width: 0%;
+.level__wave i {
+  flex: 1 1 0; min-width: 2px; max-width: 4px;
+  height: 2px; border-radius: 2px;
   background: var(--accent);
-  border-radius: 2px;
-  transition: width .1s linear;
+  transition: height .1s linear;
 }
-.level__fill--them { background: var(--ink-2); }
+.level__wave--them i { background: var(--ink-2); }
 
 .timer {
   font-variant-numeric: tabular-nums;

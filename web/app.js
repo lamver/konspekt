@@ -2871,21 +2871,59 @@ function renderRecordingState() {
   if (надпись !== null) ui.recLabel.textContent = надпись;
   ui.levels.hidden = !active;
   ui.timer.hidden = !active;
-  if (!active) {
-    ui.levelMe.style.width = '0%';
-    ui.levelThem.style.width = '0%';
+  if (!active) resetWaves();
+}
+
+/* Волна уровня: уровни приходят десять раз в секунду, каждый становится
+   столбиком справа, старые уплывают влево. 64 столбика — последние
+   шесть с лишним секунд: видно, что собеседник только что говорил, даже
+   если сейчас молчит. */
+const ВОЛНА_СТОЛБИКОВ = 64;
+const волны = { me: [], them: [] };
+
+function строитьВолну(эл) {
+  if (!эл || эл.childElementCount) return;
+  for (let i = 0; i < ВОЛНА_СТОЛБИКОВ; i++) эл.appendChild(document.createElement('i'));
+}
+
+function рисоватьВолну(эл, значения) {
+  if (!эл) return;
+  строитьВолну(эл);
+  const столбики = эл.children;
+  const сдвиг = ВОЛНА_СТОЛБИКОВ - значения.length;
+  for (let i = 0; i < ВОЛНА_СТОЛБИКОВ; i++) {
+    const v = i >= сдвиг ? значения[i - сдвиг] : 0;
+    // Корень: тихая речь у уровня 0.05 иначе была бы неотличима от тишины.
+    столбики[i].style.height = `${Math.max(2, Math.round(Math.sqrt(Math.min(1, v)) * 16))}px`;
   }
 }
 
-function renderLevels(me, them) {
-  ui.levelMe.style.width = `${Math.min(100, (me || 0) * 100)}%`;
-  ui.levelThem.style.width = `${Math.min(100, (them || 0) * 100)}%`;
-  // Если поток уровней оборвался, полоски не должны застрять.
+function добавитьВВолну(дорожка, v) {
+  const ряд = волны[дорожка];
+  ряд.push(Number.isFinite(v) ? Math.max(0, v) : 0);
+  if (ряд.length > ВОЛНА_СТОЛБИКОВ) ряд.shift();
+}
+
+function resetWaves() {
+  clearTimeout(levelResetTimer);
+  волны.me.length = 0;
+  волны.them.length = 0;
+  рисоватьВолну(ui.levelMe, волны.me);
+  рисоватьВолну(ui.levelThem, волны.them);
+}
+
+function renderLevels(me, them, тишина = 600) {
+  добавитьВВолну('me', me || 0);
+  добавитьВВолну('them', them || 0);
+  рисоватьВолну(ui.levelMe, волны.me);
+  рисоватьВолну(ui.levelThem, волны.them);
+  // Если поток уровней оборвался, волна не должна застыть на последнем
+  // крике: дальше она плывёт тишиной в том же темпе, пока уровни снова не
+  // придут. После остановки записи — ничего: resetWaves гасит таймер.
   clearTimeout(levelResetTimer);
   levelResetTimer = setTimeout(() => {
-    ui.levelMe.style.width = '0%';
-    ui.levelThem.style.width = '0%';
-  }, 600);
+    if (state.isRecording) renderLevels(0, 0, 100);
+  }, тишина);
 }
 
 function startTimer() {
