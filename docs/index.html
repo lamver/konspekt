@@ -104,8 +104,8 @@
 
      Без него поисковик видит обычную страницу с текстом и не знает, что
      за ней стоит программа: какая цена, под какую систему, откуда
-     скачать. Цены двух лицензий стоят в offers: текст «10 встреч
-     бесплатно» машина не прочитает, а поле offers прочитает.
+     скачать. Цен здесь нет намеренно: цена живёт в одном месте, в
+     каталоге aisearch.ru, и покупка идёт там (решение владельца 02.10).
 
      Снимки перечислены здесь же: по ним нас находят в поиске картинок,
      а сами они грузятся отложенно и роботу-сборщику могут не достаться. -->
@@ -121,22 +121,6 @@
   "downloadUrl": "https://github.com/lamver/konspekt-releases/releases/latest",
   "description": "A smart notepad for meetings. Records the conversation, transcribes it and turns it into notes entirely on your own computer. Nothing is uploaded anywhere.",
   "inLanguage": ["en", "es", "sr", "ru"],
-  "offers": [
-    {
-      "@type": "Offer",
-      "name": "License with 3 years of updates",
-      "price": "1490",
-      "priceCurrency": "RUB",
-      "url": "https://aisearch.ru/pricing/license/konspekt"
-    },
-    {
-      "@type": "Offer",
-      "name": "Lifetime license",
-      "price": "3900",
-      "priceCurrency": "RUB",
-      "url": "https://aisearch.ru/pricing/license/konspekt"
-    }
-  ],
   "license": "https://github.com/lamver/konspekt/blob/master/LICENSE.md",
   "featureList": [
     "Records microphone and system audio",
@@ -447,7 +431,7 @@
   <div class="wrap">
     <h2 id="t-license-title">Source code is open</h2>
     <p class="prose" id="t-license-text">Konspekt is distributed under FSL-1.1-MIT: read the code, change it, use it. The single restriction is repackaging it as a competing commercial product. Every release becomes plain MIT two years after it ships.</p>
-    <p><a id="t-license-link" href="https://github.com/lamver/konspekt/blob/master/LICENSE.md">Read the license</a></p>
+    <p><a id="t-license-link" href="https://github.com/lamver/konspekt/blob/master/LICENSE.md">Read the license</a> · <a id="t-buy-link" href="https://aisearch.ru/pricing/license/konspekt">Licenses are sold at aisearch.ru</a></p>
   </div>
 </section>
 
@@ -634,6 +618,7 @@ function render(lang) {
   setText('t-license-title', d.licenseTitle);
   setText('t-license-text', d.licenseText);
   setText('t-license-link', d.licenseLink);
+  setText('t-buy-link', d.buyLink);
 
   // Подпись у виджета проверки на языке страницы, поэтому обновляем его
   // при каждой отрисовке, а не один раз при загрузке.

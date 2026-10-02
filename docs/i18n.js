@@ -56,6 +56,7 @@ const I18N = {
     licenseTitle: 'Source code is open',
     licenseText: 'Konspekt is distributed under FSL-1.1-MIT: read the code, change it, use it. The single restriction is repackaging it as a competing commercial product. Every release becomes plain MIT two years after it ships.',
     licenseLink: 'Read the license',
+    buyLink: 'Licenses are sold at aisearch.ru',
 
     verifyTitle: 'Verifying the download',
     verifyText: 'The installer ships with SHA256SUMS and a GitHub build provenance attestation, so you can confirm the file came from this repository and was built by CI rather than by someone on the internet.',
@@ -103,6 +104,7 @@ const I18N = {
     licenseTitle: 'El código fuente es abierto',
     licenseText: 'Konspekt se distribuye bajo FSL-1.1-MIT: puedes leer el código, modificarlo y usarlo. La única restricción es reempaquetarlo como producto comercial competidor. Cada versión pasa a ser MIT normal dos años después de publicarse.',
     licenseLink: 'Leer la licencia',
+    buyLink: 'Las licencias se venden en aisearch.ru',
 
     verifyTitle: 'Cómo verificar la descarga',
     verifyText: 'El instalador viene con SHA256SUMS y con una firma de procedencia de GitHub, así puedes comprobar que el archivo salió de este repositorio y lo compiló el servidor, no una persona cualquiera.',
@@ -150,6 +152,7 @@ const I18N = {
     licenseTitle: 'Izvorni kod je otvoren',
     licenseText: 'Konspekt se objavljuje pod FSL-1.1-MIT: kod možeš čitati, menjati i koristiti. Jedino ograničenje je pakovanje u konkurentski komercijalni proizvod. Svaka verzija dve godine nakon izdanja postaje obična MIT.',
     licenseLink: 'Pročitaj licencu',
+    buyLink: 'Licence se prodaju na aisearch.ru',
 
     verifyTitle: 'Provera preuzetog fajla',
     verifyText: 'Uz instalaciju idu SHA256SUMS i GitHub potvrda o poreklu, pa možeš proveriti da fajl dolazi iz ovog repozitorijuma i da ga je sastavio server, a ne neko sa interneta.',
@@ -197,6 +200,7 @@ const I18N = {
     licenseTitle: 'Исходный код открыт',
     licenseText: 'Konspekt распространяется по FSL-1.1-MIT: код можно читать, править и использовать. Нельзя одно — собрать из него конкурирующий продукт на продажу. Каждая версия через два года после выпуска становится обычной MIT.',
     licenseLink: 'Прочитать лицензию',
+    buyLink: 'Лицензии продаются на aisearch.ru',
 
     verifyTitle: 'Как проверить скачанное',
     verifyText: 'Рядом с установщиком лежат SHA256SUMS и подпись происхождения от GitHub: можно убедиться, что файл собран из этого репозитория на сервере, а не кем-то в интернете.',
