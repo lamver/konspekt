@@ -16,6 +16,26 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
             КОРЕНЬ / "масштаб_edge_test.py"]
 
 МУТАЦИИ = [
+    # --- срок обновлений (ключ «на 3 года», решение 01.10) ---
+    ("app/core/license.py",
+     "        if (built or build_date()) > last:\n            raise LicenseError(\"updates_ended\", updates)\n",
+     "",
+     "ключ «на 3 года» подходит любой новой версии"),
+    ("app/core/license.py",
+     "        if (built or build_date()) > last:\n",
+     "        if (today or dt.date.today()) > last:\n",
+     "срок обновлений сверяется с часами, а не с датой сборки"),
+    ("app/core/license.py",
+     "        if (built or build_date()) > last:\n",
+     "        if (built or build_date()) >= last:\n",
+     "последний день обновлений уже не считается"),
+    ("app/core/license.py",
+     "            raise LicenseError(\"updates_ended\", updates)\n",
+     "            raise LicenseError(\"updates_ended\")\n",
+     "в отказе нет даты: человек не знает, до какой версии откатиться"),
+    ("app/core/license.py",
+     "        updates=updates,\n", "",
+     "окно не знает, до какого дня обновления"),
     # --- подпись ---
     ("app/core/ed25519.py",
      "    if s >= _L:\n        return False\n", "",
@@ -86,8 +106,8 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
      "NaN из файла настроек проходит"),
     # --- окно ---
     ("web/app.js",
-     "  if (ui.licenseBar) ui.licenseBar.hidden = licensed || !!state.licenseBarHidden;\n",
-     "  if (ui.licenseBar) ui.licenseBar.hidden = !!state.licenseBarHidden;\n",
+     "    ui.licenseBar.hidden = licensed || (!!state.licenseBarHidden && !over);\n",
+     "    ui.licenseBar.hidden = !!state.licenseBarHidden && !over;\n",
      "плашка висит и у заплатившего"),
     ("web/app.js",
      "  state.license = s || { licensed: true };\n",

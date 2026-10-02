@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import hashlib
 import os
 import shutil
@@ -125,6 +126,14 @@ def main() -> int:
         # Иначе случайно оставленная переменная окружения тихо соберёт
         # релиз с чёрным окном консоли.
         del os.environ["KONSPEKT_CONSOLE"]
+
+    # Дата сборки едет внутрь программы: с ней сверяется срок обновлений
+    # в ключе «на 3 года» (app/core/license.py). Пишется каждый раз заново.
+    (ROOT / "app" / "build_info.py").write_text(
+        '"""Создаётся packaging/build.py при каждой сборке. Не править."""\n'
+        f'BUILD_DATE = "{dt.date.today().isoformat()}"\n',
+        encoding="utf-8",
+    )
 
     run([sys.executable, "-m", "PyInstaller", str(SPEC), "--noconfirm",
          "--distpath", str(DIST), "--workpath", str(ROOT / "build")])

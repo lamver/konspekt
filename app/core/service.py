@@ -3009,8 +3009,8 @@ class AppService:
             # настроек правили руками. Не стираем: вдруг человек
             # захочет посмотреть, что было вставлено.
             log.warning("Сохранённый ключ лицензии не подошёл: %s", err.code)
-            return {"licensed": False, "error": err.code, "buy_url": license_mod.BUY_URL,
-                    "trial": trial}
+            return {"licensed": False, "error": err.code, "detail": err.detail,
+                    "buy_url": license_mod.BUY_URL, "trial": trial}
         return {"licensed": True, "license": lic.to_dict(), "buy_url": license_mod.BUY_URL,
                 "trial": trial}
 

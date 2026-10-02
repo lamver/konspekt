@@ -17,7 +17,15 @@
 
 Нагрузка — JSON: `v` версия формата, `id` номер лицензии, `p` товар,
 `ed` редакция, `to` кому выдана, `em` почта, `n` число мест, `iat`
-дата выдачи, `exp` дата окончания (нет поля — бессрочная).
+дата выдачи, `exp` дата окончания (нет поля — бессрочная), `upd` последний
+день обновлений (нет поля — обновления навсегда).
+
+`upd` — это не срок работы, а срок обновлений (решение 01.10): ключ «на
+3 года» подходит всем версиям, собранным до этого дня включительно,
+сколько бы лет ни прошло. Сверяется с датой сборки, а не с часами
+компьютера, поэтому перевод часов ничего не даёт. Старые версии про `upd`
+не знают и считают такой ключ бессрочным, и это верно: все они вышли
+раньше конца срока.
 
 Код открыт, и вырезать проверку можно пересборкой. Это сознательно
 принято (docs/tasks/openness-and-licensing.md): кто так сделает, тот и
@@ -72,12 +80,14 @@ class License:
     seats: int
     issued: str
     expires: str
+    updates: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id, "to": self.to, "email": self.email,
             "edition": self.edition, "seats": self.seats,
             "issued": self.issued, "expires": self.expires,
+            "updates": self.updates,
         }
 
 
@@ -106,8 +116,24 @@ def clean(raw: str) -> str:
     return "".join(ch for ch in (raw or "") if ch.isprintable() and not ch.isspace())
 
 
+def build_date() -> dt.date:
+    """Когда собрана эта версия. С ней сверяется срок обновлений `upd`.
+
+    Дату пишет packaging/build.py в app/build_info.py. В разработке файла
+    нет, и берётся сегодняшний день. Собранная программа без даты — ошибка
+    сборки, её ловит самопроверка: иначе срок сверялся бы с часами
+    компьютера, и через три года ключ отказал бы на старой версии.
+    """
+    try:
+        from app.build_info import BUILD_DATE
+    except ImportError:
+        return dt.date.today()
+    return dt.date.fromisoformat(BUILD_DATE)
+
+
 def parse(raw: str, *, today: dt.date | None = None,
-          public_keys: tuple[bytes, ...] | None = None) -> License:
+          public_keys: tuple[bytes, ...] | None = None,
+          built: dt.date | None = None) -> License:
     """Проверить ключ и вернуть, кому он выдан. Не подошёл — LicenseError."""
     key = clean(raw)
     if not key:
@@ -148,6 +174,15 @@ def parse(raw: str, *, today: dt.date | None = None,
         if (today or dt.date.today()) > until:
             raise LicenseError("expired", expires)
 
+    updates = str(data.get("upd") or "")
+    if updates:
+        try:
+            last = dt.date.fromisoformat(updates)
+        except ValueError:
+            raise LicenseError("format") from None
+        if (built or build_date()) > last:
+            raise LicenseError("updates_ended", updates)
+
     try:
         seats = max(1, int(data.get("n") or 1))
     except (TypeError, ValueError):
@@ -160,6 +195,7 @@ def parse(raw: str, *, today: dt.date | None = None,
         seats=seats,
         issued=str(data.get("iat") or ""),
         expires=expires,
+        updates=updates,
     )
 
 

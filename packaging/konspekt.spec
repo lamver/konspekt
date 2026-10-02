@@ -104,7 +104,8 @@ for package in ("soundcard", "av", "onnxruntime"):
 
 # Реализация окна, трея и горячих клавиш выбирается во время работы, поэтому
 # статически её не видно и импорты приходится называть руками.
-hiddenimports = ["webview"]
+# Дата сборки: импорт внутри функции, и пусть он точно попадёт в сборку.
+hiddenimports = ["webview", "app.build_info"]
 if WINDOWS:
     hiddenimports += [
         "webview.platforms.winforms",

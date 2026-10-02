@@ -4575,6 +4575,13 @@ function renderLicense() {
     const текст = tЕслиЕсть('license.missing_hint', { limit: trial.limit });
     if (текст !== null) подсказка.textContent = текст;
   }
+  // Сохранённый ключ перестал подходить, чаще всего потому, что эта версия
+  // вышла после конца обновлений по ключу «на 3 года». Без объяснения
+  // человек просто снова увидел бы пробный период и решил, что ключ слетел.
+  if (s && s.error && !licensed) {
+    const текст = tЕслиЕсть(`license.error.${s.error}`, { date: s.detail || '' });
+    if (текст !== null) showLicenseResult(текст, false);
+  }
   if (ui.licenseOwned) ui.licenseOwned.hidden = !licensed;
   if (ui.licenseMissing) ui.licenseMissing.hidden = licensed;
   if (ui.licenseWho) {
@@ -4584,6 +4591,7 @@ function renderLicense() {
     if (who) parts.push(t('license.issued_to', { who }));
     if (lic.seats > 1) parts.push(t('license.seats', { n: lic.seats }));
     if (lic.expires) parts.push(t('license.valid_until', { date: lic.expires }));
+    if (lic.updates) parts.push(t('license.updates_until', { date: lic.updates }));
     if (lic.id) parts.push(t('license.number', { id: lic.id }));
     ui.licenseWho.textContent = parts.join(' · ');
   }

@@ -484,10 +484,11 @@
     "remove": "Ukloni ključ sa ovog računara",
     "remove_confirm_title": "Ukloniti ključ?",
     "remove_confirm_text": "Traka „Kupi licencu“ će se vratiti. Ključ ostaje u mejlu i možete ga ponovo nalepiti ovde ili na drugom računaru.",
-    "buy_failed": "Pregledač nije mogao da se otvori. Stranica za kupovinu: konspekt.aisearch.ru",
+    "buy_failed": "Pregledač nije mogao da se otvori. Stranica za kupovinu: aisearch.ru/pricing/license/konspekt",
     "issued_to": "Izdata: {who}",
     "seats": "mesta: {n}",
     "valid_until": "važi do {date}",
+    "updates_until": "ažuriranja do {date}",
     "number": "br. {id}",
     "error": {
       "empty": "Nalepite ključ iz mejla.",
@@ -496,6 +497,7 @@
       "version": "Ključ je za noviju verziju programa Konspekt. Ažurirajte program.",
       "product": "Ovo je ključ za drugi program.",
       "expired": "Ključ je istekao {date}.",
+      "updates_ended": "Ovaj ključ pokriva ažuriranja do {date}, a ova verzija je izašla kasnije. Produžite licencu ili instalirajte verziju objavljenu pre tog datuma: na njoj ključ radi zauvek.",
       "bridge": "Program nije odgovorio. Pokušajte ponovo."
     },
     "trial_left": "Probni period: ostalo je {n} {word} od {limit}. Posle toga snimke možete da gledate i kopirate, a snimate uz licencu.",

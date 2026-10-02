@@ -484,10 +484,11 @@
     "remove": "Quitar la clave de este ordenador",
     "remove_confirm_title": "¿Quitar la clave?",
     "remove_confirm_text": "Volverá la barra «Comprar licencia». La clave sigue en tu correo y puedes pegarla de nuevo aquí o en otro ordenador.",
-    "buy_failed": "No se pudo abrir el navegador. Página de compra: konspekt.aisearch.ru",
+    "buy_failed": "No se pudo abrir el navegador. Página de compra: aisearch.ru/pricing/license/konspekt",
     "issued_to": "A nombre de: {who}",
     "seats": "puestos: {n}",
     "valid_until": "válida hasta {date}",
+    "updates_until": "actualizaciones hasta {date}",
     "number": "N.º {id}",
     "error": {
       "empty": "Pega la clave del correo.",
@@ -496,6 +497,7 @@
       "version": "La clave es para una versión más nueva de Konspekt. Actualiza el programa.",
       "product": "Esta clave es de otro programa.",
       "expired": "La clave caducó el {date}.",
+      "updates_ended": "Esta clave cubre actualizaciones hasta el {date} y esta versión salió después. Renueva la licencia o instala una versión publicada antes de esa fecha: en ella la clave funciona para siempre.",
       "bridge": "El programa no respondió. Inténtalo de nuevo."
     },
     "trial_left": "Prueba: quedan {n} {word} de {limit}. Después podrás ver y copiar tus grabaciones, y grabar con una licencia.",

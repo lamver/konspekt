@@ -484,10 +484,11 @@
     "remove": "Remove the key from this computer",
     "remove_confirm_title": "Remove the key?",
     "remove_confirm_text": "The “Buy a license” bar will come back. The key stays in your email, you can paste it again here or on another computer.",
-    "buy_failed": "Could not open the browser. Purchase page: konspekt.aisearch.ru",
+    "buy_failed": "Could not open the browser. Purchase page: aisearch.ru/pricing/license/konspekt",
     "issued_to": "Issued to: {who}",
     "seats": "seats: {n}",
     "valid_until": "valid until {date}",
+    "updates_until": "updates until {date}",
     "number": "No. {id}",
     "error": {
       "empty": "Paste the key from the email.",
@@ -496,6 +497,7 @@
       "version": "This key is for a newer version of Konspekt. Please update.",
       "product": "This key is for a different program.",
       "expired": "The key expired on {date}.",
+      "updates_ended": "This key covers updates until {date}, and this version was released later. Renew the license or install a version released before that date: the key works on it forever.",
       "bridge": "The program didn't respond. Please try again."
     },
     "trial_left": "Trial: {n} {word} of {limit} left. After that you can view and copy your recordings, and record with a license.",
