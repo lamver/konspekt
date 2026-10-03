@@ -284,6 +284,15 @@ CREATE TABLE IF NOT EXISTS meeting_folders (
     folder_id   TEXT NOT NULL REFERENCES folders(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_meeting_folders ON meeting_folders(folder_id);
+-- Какие файлы папки-источника уже взяты (core/источники.py). По отпечатку
+-- содержимого, а не по пути: переименование и перенос не дают дублей.
+CREATE TABLE IF NOT EXISTS source_files (
+    folder_id   TEXT NOT NULL REFERENCES folders(id) ON DELETE CASCADE,
+    fingerprint TEXT NOT NULL,
+    path        TEXT NOT NULL DEFAULT '',
+    taken_at    REAL NOT NULL,
+    PRIMARY KEY (folder_id, fingerprint)
+);
 """
 
 # Пробный период: первые встречи работают целиком, дальше только просмотр.
@@ -449,6 +458,32 @@ class Store:
                    FROM folders f ORDER BY f.name COLLATE NOCASE, f.created_at"""
             ).fetchall()
         return [dict(r) for r in rows]
+
+    def set_folder_source(self, folder_id: str, source: str) -> bool:
+        """Каталог на диске, из которого папка берёт записи. Пусто — не следит."""
+        with self._lock:
+            cur = self._conn.execute("UPDATE folders SET source=? WHERE id=?", (source, folder_id))
+            self._conn.commit()
+        return cur.rowcount > 0
+
+    def source_taken(self, folder_id: str, fingerprint: str) -> bool:
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT 1 FROM source_files WHERE folder_id=? AND fingerprint=?",
+                (folder_id, fingerprint),
+            ).fetchone()
+        return row is not None
+
+    def mark_source_taken(self, folder_id: str, fingerprint: str, path: str) -> None:
+        with self._lock:
+            try:
+                self._conn.execute(
+                    "INSERT OR IGNORE INTO source_files(folder_id, fingerprint, path, taken_at) VALUES (?,?,?,?)",
+                    (folder_id, fingerprint, path, now()),
+                )
+                self._conn.commit()
+            except sqlite3.IntegrityError:
+                pass  # папку удалили, пока шёл обход
 
     def rename_folder(self, folder_id: str, name: str) -> bool:
         with self._lock:

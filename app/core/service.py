@@ -1308,7 +1308,7 @@ class AppService:
     # --- папки ------------------------------------------------------------
 
     def list_folders(self) -> list[dict[str, Any]]:
-        return self.store.list_folders()
+        return self.list_folders_with_sources()
 
     @staticmethod
     def _folder_name(name: str | None) -> str:
@@ -2118,7 +2118,8 @@ class AppService:
 
     # --- импорт файлов ----------------------------------------------------
 
-    def import_files(self, paths: list[str], folder_id: str | None = None) -> list[dict[str, Any]]:
+    def import_files(self, paths: list[str], folder_id: str | None = None,
+                     title: str | None = None, started_at: float | None = None) -> list[dict[str, Any]]:
         """Поставить готовые записи в очередь разбора.
 
         На каждый файл заводится своя встреча, названная по имени файла:
@@ -2140,7 +2141,7 @@ class AppService:
             })
             if not paths:
                 return []
-        tasks = self.importer.add(paths, folder_id)
+        tasks = self.importer.add(paths, folder_id, title=title, started_at=started_at)
         bus.emit(IMPORT_CHANGED, {"tasks": self.importer.tasks()})
         return tasks
 
@@ -2155,7 +2156,8 @@ class AppService:
         self.importer.clear_finished()
         return self.import_status()
 
-    def _import_meeting(self, title: str, url: str = "", folder_id: str | None = None) -> str:
+    def _import_meeting(self, title: str, url: str = "", folder_id: str | None = None,
+                        started_at: float | None = None) -> str:
         """Встреча под импортируемый файл.
 
         Помечаем её как идущую обработку: в списке сразу видно, что
@@ -2163,7 +2165,7 @@ class AppService:
         в пометки: откуда запись, должно быть видно и через год.
         """
         meeting = Meeting(title=title or _default_title(), status=MeetingStatus.PROCESSING)
-        meeting.started_at = now()
+        meeting.started_at = started_at or now()
         if url:
             meeting.notes = url
         self.store.create_meeting(meeting)
@@ -3039,6 +3041,82 @@ class AppService:
         log.info("Ключ лицензии убран")
         return self.license_state()
 
+    # --- папка-источник ---------------------------------------------------
+
+    _сторож_папок = None
+
+    def _источники(self):
+        from . import источники as ист
+
+        if self._сторож_папок is None:
+            self._сторож_папок = ист.СторожПапок(
+                папки=self.store.list_folders,
+                уже_взят=self.store.source_taken,
+                отметить=self.store.mark_source_taken,
+                импорт=self._импорт_из_источника,
+                слово_звонок=lambda: self._msg("python.source.call"),
+            )
+        return self._сторож_папок
+
+    def _импорт_из_источника(self, путь, папка_id: str, название: str, когда: float | None) -> str:
+        """Новая запись из папки-источника: в очередь разбора, в ту же папку."""
+        if self._trial_left() == 0:
+            return "trial"
+        задачи = self.importer.add([str(путь)], папка_id, title=название, started_at=когда)
+        bus.emit(IMPORT_CHANGED, {"tasks": self.importer.tasks()})
+        bus.emit(MEETINGS_CHANGED)
+        if not задачи or задачи[0].get("status") == "failed":
+            return "failed"
+        return "ok"
+
+    def запустить_источники(self) -> None:
+        """Обход папок-источников в фоне. Зовётся при старте."""
+        try:
+            self._источники().запустить()
+        except Exception:
+            log.exception("Не удалось запустить обход папок-источников")
+
+    def folder_source_preview(self, path: str) -> dict[str, Any]:
+        """Сколько записей уже лежит в каталоге: спросить, брать ли их."""
+        from . import источники as ист
+
+        каталог = Path(path or "")
+        if not path or not каталог.is_dir():
+            return {"ok": False, "error": "missing"}
+        try:
+            return {"ok": True, "count": len(ист.файлы_записей(каталог)), "path": str(каталог)}
+        except OSError:
+            return {"ok": False, "error": "unreadable"}
+
+    def folder_set_source(self, folder_id: str, path: str, take_existing: bool) -> dict[str, Any]:
+        """Подключить каталог к папке. take_existing — разобрать и уже лежащие записи."""
+        каталог = Path(path or "")
+        if not path or not каталог.is_dir():
+            return {"ok": False, "error": "missing"}
+        if not take_existing:
+            # «Только новые»: всё, что лежит сейчас, считаем взятым. Иначе
+            # подключение папки с архивом в тысячу звонков тут же съело бы
+            # пробный период и полдня работы процессора.
+            self._источники().взять_как_есть(folder_id, каталог)
+        if not self.store.set_folder_source(folder_id, str(каталог)):
+            return {"ok": False, "error": "folder"}
+        self.запустить_источники()
+        bus.emit(MEETINGS_CHANGED)
+        return {"ok": True}
+
+    def folder_clear_source(self, folder_id: str) -> dict[str, Any]:
+        """Перестать следить. Взятые файлы помним: вернёте каталог — дублей не будет."""
+        self.store.set_folder_source(folder_id, "")
+        bus.emit(MEETINGS_CHANGED)
+        return {"ok": True}
+
+    def list_folders_with_sources(self) -> list[dict[str, Any]]:
+        папки = self.store.list_folders()
+        сторож = self._сторож_папок
+        for п in папки:
+            п["source_state"] = сторож.состояние(п["id"]) if (сторож and п.get("source")) else {}
+        return папки
+
     # --- свой бот в Telegram ----------------------------------------------
 
     _бот = None
@@ -3286,6 +3364,8 @@ class AppService:
         # Бот спрашивает Telegram в своём потоке: без остановки соединение
         # висело бы ещё до 25 секунд после выхода.
         self.остановить_телеграм()
+        if self._сторож_папок is not None:
+            self._сторож_папок.остановить()
         # Перепроверка версии больше не нужна: программа закрывается.
         self._version_checker.stop()
         # Пересчёт указателя пишет в базу, а её мы сейчас закроем.

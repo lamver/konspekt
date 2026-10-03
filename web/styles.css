@@ -420,6 +420,8 @@ body { display: flex; flex-direction: column; }
 .folder__icon { flex: none; color: var(--ink-3); }
 .folder__name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .folder__count { flex: none; font-weight: 400; font-size: 10.5px; color: var(--ink-3); }
+.folder__source { flex: none; display: inline-flex; color: var(--ink-3); }
+.folder__source.is-warn { color: var(--accent); }
 .folder__add, .folder__more {
   flex: none;
   display: none;

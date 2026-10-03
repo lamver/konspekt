@@ -109,7 +109,7 @@ for _ in range(5):
 
 # --- 10. Пачка файлов при остатке ----------------------------------------------
 добавлено: list = []
-сервис.importer.add = lambda paths, folder_id=None: (добавлено.extend(paths), [{"id": str(p)} for p in paths])[1]
+сервис.importer.add = lambda paths, folder_id=None, **_: (добавлено.extend(paths), [{"id": str(p)} for p in paths])[1]
 заблокировано.clear()
 сервис.import_files(["a.wav", "b.wav", "c.wav"])
 проверить(добавлено == ["a.wav"], f"из трёх файлов при остатке 1 загружен один: {добавлено}")

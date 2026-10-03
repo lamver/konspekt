@@ -1729,6 +1729,9 @@ function clearDropMarks() {
  * встречи. «+» начинает встречу прямо в папке — всё как обычно, только
  * встреча сразу лежит где надо.
  */
+// Две стрелки по кругу: папка сама берёт новые записи из каталога.
+const ЗНАК_ИСТОЧНИКА = '<svg viewBox="0 0 16 16" width="11" height="11"><path d="M13 6.5A5 5 0 0 0 4 4.2M3 9.5A5 5 0 0 0 12 11.8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M4 1.8v2.6h2.6M12 14.2v-2.6H9.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
 function folderNode(f, встречи, found, q) {
   const box = document.createElement('div');
   box.className = 'folder';
@@ -1771,7 +1774,28 @@ function folderNode(f, встречи, found, q) {
     e.stopPropagation();
     openFolderMenu(f, more);
   });
-  head.append(arrow, icon, name, count, add, more);
+  head.append(arrow, icon, name);
+  if (f.source) {
+    // Папка следит за каталогом на диске: значок и подсказка, откуда берёт.
+    const ист = f.source_state || {};
+    const знак = document.createElement('span');
+    знак.className = 'folder__source';
+    знак.innerHTML = ЗНАК_ИСТОЧНИКА;
+    let подсказка = t('folders.source_on', { path: f.source });
+    if (ист.trial) {
+      знак.classList.add('is-warn');
+      подсказка = t('folders.source_trial');
+    } else if (ист.error === 'missing') {
+      знак.classList.add('is-warn');
+      подсказка = t('folders.source_missing', { path: f.source });
+    } else if (ист.error) {
+      знак.classList.add('is-warn');
+      подсказка = t('folders.source_unreadable', { path: f.source });
+    }
+    знак.title = подсказка;
+    head.append(знак);
+  }
+  head.append(count, add, more);
   head.addEventListener('click', () => toggleFolder(f.id));
   head.addEventListener('contextmenu', (e) => {
     e.preventDefault();
@@ -1977,12 +2001,53 @@ function openMoveMenu(m, anchor, x, y) {
 }
 
 function openFolderMenu(f, anchor, x, y) {
+  const источник = f.source
+    ? { text: t('folders.source_stop'), run: () => stopSource(f) }
+    : { text: t('folders.source_watch'), run: () => watchSource(f) };
   showCtxMenu([
     { text: t('folders.add_meeting'), run: () => createMeeting(f.id) },
     { text: t('folders.rename'), run: () => renameFolder(f) },
+    источник,
     { sep: true },
     { text: t('folders.delete'), danger: true, run: () => deleteFolder(f) },
   ], anchor, x, y);
+}
+
+/**
+ * Папка-источник: каталог на диске, из которого записи сами становятся
+ * встречами этой папки. Если в каталоге уже лежат записи, спрашиваем,
+ * брать ли их: архив в тысячу звонков молча съел бы пробный период и
+ * полдня работы процессора.
+ */
+async function watchSource(f) {
+  const путь = await api.pick_directory();
+  if (!путь) return;
+  const обзор = await api.folder_source_preview(путь);
+  if (!обзор || !обзор.ok) {
+    showToast(t('folders.source_missing', { path: путь }));
+    return;
+  }
+  let все = false;
+  if (обзор.count > 0) {
+    все = await confirmDialog(
+      t('folders.source_existing_title', { n: обзор.count }),
+      t('folders.source_existing_text'),
+      { yes: t('folders.source_take_all'), no: t('folders.source_only_new'), danger: false },
+    );
+  }
+  const итог = await api.folder_set_source(f.id, путь, все);
+  if (!итог || !итог.ok) {
+    showToast(t('folders.source_missing', { path: путь }));
+    return;
+  }
+  showToast(t('folders.source_started'));
+  await loadMeetings();
+}
+
+async function stopSource(f) {
+  await api.folder_clear_source(f.id);
+  showToast(t('folders.source_stopped'));
+  await loadMeetings();
 }
 
 /**
@@ -2017,15 +2082,30 @@ async function askDeleteMeeting(meeting) {
  * что перед ним браузер, и пугается ровно там, где нужен спокойный
  * ответ на понятный вопрос.
  */
-function confirmDialog(title, text) {
+function confirmDialog(title, text, подписи = null) {
   return new Promise((resolve) => {
     ui.confirmTitle.textContent = title;
     ui.confirmText.textContent = text;
+    // Свои подписи для вопросов не про удаление: «Разобрать и их» и
+    // «Только новые» вместо «Удалить» и «Отмена». После ответа вернём как было.
+    const прежние = { yes: ui.confirmYes.textContent, no: ui.confirmNo.textContent };
+    if (подписи) {
+      if (подписи.yes) ui.confirmYes.textContent = подписи.yes;
+      if (подписи.no) ui.confirmNo.textContent = подписи.no;
+      ui.confirmYes.classList.toggle('btn-danger', !!подписи.danger);
+      ui.confirmYes.classList.toggle('btn-primary', !подписи.danger);
+    }
     ui.confirmSheet.hidden = false;
     ui.confirmYes.focus();
 
     const finish = (answer) => {
       ui.confirmSheet.hidden = true;
+      if (подписи) {
+        ui.confirmYes.textContent = прежние.yes;
+        ui.confirmNo.textContent = прежние.no;
+        ui.confirmYes.classList.add('btn-danger');
+        ui.confirmYes.classList.remove('btn-primary');
+      }
       ui.confirmYes.removeEventListener('click', onYes);
       ui.confirmNo.removeEventListener('click', onNo);
       ui.confirmSheet.removeEventListener('click', onBackdrop);

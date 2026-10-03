@@ -596,7 +596,19 @@
     "delete_confirm_text": "Las reuniones no se eliminan: vuelven a la lista general.",
     "deleted": "Carpeta eliminada, las reuniones siguen",
     "moved": "Reunión movida a «{name}»",
-    "moved_out": "Reunión quitada de la carpeta"
+    "moved_out": "Reunión quitada de la carpeta",
+    "source_watch": "Tomar grabaciones de una carpeta del disco…",
+    "source_stop": "Dejar de tomar grabaciones de la carpeta",
+    "source_on": "Toma nuevas grabaciones de {path}",
+    "source_existing_title": "La carpeta ya tiene {n} grabaciones",
+    "source_existing_text": "¿Transcribirlas también? Lleva tiempo y cada una cuenta como reunión de prueba. Si no, Konspekt tomará solo las nuevas.",
+    "source_take_all": "Transcribirlas también",
+    "source_only_new": "Solo las nuevas",
+    "source_started": "Listo: las nuevas grabaciones de la carpeta aparecerán aquí solas",
+    "source_stopped": "La carpeta ya no toma grabaciones del disco. Las ya transcritas se quedan",
+    "source_trial": "Se agotaron las reuniones de prueba: no se toman nuevas grabaciones de la carpeta. Con licencia llegarán solas",
+    "source_missing": "No se encontró la carpeta {path}",
+    "source_unreadable": "No se puede leer la carpeta {path}: sin acceso"
   },
   "link": {
     "button": "Transcribir una grabación desde un enlace",

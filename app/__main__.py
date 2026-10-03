@@ -208,6 +208,8 @@ def main() -> int:
         service.поднять_сторожа()
         # Свой бот в Telegram, если человек его подключил.
         service.запустить_телеграм()
+        # Папки-источники: новые записи из каталогов на диске.
+        service.запустить_источники()
 
     try:
         webview.start(on_started, gui=None, debug=False)

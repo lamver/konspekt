@@ -596,7 +596,19 @@
     "delete_confirm_text": "Meetings won't be deleted: they return to the main list.",
     "deleted": "Folder deleted, meetings kept",
     "moved": "Meeting moved to “{name}”",
-    "moved_out": "Meeting removed from folder"
+    "moved_out": "Meeting removed from folder",
+    "source_watch": "Take recordings from a folder on disk…",
+    "source_stop": "Stop taking recordings from the folder",
+    "source_on": "Takes new recordings from {path}",
+    "source_existing_title": "The folder already has {n} recordings",
+    "source_existing_text": "Transcribe them too? It takes time, and each one counts toward your trial meetings. Otherwise Konspekt will only take new ones.",
+    "source_take_all": "Transcribe them too",
+    "source_only_new": "Only new ones",
+    "source_started": "Done: new recordings from the folder will appear here by themselves",
+    "source_stopped": "The folder no longer takes recordings from disk. Already transcribed ones stay",
+    "source_trial": "Trial meetings are used up: new recordings from the folder aren't taken. With a license they'll arrive by themselves",
+    "source_missing": "Folder {path} not found",
+    "source_unreadable": "Can't read folder {path}: access denied"
   },
   "link": {
     "button": "Transcribe a recording from a link",

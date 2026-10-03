@@ -57,6 +57,9 @@ class ImportTask:
     url: str = ""
     folder_id: str | None = None
     fetched: float = 0.0      # доля скачанного, 0..1
+    # Когда на самом деле был разговор: у записи звонка — время из имени
+    # файла, иначе встреча встала бы в списке на день разбора.
+    started_at: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
         # Доля прогресса считается здесь, чтобы фронт не повторял эту
@@ -123,7 +126,8 @@ class ImportQueue:
 
     # --- постановка в очередь --------------------------------------------
 
-    def add(self, paths: list[str] | list[Path], folder_id: str | None = None) -> list[dict[str, Any]]:
+    def add(self, paths: list[str] | list[Path], folder_id: str | None = None,
+            title: str | None = None, started_at: float | None = None) -> list[dict[str, Any]]:
         """Поставить файлы в очередь.
 
         Проверяем их сразу, ещё до разбора: человек бросил пачку и должен
@@ -134,10 +138,11 @@ class ImportQueue:
         for raw in paths:
             path = Path(raw)
             task = ImportTask(path=path, title=path.stem or path.name, folder_id=folder_id)
+            task.started_at = started_at
             try:
                 info: AudioInfo = probe(path)
                 task.duration = info.duration
-                task.title = info.title
+                task.title = title or info.title
                 task.stereo_split = info.stereo_split
             except UnsupportedAudio as exc:
                 task.status = FAILED
@@ -361,7 +366,11 @@ class ImportQueue:
             return
         # Встречу заводим только теперь, когда точно начали разбор: иначе
         # отменённые файлы оставляли бы после себя пустые встречи.
-        meeting_id = self._create_meeting(task.title, task.url, task.folder_id)
+        if task.started_at:
+            meeting_id = self._create_meeting(task.title, task.url, task.folder_id,
+                                              started_at=task.started_at)
+        else:
+            meeting_id = self._create_meeting(task.title, task.url, task.folder_id)
         task.meeting_id = meeting_id
         if self._prepare_meeting is not None:
             self._prepare_meeting(meeting_id)

@@ -596,7 +596,19 @@
     "delete_confirm_text": "Sastanci se neće obrisati: vraćaju se na glavnu listu.",
     "deleted": "Fascikla obrisana, sastanci su ostali",
     "moved": "Sastanak premešten u „{name}“",
-    "moved_out": "Sastanak uklonjen iz fascikle"
+    "moved_out": "Sastanak uklonjen iz fascikle",
+    "source_watch": "Uzimaj snimke iz fascikle na disku…",
+    "source_stop": "Prestani da uzimaš snimke iz fascikle",
+    "source_on": "Uzima nove snimke iz {path}",
+    "source_existing_title": "U fascikli već ima {n} snimaka",
+    "source_existing_text": "Da li da prepišem i njih? To traje, i svaki se računa u probne sastanke. Inače će Konspekt uzimati samo nove.",
+    "source_take_all": "Prepiši i njih",
+    "source_only_new": "Samo nove",
+    "source_started": "Gotovo: novi snimci iz fascikle pojavljivaće se ovde sami",
+    "source_stopped": "Fascikla više ne uzima snimke sa diska. Već prepisani ostaju",
+    "source_trial": "Probni sastanci su potrošeni: novi snimci iz fascikle se ne uzimaju. Uz licencu stići će sami",
+    "source_missing": "Fascikla {path} nije pronađena",
+    "source_unreadable": "Fascikla {path} ne može da se pročita: nema pristupa"
   },
   "link": {
     "button": "Transkribuj snimak sa linka",

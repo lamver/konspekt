@@ -14,6 +14,13 @@ from __future__ import annotations
 
 MESSAGES: dict[str, dict[str, str]] = {
     # Ответы своего бота в Telegram (core/telegram_bot.py).
+    # Название встречи из папки-источника, если в имени файла был номер.
+    "python.source.call": {
+        "ru": "Звонок",
+        "en": "Call",
+        "es": "Llamada",
+        "sr": "Poziv",
+    },
     "python.telegram.voice_title": {
         "ru": "голосовое",
         "en": "voice message",

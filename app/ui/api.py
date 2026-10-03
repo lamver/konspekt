@@ -527,6 +527,30 @@ class Api:
         """Убрать ключ с этого компьютера."""
         return self._service.remove_license()
 
+    def pick_directory(self) -> str:
+        """Выбрать каталог на диске для папки-источника. Отказ — пустая строка."""
+        if not self._window:
+            return ""
+        try:
+            import webview  # noqa: PLC0415
+
+            выбор = self._window.create_file_dialog(webview.FOLDER_DIALOG)
+        except Exception:
+            log.debug("Окно выбора каталога не открылось", exc_info=True)
+            return ""
+        if not выбор:
+            return ""
+        return str(выбор[0] if isinstance(выбор, (list, tuple)) else выбор)
+
+    def folder_source_preview(self, path: str) -> dict[str, Any]:
+        return self._service.folder_source_preview(str(path or ""))
+
+    def folder_set_source(self, folder_id: str, path: str, take_existing: bool) -> dict[str, Any]:
+        return self._service.folder_set_source(str(folder_id), str(path or ""), bool(take_existing))
+
+    def folder_clear_source(self, folder_id: str) -> dict[str, Any]:
+        return self._service.folder_clear_source(str(folder_id))
+
     def telegram_state(self) -> dict[str, Any]:
         return self._service.telegram_state()
 
