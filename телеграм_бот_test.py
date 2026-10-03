@@ -298,6 +298,29 @@ for _ in range(50):
           "опрос забирает сообщения и отвечает; имя бота узнаётся")
 проверить(not поток.is_alive(), "остановка опроса не висит")
 
+# --- Токен не попадает в журнал -------------------------------------------
+# httpx пишет адрес каждого запроса, а у Telegram в адресе токен. Журнал
+# прикладывают к жалобам: ключ от бота уезжал бы вместе с ним.
+import io  # noqa: E402
+import logging  # noqa: E402
+
+поток_журнала = io.StringIO()
+обработчик = logging.StreamHandler(поток_журнала)
+журнал_httpx = logging.getLogger("httpx")
+прежний = журнал_httpx.level
+журнал_httpx.setLevel(logging.INFO)
+журнал_httpx.addHandler(обработчик)
+try:
+    журнал_httpx.info('HTTP Request: %s %s "%s %d %s"', "POST",
+                      "https://api.telegram.org/bot123456:AAHsecret_TOKEN-xyz/getUpdates", "HTTP/1.1", 200, "OK")
+    журнал_httpx.info("HTTP Request: GET https://api.telegram.org/file/bot123456:AAHsecret_TOKEN-xyz/voice/1.oga")
+finally:
+    журнал_httpx.removeHandler(обработчик)
+    журнал_httpx.setLevel(прежний)
+записано = поток_журнала.getvalue()
+проверить("AAHsecret" not in записано and записано.count("<токен скрыт>") == 2,
+          "токен бота вычищен из журнала, и в запросах, и в скачивании файлов")
+
 print()
 if БЕДЫ:
     print(f"Бед: {len(БЕДЫ)}")
