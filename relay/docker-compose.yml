@@ -1,0 +1,23 @@
+# Ретранслятор вебхуков Конспекта.
+#
+# Вариант 1 — свой домен, сертификат Let's Encrypt получается сам:
+#   задайте RELAY_DOMAIN, откройте порты 80 и 443.
+# Вариант 2 — за вашим nginx или caddy: уберите RELAY_DOMAIN, поставьте
+#   RELAY_PROXY=1 и проксируйте https://ваш-домен/ на 127.0.0.1:8080.
+services:
+  relay:
+    build: .
+    restart: unless-stopped
+    environment:
+      RELAY_DOMAIN: relay.example.ru   # ← ваш домен; для варианта 2 удалите строку
+      # RELAY_PROXY: "1"
+      RELAY_KEEP_DAYS: "7"
+    ports:
+      - "80:80"
+      - "443:443"
+      # - "127.0.0.1:8080:8080"        # для варианта 2
+    volumes:
+      - relay-data:/data
+
+volumes:
+  relay-data:
