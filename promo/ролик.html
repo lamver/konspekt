@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Конспект — промо 15 секунд</title>
+<!--
+  Промо-ролик Конспекта, 15 секунд, 1920×1080, без голоса и музыки.
+
+  Кадр — чистая функция времени: window.кадр(t) рисует момент t секунд,
+  ничего не запоминая между вызовами. Поэтому снять.mjs может снимать
+  кадры в любом порядке и с любой частотой, а ролик выходит одинаковым
+  при каждой сборке. requestAnimationFrame не используется вовсе.
+
+  Звуки привязаны к тем же моментам: список ЗВУКИ ниже читает звук.py.
+  Поменяли время сцены — поменяйте и звук рядом, в одном месте.
+-->
+<style>
+@font-face { font-family: "Inter"; src: url("../web/fonts/Inter-Variable.woff2") format("woff2"); font-weight: 100 900; }
+@font-face { font-family: "IBM Plex Serif"; src: url("../web/fonts/IBMPlexSerif-Regular.woff2") format("woff2"); font-weight: 400; }
+@font-face { font-family: "IBM Plex Serif"; src: url("../web/fonts/IBMPlexSerif-Medium.woff2") format("woff2"); font-weight: 500; }
+
+:root {
+  --фон: #141210;
+  --фон-2: #1D1A17;
+  --карта: #221F1B;
+  --линия: #34302A;
+  --текст: #F3F1ED;
+  --текст-2: #B5AEA4;
+  --текст-3: #7D766C;
+  --акцент: #D65A3F;
+  --запись: #E0483B;
+  --ui: "Inter", "Segoe UI", sans-serif;
+  --serif: "IBM Plex Serif", Georgia, serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--фон); }
+body { font-family: var(--ui); color: var(--текст); -webkit-font-smoothing: antialiased; }
+
+/* Мягкое пятно света: двигается медленно, чтобы фон жил. */
+#свет {
+  position: absolute; width: 1400px; height: 1400px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(214,90,63,0.16) 0%, rgba(214,90,63,0) 62%);
+  left: 0; top: 0; pointer-events: none;
+}
+/* Зерно поверх всего: без него плоский тёмный фон выглядит дёшево. */
+#зерно {
+  position: absolute; inset: 0; opacity: 0.05; pointer-events: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+.сцена { position: absolute; inset: 0; display: grid; place-items: center; }
+
+/* 1. Вопрос */
+#вопрос { display: flex; flex-direction: column; align-items: center; gap: 18px; }
+#вопрос .слово {
+  font-family: var(--serif); font-weight: 500; font-size: 104px; letter-spacing: -1.5px;
+  line-height: 1.05; white-space: nowrap;
+}
+#вопрос .слово.акцент { color: var(--акцент); }
+
+/* 2. Запись */
+#запись-блок { display: flex; flex-direction: column; align-items: center; gap: 56px; }
+#кнопка {
+  display: flex; align-items: center; gap: 22px;
+  padding: 30px 56px; border-radius: 999px;
+  background: var(--карта); border: 2px solid var(--линия);
+  font-size: 44px; font-weight: 600; letter-spacing: -0.3px;
+}
+#точка { width: 30px; height: 30px; border-radius: 50%; background: var(--запись); }
+#дорожки { display: flex; flex-direction: column; gap: 26px; }
+.дорожка { display: flex; align-items: center; gap: 28px; }
+.дорожка .кто { width: 210px; text-align: right; font-size: 28px; color: var(--текст-2); font-weight: 500; }
+.волна { display: flex; align-items: center; gap: 7px; height: 90px; }
+.волна i { display: block; width: 9px; border-radius: 5px; background: var(--текст); }
+.дорожка.они .волна i { background: var(--акцент); }
+
+/* Подпись к сцене внизу */
+.подпись {
+  position: absolute; left: 0; right: 0; bottom: 110px; text-align: center;
+  font-size: 34px; color: var(--текст-2); letter-spacing: 0.2px;
+}
+.подпись b { color: var(--текст); font-weight: 600; }
+
+/* 3. Расшифровка */
+#расшифровка {
+  width: 1180px; padding: 54px 64px; border-radius: 28px;
+  background: var(--карта); border: 1px solid var(--линия);
+  box-shadow: 0 60px 120px rgba(0,0,0,0.45);
+  display: flex; flex-direction: column; gap: 34px;
+}
+.реплика .шапка { font-size: 24px; color: var(--текст-3); margin-bottom: 10px; font-weight: 500; }
+.реплика .шапка b { color: var(--текст-2); font-weight: 600; margin-right: 12px; }
+.реплика .текст { font-size: 36px; line-height: 1.35; color: var(--текст); min-height: 49px; }
+.реплика .курсор { display: inline-block; width: 3px; height: 38px; margin-left: 4px; vertical-align: -6px; background: var(--акцент); }
+
+/* 4. Итоги */
+#итоги {
+  width: 1100px; padding: 58px 70px; border-radius: 28px;
+  background: #F6F3EE; color: #2B2926;
+  box-shadow: 0 70px 140px rgba(0,0,0,0.55);
+}
+#итоги h2 { font-family: var(--serif); font-weight: 500; font-size: 64px; letter-spacing: -0.8px; margin-bottom: 36px; }
+#итоги .пункт { display: flex; align-items: center; gap: 26px; font-size: 38px; line-height: 1.3; padding: 18px 0; border-top: 1px solid #E2DED7; }
+#итоги .галка {
+  flex: 0 0 auto; width: 46px; height: 46px; border-radius: 50%;
+  background: var(--акцент); display: grid; place-items: center;
+}
+#итоги .галка svg { width: 26px; height: 26px; }
+#итоги .пункт em { font-style: normal; color: #8B857D; }
+
+/* 5. Обещание */
+#обещание { display: flex; flex-direction: column; align-items: center; gap: 44px; }
+#замок svg { width: 120px; height: 120px; }
+#обещание .строка { font-family: var(--serif); font-weight: 500; font-size: 92px; letter-spacing: -1.2px; text-align: center; line-height: 1.1; }
+#обещание .строка span { color: var(--акцент); }
+
+/* 6. Финал */
+#финал { display: flex; flex-direction: column; align-items: center; gap: 34px; }
+#логотип { display: flex; align-items: center; gap: 30px; }
+#знак { width: 74px; height: 86px; border-radius: 9px; background: var(--текст); border-left: 22px solid var(--акцент); }
+#имя { font-family: var(--serif); font-weight: 500; font-size: 128px; letter-spacing: -2px; }
+#слоган { font-size: 38px; color: var(--текст-2); }
+#адрес { margin-top: 26px; font-size: 32px; color: var(--текст); font-weight: 600; letter-spacing: 0.3px;
+  padding: 18px 40px; border-radius: 999px; border: 2px solid var(--линия); }
+#адрес span { color: var(--текст-3); font-weight: 500; }
+</style>
+</head>
+<body>
+<div id="свет"></div>
+
+<section class="сцена" id="с1"><div id="вопрос">
+  <div class="слово">Час созвона.</div>
+  <div class="слово">Десять решений.</div>
+  <div class="слово акцент">Кто что обещал?</div>
+</div></section>
+
+<section class="сцена" id="с2">
+  <div id="запись-блок">
+    <div id="кнопка"><div id="точка"></div><span>Запись</span></div>
+    <div id="дорожки">
+      <div class="дорожка вы"><div class="кто">Вы</div><div class="волна"></div></div>
+      <div class="дорожка они"><div class="кто">Собеседник</div><div class="волна"></div></div>
+    </div>
+  </div>
+  <div class="подпись">Слышит <b>обе стороны</b> звонка</div>
+</section>
+
+<section class="сцена" id="с3">
+  <div id="расшифровка">
+    <div class="реплика"><div class="шапка"><b>Анна</b>12:04</div><div class="текст"></div></div>
+    <div class="реплика"><div class="шапка"><b>Игорь</b>12:05</div><div class="текст"></div></div>
+    <div class="реплика"><div class="шапка"><b>Анна</b>12:05</div><div class="текст"></div></div>
+  </div>
+  <div class="подпись">Расшифровка <b>прямо на компьютере</b></div>
+</section>
+
+<section class="сцена" id="с4">
+  <div id="итоги">
+    <h2>Итоги встречи</h2>
+    <div class="пункт"><div class="галка"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.2 4.2L19 7" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div>Запуск переносим на 14 ноября</div></div>
+    <div class="пункт"><div class="галка"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.2 4.2L19 7" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div>Смета до пятницы <em>— Игорь</em></div></div>
+    <div class="пункт"><div class="галка"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.2 4.2L19 7" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div>Письмо клиенту сегодня <em>— Анна</em></div></div>
+  </div>
+  <div class="подпись">Итоги и задачи <b>сами собой</b></div>
+</section>
+
+<section class="сцена" id="с5"><div id="обещание">
+  <div id="замок"><svg viewBox="0 0 48 48"><rect id="тело" x="9" y="21" width="30" height="22" rx="5" fill="none" stroke="#F3F1ED" stroke-width="3.2"/><path id="дужка" d="M15 21v-6a9 9 0 0 1 18 0v6" fill="none" stroke="#D65A3F" stroke-width="3.2" stroke-linecap="round"/></svg></div>
+  <div class="строка">Ничего не уходит<br><span>с вашего компьютера</span></div>
+</div></section>
+
+<section class="сцена" id="с6"><div id="финал">
+  <div id="логотип"><div id="знак"></div><div id="имя">Конспект</div></div>
+  <div id="слоган">Записывает, расшифровывает и пишет итоги встреч</div>
+  <div id="адрес">aisearch.ru/programmy/konspekt <span>· Windows 10 и 11</span></div>
+</div></section>
+
+<div id="зерно"></div>
+
+<script>
+/* Звуки для звук.py: время в секундах, вид, громкость 0..1.
+   Между маркерами только JSON: его читают регуляркой. */
+const ЗВУКИ = /*ЗВУКИ*/[
+  {"t": 0.30, "вид": "клик", "г": 1.0},
+  {"t": 1.05, "вид": "клик", "г": 1.0},
+  {"t": 1.80, "вид": "поп", "г": 0.8},
+  {"t": 2.70, "вид": "вжух", "г": 0.5, "д": 0.6},
+  {"t": 3.25, "вид": "поп", "г": 0.5},
+  {"t": 3.70, "вид": "нажатие", "г": 0.85},
+  {"t": 3.72, "вид": "удар", "г": 0.55},
+  {"t": 5.05, "вид": "вжух", "г": 0.45, "д": 0.5},
+  {"t": 5.45, "вид": "печать", "г": 0.5, "д": 3.1},
+  {"t": 8.85, "вид": "вжух", "г": 0.5, "д": 0.55},
+  {"t": 9.70, "вид": "галка", "г": 0.7},
+  {"t": 10.25, "вид": "галка", "г": 0.7, "тон": 1.12},
+  {"t": 10.80, "вид": "галка", "г": 0.7, "тон": 1.26},
+  {"t": 11.65, "вид": "вжух", "г": 0.4, "д": 0.45},
+  {"t": 12.15, "вид": "щелчок_замка", "г": 1.0},
+  {"t": 12.85, "вид": "подъём", "г": 0.55, "д": 0.65},
+  {"t": 13.50, "вид": "удар", "г": 0.6},
+  {"t": 13.52, "вид": "звон", "г": 0.3}
+]/*/ЗВУКИ*/;
+
+const ДЛИНА = 15;
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => Array.from(document.querySelectorAll(s));
+
+const зажать = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+/** Доля пути от a до b: 0 до a, 1 после b. */
+const доля = (t, a, b) => зажать((t - a) / (b - a));
+const плавно = (x) => 1 - Math.pow(1 - x, 3);            // быстро стартует, мягко садится
+const пружина = (x) => x === 0 ? 0 : x === 1 ? 1 :
+  Math.pow(2, -10 * x) * Math.sin((x * 10 - 0.75) * (2 * Math.PI) / 3) + 1;
+const смесь = (a, b, x) => a + (b - a) * x;
+
+/** Видимость сцены с плавным входом и выходом. */
+function окно(t, вход, выход, плавн = 0.35) {
+  return Math.min(доля(t, вход, вход + плавн), 1 - доля(t, выход - плавн, выход));
+}
+
+function стиль(эл, { o = 1, x = 0, y = 0, s = 1, blur = 0 } = {}) {
+  эл.style.opacity = o;
+  эл.style.transform = `translate(${x}px, ${y}px) scale(${s})`;
+  эл.style.filter = blur > 0.05 ? `blur(${blur}px)` : 'none';
+}
+
+/* Волна дорожки: столбики из синусов, детерминированно от t. */
+const СТОЛБИКОВ = 46;
+for (const в of $$('.волна')) for (let i = 0; i < СТОЛБИКОВ; i++) в.appendChild(document.createElement('i'));
+function волна(эл, t, сдвиг, сила) {
+  const столбики = эл.children;
+  for (let i = 0; i < столбики.length; i++) {
+    const ф = i * 0.55 + сдвиг;
+    const h = Math.abs(Math.sin(t * 7.3 + ф) * 0.6 + Math.sin(t * 13.1 + ф * 1.7) * 0.4);
+    const огибающая = Math.sin(Math.PI * (i + 0.5) / столбики.length);
+    столбики[i].style.height = `${8 + 82 * h * огибающая * сила}px`;
+  }
+}
+
+const РЕПЛИКИ = [
+  'Давайте сдвинем запуск на четырнадцатое ноября.',
+  'Тогда смету пришлю до пятницы.',
+  'Отлично, письмо клиенту отправлю сегодня.',
+];
+const ПЕЧАТЬ = [[5.45, 6.75], [6.85, 7.75], [7.85, 8.65]];
+
+function кадр(t) {
+  /* Фон: свет медленно плывёт по кругу. */
+  const свет = $('#свет');
+  свет.style.left = `${260 + Math.cos(t * 0.35) * 260}px`;
+  свет.style.top = `${-420 + Math.sin(t * 0.28) * 160}px`;
+
+  /* 1. Вопрос: три строки по одной, потом уходят в размытие. */
+  const с1 = $('#с1'); const к1 = 1 - доля(t, 2.6, 3.0);
+  с1.style.opacity = к1;
+  $$('#вопрос .слово').forEach((эл, i) => {
+    const п = плавно(доля(t, 0.25 + i * 0.75, 0.75 + i * 0.75));
+    стиль(эл, { o: п, y: смесь(40, 0, п), blur: смесь(14, 0, п) + доля(t, 2.6, 3.0) * 18 });
+  });
+
+  /* 2. Запись: кнопка выпрыгивает, нажатие, точка дышит, дорожки живут. */
+  const с2 = $('#с2'); с2.style.opacity = окно(t, 3.0, 5.25, 0.3);
+  const вход = пружина(доля(t, 3.15, 3.75));
+  const нажим = 1 - 0.08 * Math.sin(Math.PI * доля(t, 3.66, 3.86));
+  стиль($('#кнопка'), { o: доля(t, 3.15, 3.35), s: смесь(0.6, 1, вход) * нажим });
+  const пишем = t >= 3.72;
+  $('#кнопка span').textContent = пишем ? 'Идёт запись' : 'Запись';
+  $('#кнопка').style.borderColor = пишем ? 'rgba(224,72,59,0.55)' : 'var(--линия)';
+  $('#точка').style.transform = `scale(${пишем ? 1 + 0.18 * Math.sin(t * 9) : 1})`;
+  const сила = плавно(доля(t, 3.75, 4.2));
+  $$('.дорожка').forEach((д, i) => {
+    стиль(д, { o: доля(t, 3.8 + i * 0.12, 4.15 + i * 0.12), y: смесь(24, 0, плавно(доля(t, 3.8 + i * 0.12, 4.3 + i * 0.12))) });
+    волна(д.querySelector('.волна'), t, i * 2.1, сила * (i === 0 ? 0.75 : 1));
+  });
+  стиль($('#с2 .подпись'), { o: доля(t, 4.0, 4.4), y: смесь(16, 0, плавно(доля(t, 4.0, 4.5))) });
+
+  /* 3. Расшифровка: карточка въезжает, строки печатаются. */
+  const с3 = $('#с3'); с3.style.opacity = окно(t, 5.15, 9.0, 0.3);
+  const к3 = плавно(доля(t, 5.15, 5.7));
+  стиль($('#расшифровка'), { o: к3, y: смесь(70, 0, к3), s: смесь(0.96, 1, к3) });
+  $$('.реплика').forEach((р, i) => {
+    const [а, б] = ПЕЧАТЬ[i];
+    const п = доля(t, а, б);
+    const текст = РЕПЛИКИ[i];
+    const n = Math.round(текст.length * п);
+    const идёт = t >= а && t < б + 0.25;
+    р.querySelector('.текст').innerHTML = текст.slice(0, n) + (идёт ? '<span class="курсор"></span>' : '');
+    р.style.opacity = t >= а - 0.15 ? 1 : 0.0;
+  });
+  стиль($('#с3 .подпись'), { o: доля(t, 5.6, 6.0) });
+
+  /* 4. Итоги: светлая карточка, галочки щёлкают по одной. */
+  const с4 = $('#с4'); с4.style.opacity = окно(t, 8.9, 11.9, 0.3);
+  const к4 = плавно(доля(t, 8.9, 9.45));
+  стиль($('#итоги'), { o: к4, y: смесь(90, 0, к4), s: смесь(0.94, 1, к4) });
+  $$('#итоги .пункт').forEach((п, i) => {
+    const т0 = 9.6 + i * 0.55;
+    const появ = плавно(доля(t, т0 - 0.1, т0 + 0.25));
+    стиль(п, { o: появ, x: смесь(-30, 0, появ) });
+    стиль(п.querySelector('.галка'), { s: смесь(0.2, 1, пружина(доля(t, т0, т0 + 0.5))), o: доля(t, т0, т0 + 0.12) });
+  });
+  стиль($('#с4 .подпись'), { o: доля(t, 9.5, 9.9) });
+
+  /* 5. Обещание: замок защёлкивается. */
+  const с5 = $('#с5'); с5.style.opacity = окно(t, 11.8, 13.45, 0.3);
+  const к5 = плавно(доля(t, 11.8, 12.3));
+  стиль($('#обещание .строка'), { o: к5, y: смесь(40, 0, к5), blur: смесь(10, 0, к5) });
+  стиль($('#замок'), { o: доля(t, 11.85, 12.1), s: смесь(0.8, 1, пружина(доля(t, 11.85, 12.5))) });
+  const дужка = смесь(-7, 0, плавно(доля(t, 12.0, 12.18)));
+  $('#дужка').setAttribute('transform', `translate(0 ${дужка})`);
+
+  /* 6. Финал: знак, имя, адрес. */
+  const с6 = $('#с6'); с6.style.opacity = доля(t, 13.4, 13.7);
+  const к6 = пружина(доля(t, 13.45, 14.2));
+  стиль($('#логотип'), { o: доля(t, 13.45, 13.65), s: смесь(0.82, 1, к6) });
+  стиль($('#слоган'), { o: доля(t, 13.8, 14.15), y: смесь(18, 0, плавно(доля(t, 13.8, 14.25))) });
+  стиль($('#адрес'), { o: доля(t, 14.0, 14.35), y: смесь(18, 0, плавно(доля(t, 14.0, 14.45))) });
+}
+
+window.кадр = кадр;
+window.ДЛИНА = ДЛИНА;
+/* Открыли файл просто в браузере: проигрываем вживую для просмотра. */
+if (!new URLSearchParams(location.search).has('съёмка')) {
+  const старт = performance.now();
+  const ход = () => { кадр(((performance.now() - старт) / 1000) % ДЛИНА); requestAnimationFrame(ход); };
+  requestAnimationFrame(ход);
+} else {
+  кадр(0);
+}
+</script>
+</body>
+</html>

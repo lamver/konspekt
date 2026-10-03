@@ -335,7 +335,9 @@ def _сцена(w, service, язык: str, ид: dict[str, str], llm: dict, ит
     _снять(w, язык, "18-licenzija")
 
     # Диктовка: была в прошлых снимках, нужна и инструкции.
-    w.evaluate_js("showPrefsTab('dictation')")
+    w.evaluate_js("state.licenseBarHidden = true; renderLicense(); showPrefsTab('dictation');"
+                  " setTimeout(() => { el('dictation-enabled').checked = true; }, 700);")
+    time.sleep(0.6)
     _снять(w, язык, "19-diktovka")
 
     w.evaluate_js(f"applyTheme({_js(тема_была)})")

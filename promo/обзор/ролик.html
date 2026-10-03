@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Konspekt — обзорный ролик</title>
+<!--
+  Обзорный ролик Конспекта, 1920×1080, на любом языке.
+
+  Что откуда берётся:
+    сценарий.js              — сцены, снимки, наезды, звуки (один на все языки);
+    тексты/<язык>.js         — слова на экране и текст озвучки;
+    сборка/<язык>/голос.js   — длины реплик озвучки (пишет собрать.py);
+    docs/screenshots/<язык>/ — снимки программы.
+  Язык выбирается в адресе: ролик.html?язык=en. Без голос.js длина сцен
+  прикидывается по числу слов реплики, так что смотреть можно сразу.
+
+  Как и в первом промо, кадр — чистая функция времени: window.кадр(t)
+  рисует момент t, ничего не помня между вызовами. Поэтому снять.mjs
+  снимает кадры в любом порядке, и ролик одинаков при каждой сборке.
+-->
+<style>
+@font-face { font-family: "Inter"; src: url("../../web/fonts/Inter-Variable.woff2") format("woff2"); font-weight: 100 900; }
+@font-face { font-family: "IBM Plex Serif"; src: url("../../web/fonts/IBMPlexSerif-Regular.woff2") format("woff2"); font-weight: 400; }
+@font-face { font-family: "IBM Plex Serif"; src: url("../../web/fonts/IBMPlexSerif-Medium.woff2") format("woff2"); font-weight: 500; }
+
+:root {
+  --фон: #141210;
+  --карта: #221F1B;
+  --линия: #34302A;
+  --текст: #F3F1ED;
+  --текст-2: #B5AEA4;
+  --текст-3: #7D766C;
+  --акцент: #E0704F;
+  --ui: "Inter", "Segoe UI", sans-serif;
+  --serif: "IBM Plex Serif", Georgia, serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--фон); }
+body { font-family: var(--ui); color: var(--текст); -webkit-font-smoothing: antialiased; }
+
+#свет {
+  position: absolute; width: 1500px; height: 1500px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(214,90,63,0.15) 0%, rgba(214,90,63,0) 62%);
+  pointer-events: none;
+}
+#зерно {
+  position: absolute; inset: 0; opacity: 0.05; pointer-events: none; z-index: 50;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+.сцена { position: absolute; inset: 0; opacity: 0; }
+.акцент { color: var(--акцент); }
+
+/* Текст слева от снимка */
+.колонка {
+  position: absolute; left: 110px; top: 0; bottom: 0; width: 500px;
+  display: flex; flex-direction: column; justify-content: center; gap: 30px;
+}
+.заголовок { font-family: var(--serif); font-weight: 500; font-size: 74px; line-height: 1.06; letter-spacing: -1.2px; }
+.подпись { font-size: 29px; line-height: 1.4; color: var(--текст-2); }
+
+/* Снимок программы в рамке */
+.рамка {
+  position: absolute; left: 670px; top: 125px; width: 1200px; height: 829px;
+  border-radius: 18px; overflow: hidden; background: #fff;
+  box-shadow: 0 50px 120px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.06);
+}
+.рамка img { position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: block; }
+.метка {
+  position: absolute; left: 22px; bottom: 22px; z-index: 2;
+  padding: 12px 24px; border-radius: 999px; font-size: 26px; font-weight: 600;
+  background: rgba(20,18,16,0.88); color: var(--текст); border: 1px solid rgba(255,255,255,0.12);
+}
+
+/* Вступление */
+.вступление { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; }
+.вступление .строка { font-family: var(--serif); font-weight: 500; font-size: 112px; letter-spacing: -1.6px; white-space: nowrap; }
+
+/* Языки: четыре снимка сеткой */
+.сетка .карточка {
+  position: absolute; width: 600px; height: 414px; border-radius: 14px; overflow: hidden; background: #fff;
+  box-shadow: 0 40px 90px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.06);
+}
+.сетка .карточка img { width: 100%; height: 100%; display: block; }
+.сетка .карточка .метка { left: auto; right: 16px; bottom: auto; top: 16px; font-size: 24px; padding: 9px 20px; }
+
+/* Финал */
+.финал-фон { position: absolute; inset: -40px; background-size: cover; background-position: center; filter: blur(22px) brightness(0.32); }
+.финал { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 34px; }
+.логотип { display: flex; align-items: center; gap: 30px; }
+.знак { width: 74px; height: 86px; border-radius: 9px; background: var(--текст); border-left: 22px solid #D65A3F; }
+.имя { font-family: var(--serif); font-weight: 500; font-size: 132px; letter-spacing: -2px; }
+.слоган { font-size: 38px; color: var(--текст-2); text-align: center; max-width: 1300px; }
+.бренд { margin-top: 30px; font-size: 40px; font-weight: 700; letter-spacing: 6px;
+  padding: 18px 46px; border-radius: 999px; border: 2px solid rgba(255,255,255,0.18); }
+.платформа { font-size: 26px; color: var(--текст-3); }
+</style>
+</head>
+<body>
+<div id="свет"></div>
+<div id="сцены"></div>
+<div id="зерно"></div>
+
+<script>
+/* Язык из адреса; файлы языка подгружаем тегами script: из file://
+   fetch не работает, а script работает. */
+const ЯЗЫК = new URLSearchParams(location.search).get('язык') || 'en';
+const СНИМКИ = `../../docs/screenshots/`;
+
+function подгрузить(путь, обязательно = true) {
+  return new Promise((готово, беда) => {
+    const с = document.createElement('script');
+    с.src = путь;
+    с.onload = готово;
+    с.onerror = () => (обязательно ? беда(new Error(`нет ${путь}`)) : готово());
+    document.head.appendChild(с);
+  });
+}
+
+const зажать = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const доля = (t, a, b) => зажать((t - a) / (b - a));
+const плавно = (x) => 1 - Math.pow(1 - x, 3);
+const мягко = (x) => x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+const пружина = (x) => x === 0 ? 0 : x === 1 ? 1 :
+  Math.pow(2, -10 * x) * Math.sin((x * 10 - 0.75) * (2 * Math.PI) / 3) + 1;
+const смесь = (a, b, x) => a + (b - a) * x;
+
+function стиль(эл, { o = 1, x = 0, y = 0, s = 1, blur = 0 } = {}) {
+  эл.style.opacity = o;
+  эл.style.transform = `translate(${x}px, ${y}px) scale(${s})`;
+  эл.style.filter = blur > 0.05 ? `blur(${blur}px)` : 'none';
+}
+
+/* «*слово*» → слово цветом. Текст вставляем узлами, без innerHTML. */
+function слова(эл, текст) {
+  эл.textContent = '';
+  текст.split(/(\*[^*]+\*)/).forEach((к) => {
+    if (!к) return;
+    if (к.startsWith('*')) {
+      const s = document.createElement('span'); s.className = 'акцент'; s.textContent = к.slice(1, -1);
+      эл.appendChild(s);
+    } else эл.appendChild(document.createTextNode(к));
+  });
+}
+
+function узел(тег, класс, родитель) {
+  const у = document.createElement(тег);
+  if (класс) у.className = класс;
+  if (родитель) родитель.appendChild(у);
+  return у;
+}
+
+/* Длины сцен: реплика озвучки плюс вход и хвост, но не короче «мин».
+   Тот же расчёт повторяет собрать.py, чтобы звук лёг в те же секунды. */
+function разметить(сц, тексты, голос) {
+  let t = 0;
+  return сц.сцены.map((с) => {
+    const реплика = тексты.сцены[с.id]?.голос || '';
+    const прикидка = реплика.split(/\s+/).filter(Boolean).length / (тексты.слов_в_секунду || 2.6);
+    const длина_голоса = голос?.[с.голос] ?? прикидка;
+    const длина = Math.max(с.мин, сц.голос_вход + длина_голоса + сц.голос_хвост);
+    const сцена = { ...с, начало: t, конец: t + длина };
+    t += длина;
+    return сцена;
+  });
+}
+
+let СЦЕНЫ = [];
+let ДЛИНА = 0;
+
+function построить() {
+  const сц = window.СЦЕНАРИЙ;
+  const тексты = window.ТЕКСТЫ;
+  document.documentElement.lang = тексты.язык;
+  СЦЕНЫ = разметить(сц, тексты, window.ГОЛОС);
+  ДЛИНА = СЦЕНЫ[СЦЕНЫ.length - 1].конец;
+  const корень = document.getElementById('сцены');
+  const [ширина_снимка] = сц.снимок;
+
+  for (const с of СЦЕНЫ) {
+    const т = тексты.сцены[с.id] || {};
+    const эл = узел('section', 'сцена', корень);
+    с.эл = эл;
+
+    if (с.вид === 'вступление') {
+      const блок = узел('div', 'вступление', эл);
+      с.строки = (т.строки || []).map((строка) => { const у = узел('div', 'строка', блок); слова(у, строка); return у; });
+      continue;
+    }
+    if (с.вид === 'финал') {
+      const фон = узел('div', 'финал-фон', эл);
+      фон.style.backgroundImage = `url("${СНИМКИ}${ЯЗЫК}/${с.кадры[0].файл}.png")`;
+      const блок = узел('div', 'финал', эл);
+      const лого = узел('div', 'логотип', блок);
+      узел('div', 'знак', лого);
+      узел('div', 'имя', лого).textContent = т.имя || 'Konspekt';
+      с.лого = лого;
+      с.слоган = узел('div', 'слоган', блок); с.слоган.textContent = т.слоган || '';
+      с.бренд = узел('div', 'бренд', блок); с.бренд.textContent = т.бренд || '';
+      с.платформа = узел('div', 'платформа', блок); с.платформа.textContent = т.платформа || '';
+      continue;
+    }
+
+    const колонка = узел('div', 'колонка', эл);
+    с.заголовок = узел('div', 'заголовок', колонка); слова(с.заголовок, т.заголовок || '');
+    с.подпись = узел('div', 'подпись', колонка); с.подпись.textContent = т.подпись || '';
+
+    if (с.вид === 'языки') {
+      const сетка = узел('div', 'сетка', эл);
+      с.карточки = с.кадры.map((к, i) => {
+        const карта = узел('div', 'карточка', сетка);
+        карта.style.left = `${670 + (i % 2) * 628}px`;
+        карта.style.top = `${112 + Math.floor(i / 2) * 442}px`;
+        const img = узел('img', '', карта); img.src = `${СНИМКИ}${к.язык}/${к.файл}.png`;
+        узел('div', 'метка', карта).textContent = т.языки?.[к.язык] || к.язык;
+        return карта;
+      });
+      continue;
+    }
+
+    /* снимок или снимки: рамки одна поверх другой, сменяются растворением */
+    с.рамки = с.кадры.map((к) => {
+      const рамка = узел('div', 'рамка', эл);
+      const img = узел('img', '', рамка);
+      img.src = `${СНИМКИ}${ЯЗЫК}/${к.файл}.png`;
+      const [x, y] = к.наезд || [ширина_снимка / 2, сц.снимок[1] / 2];
+      img.style.transformOrigin = `${(x / ширина_снимка) * 100}% ${(y / сц.снимок[1]) * 100}%`;
+      if (к.метка) узел('div', 'метка', рамка).textContent = т.метки?.[к.метка] || к.метка;
+      return { рамка, img, масштаб: (к.наезд || [0, 0, 1])[2] };
+    });
+  }
+}
+
+function кадр(t) {
+  const сц = window.СЦЕНАРИЙ;
+  const П = сц.переход;
+  const свет = document.getElementById('свет');
+  свет.style.left = `${-200 + Math.cos(t * 0.21) * 320}px`;
+  свет.style.top = `${-520 + Math.sin(t * 0.17) * 200}px`;
+
+  for (const с of СЦЕНЫ) {
+    const д = с.конец - с.начало;
+    const мест = t - с.начало;
+    const видно = Math.min(доля(мест, 0, П), 1 - доля(мест, д - П, д));
+    с.эл.style.opacity = видно;
+    с.эл.style.visibility = видно > 0 ? 'visible' : 'hidden';
+    if (видно <= 0) continue;
+
+    if (с.вид === 'вступление') {
+      с.строки.forEach((у, i) => {
+        const п = плавно(доля(мест, 0.25 + i * 0.85, 0.85 + i * 0.85));
+        стиль(у, { o: п, y: смесь(40, 0, п), blur: смесь(14, 0, п) });
+      });
+      continue;
+    }
+    if (с.вид === 'финал') {
+      const к = пружина(доля(мест, 0.2, 1.0));
+      стиль(с.лого, { o: доля(мест, 0.2, 0.45), s: смесь(0.82, 1, к) });
+      стиль(с.слоган, { o: доля(мест, 0.7, 1.1), y: смесь(18, 0, плавно(доля(мест, 0.7, 1.2))) });
+      стиль(с.бренд, { o: доля(мест, 1.2, 1.6), s: смесь(0.9, 1, пружина(доля(мест, 1.2, 1.9))) });
+      стиль(с.платформа, { o: доля(мест, 1.6, 2.0) });
+      continue;
+    }
+
+    const вход = плавно(доля(мест, 0.05, 0.75));
+    стиль(с.заголовок, { o: вход, y: смесь(30, 0, вход), blur: смесь(10, 0, вход) });
+    const вход2 = плавно(доля(мест, 0.35, 1.0));
+    стиль(с.подпись, { o: вход2, y: смесь(20, 0, вход2) });
+
+    if (с.вид === 'языки') {
+      с.карточки.forEach((карта, i) => {
+        const момент = (с.звуки?.[i]?.доля ?? 0.1 + i * 0.12) * д;
+        const п = пружина(доля(мест, момент - 0.05, момент + 0.55));
+        стиль(карта, { o: доля(мест, момент - 0.05, момент + 0.15), s: смесь(0.86, 1, п), y: смесь(30, 0, плавно(доля(мест, момент - 0.05, момент + 0.4))) });
+      });
+      continue;
+    }
+
+    /* Снимки: сцена делится поровну, каждый снимок наезжает к своей точке. */
+    const n = с.рамки.length;
+    const часть = д / n;
+    с.рамки.forEach((р, i) => {
+      const а = i * часть;
+      const б = а + часть;
+      const свой = i === 0 ? 1 : доля(мест, а - 0.2, а + 0.25);
+      const уходит = i === n - 1 ? 0 : доля(мест, б - 0.2, б + 0.25);
+      const первый = i === 0 ? плавно(доля(мест, 0.0, 0.7)) : 1;
+      стиль(р.рамка, { o: свой * (1 - уходит), y: смесь(50, 0, первый), s: смесь(0.97, 1, первый) });
+      const наезд = мягко(доля(мест, а + 0.3, б - 0.1));
+      р.img.style.transform = `scale(${смесь(1, р.масштаб, наезд)})`;
+    });
+  }
+}
+
+window.кадр = кадр;
+Promise.all([подгрузить('сценарий.js'), подгрузить(`тексты/${ЯЗЫК}.js`), подгрузить(`сборка/${ЯЗЫК}/голос.js`, false)])
+  .then(() => {
+    построить();
+    window.ДЛИНА = ДЛИНА;
+    window.СЦЕНЫ_ДЛЯ_СБОРКИ = СЦЕНЫ.map((с) => ({ id: с.id, начало: с.начало, конец: с.конец }));
+    window.готово = true;
+    if (!new URLSearchParams(location.search).has('съёмка')) {
+      const старт = performance.now();
+      const ход = () => { кадр(((performance.now() - старт) / 1000) % ДЛИНА); requestAnimationFrame(ход); };
+      requestAnimationFrame(ход);
+    } else {
+      кадр(0);
+    }
+  })
+  .catch((e) => { document.body.textContent = String(e); });
+</script>
+</body>
+</html>
