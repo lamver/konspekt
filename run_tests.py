@@ -186,6 +186,7 @@ FAST = [
     "ссылки_test.py",
     "разборы_счёт_test.py",
     "язык_итогов_test.py",
+    "докачка_моделей_test.py",
     "разборы_test.py",
     "разборы_edge_test.py",
     "clip_test.py",

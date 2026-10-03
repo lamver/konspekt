@@ -42,9 +42,12 @@ from ..asr.embedder import MODEL_FILES as EMBEDDER_FILES
 from ..asr.embedder import MODEL_REPO as EMBEDDER_REPO
 from ..asr.embedder import VoiceEmbedder
 from ..asr.langid import MODEL_DIR_NAME as LANGID_DIR_NAME
+from ..asr.langid import MODEL_FILES as LANGID_FILES
+from ..asr.langid import MODEL_REPO as LANGID_REPO
 from ..asr.langid import CYRILLIC_LANGS, LanguageDetector
 from ..asr.router import LanguageRouter
 from ..asr.whisper import DEFAULT_SIZE as WHISPER_DEFAULT_SIZE
+from ..asr.whisper import MODEL_FILES as WHISPER_FILES
 from ..asr.whisper import SIZES as WHISPER_SIZES
 from ..asr.whisper import WhisperTranscriber
 from ..asr.enroll import (
@@ -485,6 +488,9 @@ class AppService:
                 # Не смогли — не беда: попробуем ещё раз при первой
                 # реплике, а до тех пор приложение работает как обычно.
                 log.exception("Фоновая загрузка модели не удалась")
+            # Русская модель первой: с ней программа уже полезна. Остальное
+            # следом, тем же потоком, чтобы две загрузки не делили канал.
+            self._докачать_остальные_модели()
 
         # Раньше здесь стоял ранний выход, если файлы уже на диске. Из-за
         # него повреждённые веса доживали до первой реплики: человек жал
@@ -493,6 +499,74 @@ class AppService:
         # чинится до того, как понадобится расшифровка.
         threading.Thread(target=run, name="asr-prefetch", daemon=True).start()
         log.info("Готовим модель распознавания в фоне")
+
+    def _остальные_модели(self) -> list[tuple[str, str, tuple[str, ...], Path, Any]]:
+        """Модели, без которых программа работает, но хуже.
+
+        Определитель языка и Whisper: без них нерусская речь уходит в
+        русскую модель и выходит кириллической кашей. Модель голосов: без
+        неё реплики не подписываются именами.
+
+        До 0.15.1 их не качал никто (найдено 04.10): у разработчика веса
+        лежали в папке с весны, а на чистой установке их не было, и
+        английская встреча у нового пользователя выходила кашей.
+        """
+        out = []
+        asr = self.settings.asr
+        if asr.detect_language:
+            out.append(("определитель языка", LANGID_REPO, LANGID_FILES,
+                        paths.models_dir() / LANGID_DIR_NAME,
+                        lambda путь: LanguageDetector(путь).is_downloaded()))
+            размер = getattr(asr, "whisper_size", WHISPER_DEFAULT_SIZE)
+            if размер not in WHISPER_SIZES:
+                размер = WHISPER_DEFAULT_SIZE
+            о = WHISPER_SIZES[размер]
+            out.append((f"Whisper {размер}", о["repo"], WHISPER_FILES,
+                        paths.models_dir() / о["dir"],
+                        lambda путь: WhisperTranscriber(путь).is_downloaded()))
+        out.append(("модель голосов", EMBEDDER_REPO, EMBEDDER_FILES,
+                    paths.models_dir() / EMBEDDER_DIR_NAME,
+                    lambda путь: VoiceEmbedder(путь).is_downloaded()))
+        return out
+
+    def _докачать_остальные_модели(self) -> None:
+        """Скачать недостающие модели и включить их, как только скачались.
+
+        Молча, без полосы на экране: программа уже работает, а полоса
+        «качаем ещё 360 МБ» только пугала бы. Не вышло — попробуем при
+        следующем запуске, загрузчик продолжит с того места, где встал.
+        """
+        if os.environ.get("KONSPEKT_NO_PREFETCH") == "1" or not self.settings.asr.enabled:
+            return
+        скачано = False
+        for имя, repo, files, папка, готова in self._остальные_модели():
+            if готова(папка):
+                continue
+            log.info("Качаем %s", имя)
+            try:
+                ModelDownloader(repo, files, папка).run_blocking()
+            except DownloadBusy:
+                log.info("%s качает другой экземпляр программы", имя)
+                continue
+            except Exception:
+                log.exception("%s не скачалась, попробуем при следующем запуске", имя)
+                continue
+            log.info("%s скачана", имя)
+            скачано = True
+        if скачано:
+            self._включить_новые_модели()
+
+    def _включить_новые_модели(self) -> None:
+        """Пересобрать распознавание под только что скачанные модели.
+
+        Посреди записи движок не трогаем: подмена на ходу теряет
+        накопленный кусок звука. Ждём конца записи в этом же фоновом
+        потоке, он и так никому не нужен.
+        """
+        while self.capture.is_recording:
+            time.sleep(2.0)
+        self.transcriber = self._build_transcriber()
+        log.info("Распознавание пересобрано: %s", getattr(self.transcriber, "name", "?"))
 
     def _prepare_meaning(self) -> None:
         """Скачать модель смысла, если её нет, и поднять пересчёт указателя.
