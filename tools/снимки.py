@@ -39,7 +39,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import testenv  # noqa: E402,F401  русский вывод в консоли Windows
 
 from tools.встреча_для_снимков import ВСТРЕЧИ  # noqa: E402
-from tools.снимок_окна import снять_окно  # noqa: E402
+from tools.снимок_окна import снять_страницу  # noqa: E402
 
 КОРЕНЬ = Path(__file__).resolve().parent.parent
 КУДА = КОРЕНЬ / "docs" / "screenshots"
@@ -141,7 +141,7 @@ def _снять(w, язык: str, имя: str) -> None:
 
     папка = КУДА / язык
     папка.mkdir(parents=True, exist_ok=True)
-    снять_окно("Konspekt", папка / f"{имя}.png")
+    снять_страницу(w, папка / f"{имя}.png")
     print(f"  [снято] {язык}/{имя}.png")
 
 

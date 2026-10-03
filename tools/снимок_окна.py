@@ -62,3 +62,45 @@ def снять_окно(заголовок: str, куда: Path) -> None:
         приёмник.DeleteDC()
         исток.DeleteDC()
         win32gui.ReleaseDC(hwnd, окно_dc)
+
+
+def снять_страницу(w, куда: Path) -> None:
+    """Снять страницу окна pywebview средствами самого WebView2.
+
+    PrintWindow после обновления WebView2 стал отдавать чёрный холст:
+    страница рисуется отдельным процессом через композитор, и в чужой
+    холст её больше не зовут. CapturePreviewAsync просит снимок у самого
+    движка. Рамки окна в нём нет, но у Конспекта рамка и так своя, она
+    часть страницы.
+    """
+    import threading
+
+    import clr  # noqa: F401  pythonnet, им живёт pywebview под Windows
+    from Microsoft.Web.WebView2.Core import CoreWebView2CapturePreviewImageFormat
+    from System import Action, Func, Object
+    from System.IO import MemoryStream
+
+    webview = w.native.webview
+    поток = MemoryStream()
+    готово = threading.Event()
+    ошибка: list[str] = []
+
+    def запустить() -> Object:
+        задача = webview.CoreWebView2.CapturePreviewAsync(
+            CoreWebView2CapturePreviewImageFormat.Png, поток)
+
+        def по_готовности(t) -> None:
+            if t.IsFaulted:
+                ошибка.append(str(t.Exception))
+            готово.set()
+
+        задача.ContinueWith(Action[type(задача)](по_готовности))
+        return None
+
+    webview.Invoke(Func[Object](запустить))
+    if not готово.wait(15):
+        raise RuntimeError("WebView2 не отдал снимок за 15 секунд")
+    if ошибка:
+        raise RuntimeError(f"снимок страницы не удался: {ошибка[0]}")
+    куда.parent.mkdir(parents=True, exist_ok=True)
+    куда.write_bytes(bytes(поток.ToArray()))
