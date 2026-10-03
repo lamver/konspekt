@@ -830,6 +830,81 @@
     </div>
   </div>
 
+  <!-- Источник записей у папки: каталог на диске, сервер АТС, телефония. -->
+  <div class="sheet" id="source-sheet" hidden>
+    <div class="sheet__panel confirm source-panel">
+      <h3 class="confirm__title" data-i18n="source.title">Откуда брать записи</h3>
+      <label class="field">
+        <span class="field__label" data-i18n="source.kind">Источник</span>
+        <select id="source-kind">
+          <option value="disk" data-i18n="source.kind_disk">Папка на этом компьютере</option>
+          <option value="sftp">SFTP</option>
+          <option value="ftp">FTP</option>
+          <option value="mango">Mango Office</option>
+          <option value="uis">UIS (CoMagic)</option>
+          <option value="bitrix" data-i18n="source.kind_bitrix">Битрикс24</option>
+        </select>
+      </label>
+      <p class="hint" id="source-help"></p>
+
+      <div class="source-fields" data-for="disk">
+        <label class="field">
+          <span class="field__label" data-i18n="source.path">Папка</span>
+          <div class="source-path-row">
+            <input type="text" id="source-path" readonly>
+            <button class="btn-ghost" type="button" id="source-pick" data-i18n="source.pick">Выбрать…</button>
+          </div>
+        </label>
+      </div>
+      <div class="source-fields" data-for="sftp ftp">
+        <div class="source-row">
+          <label class="field source-grow"><span class="field__label" data-i18n="source.host">Сервер</span>
+            <input type="text" id="source-host" spellcheck="false" placeholder="pbx.example.ru"></label>
+          <label class="field source-port"><span class="field__label" data-i18n="source.port">Порт</span>
+            <input type="text" id="source-port" inputmode="numeric" placeholder="22"></label>
+        </div>
+        <div class="source-row">
+          <label class="field source-grow"><span class="field__label" data-i18n="source.user">Логин</span>
+            <input type="text" id="source-user" spellcheck="false" autocomplete="off"></label>
+          <label class="field source-grow"><span class="field__label" data-i18n="source.password">Пароль</span>
+            <input type="password" id="source-password" autocomplete="off"></label>
+        </div>
+        <label class="field"><span class="field__label" data-i18n="source.dir">Каталог с записями</span>
+          <input type="text" id="source-dir" spellcheck="false" placeholder="/var/spool/asterisk/monitor"></label>
+        <label class="check" data-for="ftp">
+          <input type="checkbox" id="source-tls" checked>
+          <span data-i18n="source.tls">Шифровать соединение (FTPS)</span>
+        </label>
+      </div>
+      <div class="source-fields" data-for="mango">
+        <label class="field"><span class="field__label" data-i18n="source.mango_key">Уникальный код АТС</span>
+          <input type="password" id="source-mango-key" autocomplete="off"></label>
+        <label class="field"><span class="field__label" data-i18n="source.mango_salt">Ключ для создания подписи</span>
+          <input type="password" id="source-mango-salt" autocomplete="off"></label>
+      </div>
+      <div class="source-fields" data-for="uis">
+        <label class="field"><span class="field__label" data-i18n="source.uis_key">Ключ Data API</span>
+          <input type="password" id="source-uis-key" autocomplete="off"></label>
+      </div>
+      <div class="source-fields" data-for="bitrix">
+        <label class="field"><span class="field__label" data-i18n="source.bitrix_webhook">Адрес входящего вебхука</span>
+          <input type="password" id="source-bitrix-webhook" autocomplete="off" placeholder="https://….bitrix24.ru/rest/1/…/"></label>
+      </div>
+
+      <label class="field">
+        <span class="field__label" data-i18n="source.take">Что взять сразу</span>
+        <select id="source-take"></select>
+      </label>
+      <p class="link-error" id="source-result" hidden></p>
+      <div class="confirm__row">
+        <button class="btn-ghost" type="button" id="source-test" data-i18n="source.test">Проверить</button>
+        <span class="source-spacer"></span>
+        <button class="btn-ghost" type="button" id="source-cancel" data-i18n="confirm.cancel">Отмена</button>
+        <button class="btn-new" type="button" id="source-save" data-i18n="folders.save">Сохранить</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Меню встречи или папки: перенести, переименовать, удалить. -->
   <div class="ctx-menu" id="ctx-menu" role="menu" hidden></div>
 

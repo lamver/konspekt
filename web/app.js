@@ -1788,9 +1788,12 @@ function folderNode(f, встречи, found, q) {
     } else if (ист.error === 'missing') {
       знак.classList.add('is-warn');
       подсказка = t('folders.source_missing', { path: f.source });
-    } else if (ист.error) {
+    } else if (ист.error === 'unreadable') {
       знак.classList.add('is-warn');
       подсказка = t('folders.source_unreadable', { path: f.source });
+    } else if (ист.error) {
+      знак.classList.add('is-warn');
+      подсказка = `${f.source}: ${tЕслиЕсть(`source.error.${ист.error}`) || t('source.error.api')}`;
     }
     знак.title = подсказка;
     head.append(знак);
@@ -2002,8 +2005,9 @@ function openMoveMenu(m, anchor, x, y) {
 
 function openFolderMenu(f, anchor, x, y) {
   const источник = f.source
-    ? { text: t('folders.source_stop'), run: () => stopSource(f) }
-    : { text: t('folders.source_watch'), run: () => watchSource(f) };
+    ? [{ text: t('source.edit'), run: () => openSourceSheet(f) },
+       { text: t('folders.source_stop'), run: () => stopSource(f) }]
+    : [{ text: t('source.menu'), run: () => openSourceSheet(f) }];
   // Итоги в Telegram — только у папки, которая сама берёт записи: обычную
   // папку человек наполняет руками и видит сам.
   const вТелеграм = f.source
@@ -2012,40 +2016,133 @@ function openFolderMenu(f, anchor, x, y) {
   showCtxMenu([
     { text: t('folders.add_meeting'), run: () => createMeeting(f.id) },
     { text: t('folders.rename'), run: () => renameFolder(f) },
-    источник,
+    ...источник,
     ...вТелеграм,
     { sep: true },
     { text: t('folders.delete'), danger: true, run: () => deleteFolder(f) },
   ], anchor, x, y);
 }
 
-/**
- * Папка-источник: каталог на диске, из которого записи сами становятся
- * встречами этой папки. Если в каталоге уже лежат записи, спрашиваем,
- * брать ли их: архив в тысячу звонков молча съел бы пробный период и
- * полдня работы процессора.
- */
-async function watchSource(f) {
-  const путь = await api.pick_directory();
-  if (!путь) return;
-  const обзор = await api.folder_source_preview(путь);
-  if (!обзор || !обзор.ok) {
-    showToast(t('folders.source_missing', { path: путь }));
-    return;
+/* --- Окно «Откуда брать записи» ------------------------------------------
+
+   Один источник на папку: каталог на этом компьютере, сервер АТС по SFTP
+   или FTP, облачная телефония. Ключи и пароли в окно не возвращаются: при
+   правке поле пустое, и пустое значит «оставить сохранённый». */
+
+const ТЕЛЕФОНИИ = ['mango', 'uis', 'bitrix'];
+let источникПапки = null;
+
+function sourceFields(вид) {
+  const з = (id) => (el(id).value || '').trim();
+  if (вид === 'sftp' || вид === 'ftp') {
+    return { host: з('source-host'), port: з('source-port'), user: з('source-user'),
+             password: el('source-password').value || '', dir: з('source-dir') || '/',
+             tls: el('source-tls').checked };
   }
-  let все = false;
-  if (обзор.count > 0) {
-    все = await confirmDialog(
-      t('folders.source_existing_title', { n: обзор.count }),
-      t('folders.source_existing_text'),
-      { yes: t('folders.source_take_all'), no: t('folders.source_only_new'), danger: false },
-    );
+  if (вид === 'mango') return { key: з('source-mango-key'), salt: з('source-mango-salt') };
+  if (вид === 'uis') return { key: з('source-uis-key') };
+  if (вид === 'bitrix') return { webhook: з('source-bitrix-webhook') };
+  return {};
+}
+
+function syncSourceKind() {
+  const вид = el('source-kind').value;
+  document.querySelectorAll('#source-sheet [data-for]').forEach((блок) => {
+    блок.hidden = !блок.dataset.for.split(' ').includes(вид);
+  });
+  el('source-help').textContent = tЕслиЕсть(`source.help_${вид}`) || '';
+  el('source-port').placeholder = вид === 'ftp' ? '21' : '22';
+  const взять = el('source-take');
+  const варианты = ТЕЛЕФОНИИ.includes(вид) ? ['new', 'day', 'week', 'month'] : ['new', 'all'];
+  взять.textContent = '';
+  for (const в of варианты) {
+    const о = document.createElement('option');
+    о.value = в;
+    о.textContent = t(`source.take_${в}`);
+    взять.append(о);
   }
-  const итог = await api.folder_set_source(f.id, путь, все);
-  if (!итог || !итог.ok) {
-    showToast(t('folders.source_missing', { path: путь }));
-    return;
+  el('source-result').hidden = true;
+}
+
+async function openSourceSheet(f) {
+  источникПапки = f;
+  for (const id of ['source-path', 'source-host', 'source-port', 'source-user', 'source-password', 'source-dir',
+                    'source-mango-key', 'source-mango-salt', 'source-uis-key', 'source-bitrix-webhook']) {
+    el(id).value = '';
+    el(id).dataset.kept = '';
   }
+  el('source-tls').checked = true;
+  let вид = 'disk';
+  if (f.source) {
+    const инфо = (await api.folder_source_info(f.id)) || {};
+    вид = инфо.kind || 'disk';
+    const п = инфо.fields || {};
+    if (вид === 'disk') el('source-path').value = п.path || '';
+    el('source-host').value = п.host || '';
+    el('source-port').value = п.port || '';
+    el('source-user').value = п.user || '';
+    el('source-dir').value = п.dir || '';
+    if (п.tls === false) el('source-tls').checked = false;
+    const поле = { password: 'source-password', key: вид === 'uis' ? 'source-uis-key' : 'source-mango-key',
+                   salt: 'source-mango-salt', webhook: 'source-bitrix-webhook' };
+    for (const к of инфо.secrets || []) {
+      const id = поле[к];
+      if (id) el(id).placeholder = t('source.secret_kept');
+    }
+  }
+  el('source-kind').value = вид;
+  syncSourceKind();
+  el('source-sheet').hidden = false;
+}
+
+function closeSourceSheet() {
+  el('source-sheet').hidden = true;
+  источникПапки = null;
+  for (const id of ['source-password', 'source-mango-key', 'source-mango-salt', 'source-uis-key', 'source-bitrix-webhook']) {
+    el(id).placeholder = id === 'source-bitrix-webhook' ? 'https://….bitrix24.ru/rest/1/…/' : '';
+  }
+}
+
+function sourceMessage(текст, хорошо) {
+  const м = el('source-result');
+  м.textContent = текст;
+  м.hidden = !текст;
+  м.classList.toggle('source-ok', !!хорошо);
+}
+
+async function testSource() {
+  const вид = el('source-kind').value;
+  if (вид === 'disk') return;
+  sourceMessage(t('source.checking'), true);
+  const r = await api.folder_source_test(вид, sourceFields(вид), источникПапки && источникПапки.id);
+  sourceMessage(r && r.ok ? t('source.test_ok') : t(`source.error.${(r && r.error) || 'api'}`), r && r.ok);
+}
+
+async function saveSource() {
+  const f = источникПапки;
+  if (!f) return;
+  const вид = el('source-kind').value;
+  const взять = el('source-take').value;
+  if (вид === 'disk') {
+    const путь = el('source-path').value;
+    if (!путь) {
+      sourceMessage(t('source.error.no_path'));
+      return;
+    }
+    const итог = await api.folder_set_source(f.id, путь, взять === 'all');
+    if (!итог || !итог.ok) {
+      sourceMessage(t('folders.source_missing', { path: путь }));
+      return;
+    }
+  } else {
+    sourceMessage(t('source.checking'), true);
+    const итог = await api.folder_set_remote_source(f.id, вид, sourceFields(вид), взять);
+    if (!итог || !итог.ok) {
+      sourceMessage(t(`source.error.${(итог && итог.error) || 'api'}`));
+      return;
+    }
+  }
+  closeSourceSheet();
   showToast(t('folders.source_started'));
   await loadMeetings();
 }
@@ -4592,6 +4689,15 @@ function bindUi() {
   }
   if (ui.summarySendTelegram) ui.summarySendTelegram.addEventListener('click', отправитьВТелеграм);
   el('tg-connect').addEventListener('click', connectTelegram);
+  el('source-kind').addEventListener('change', syncSourceKind);
+  el('source-pick').addEventListener('click', async () => {
+    const путь = await api.pick_directory();
+    if (путь) el('source-path').value = путь;
+  });
+  el('source-test').addEventListener('click', testSource);
+  el('source-save').addEventListener('click', saveSource);
+  el('source-cancel').addEventListener('click', closeSourceSheet);
+  el('source-sheet').addEventListener('click', (e) => { if (e.target === el('source-sheet')) closeSourceSheet(); });
   el('tg-token').addEventListener('keydown', (e) => { if (e.key === 'Enter') connectTelegram(); });
   el('tg-botfather').addEventListener('click', () => api.telegram_open_botfather());
   el('tg-enabled').addEventListener('change', async (e) => renderTelegram(await api.telegram_set_enabled(e.target.checked)));

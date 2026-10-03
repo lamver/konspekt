@@ -36,6 +36,7 @@ dependencies = [
     # Расшифровать запись по ссылке: yt-dlp как библиотека, без
     # отдельной программы и без ffmpeg (app/core/link.py). Unlicense.
     "yt-dlp>=2026.8.19",
+    "paramiko>=3.4",
 ]
 
 [project.scripts]

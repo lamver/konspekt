@@ -356,7 +356,13 @@ class Store:
             self._conn.executescript(FOLDERS_SCHEMA)
             # Присылать ли итоги записей этой папки в Telegram. Колонка
             # только добавляется: прежняя версия её просто не замечает.
-            self._add_columns("folders", {"notify_telegram": "INTEGER NOT NULL DEFAULT 0"})
+            self._add_columns("folders", {
+                "notify_telegram": "INTEGER NOT NULL DEFAULT 0",
+                # Вид источника: disk, sftp, ftp, mango, uis, bitrix. И его
+                # настройки в JSON: секреты внутри зашифрованы (core/секрет.py).
+                "source_kind": "TEXT NOT NULL DEFAULT 'disk'",
+                "source_config": "TEXT NOT NULL DEFAULT ''",
+            })
             self._начать_пробный_период()
             if was < 2:
                 self._add_columns(
@@ -457,17 +463,26 @@ class Store:
         with self._lock:
             rows = self._conn.execute(
                 """SELECT f.id, f.name, f.created_at, f.source, f.notify_telegram,
+                          f.source_kind, f.source_config,
                           (SELECT COUNT(*) FROM meeting_folders mf WHERE mf.folder_id = f.id) AS count
                    FROM folders f ORDER BY f.name COLLATE NOCASE, f.created_at"""
             ).fetchall()
         return [dict(r) for r in rows]
 
-    def set_folder_source(self, folder_id: str, source: str) -> bool:
-        """Каталог на диске, из которого папка берёт записи. Пусто — не следит."""
+    def set_folder_source(self, folder_id: str, source: str, kind: str = "disk", config: str = "") -> bool:
+        """Откуда папка берёт записи. source пустой — ниоткуда."""
         with self._lock:
-            cur = self._conn.execute("UPDATE folders SET source=? WHERE id=?", (source, folder_id))
+            cur = self._conn.execute(
+                "UPDATE folders SET source=?, source_kind=?, source_config=? WHERE id=?",
+                (source, kind if source else "disk", config if source else "", folder_id),
+            )
             self._conn.commit()
         return cur.rowcount > 0
+
+    def set_folder_source_config(self, folder_id: str, config: str) -> None:
+        with self._lock:
+            self._conn.execute("UPDATE folders SET source_config=? WHERE id=?", (config, folder_id))
+            self._conn.commit()
 
     def set_folder_notify(self, folder_id: str, on: bool) -> bool:
         with self._lock:

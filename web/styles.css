@@ -421,6 +421,15 @@ body { display: flex; flex-direction: column; }
 .folder__name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .folder__count { flex: none; font-weight: 400; font-size: 10.5px; color: var(--ink-3); }
 .folder__source { flex: none; display: inline-flex; color: var(--ink-3); }
+.source-panel { width: min(460px, 92vw); max-height: 88vh; overflow-y: auto; }
+.source-fields { display: flex; flex-direction: column; gap: 8px; margin: 8px 0; }
+.source-row { display: flex; gap: 8px; }
+.source-grow { flex: 1; min-width: 0; }
+.source-port { width: 80px; flex: none; }
+.source-path-row { display: flex; gap: 6px; }
+.source-path-row input { flex: 1; min-width: 0; }
+.source-spacer { flex: 1; }
+.source-ok { color: var(--ink-2); }
 .folder__source.is-warn { color: var(--accent); }
 .folder__add, .folder__more {
   flex: none;

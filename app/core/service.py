@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import base64
 import io
+import json
 import logging
 import os
 import re
@@ -3049,14 +3050,136 @@ class AppService:
         from . import источники as ист
 
         if self._сторож_папок is None:
+            from . import источники_сеть as сеть
+
             self._сторож_папок = ист.СторожПапок(
                 папки=self.store.list_folders,
                 уже_взят=self.store.source_taken,
                 отметить=self.store.mark_source_taken,
                 импорт=self._импорт_из_источника,
                 слово_звонок=lambda: self._msg("python.source.call"),
+                сеть=self._сетевой_источник,
+                сдвинуть_курсор=self._сдвинуть_курсор,
+                папка_данных=paths.data_dir() / "sources",
+                интервалы_сети=сеть.ИНТЕРВАЛЫ,
             )
         return self._сторож_папок
+
+    # Настройки сетевого источника лежат в folders.source_config как JSON;
+    # секретные поля (пароль, ключ, вебхук) внутри зашифрованы DPAPI.
+
+    @staticmethod
+    def _настройки_источника(папка: dict[str, Any]) -> dict[str, Any]:
+        try:
+            return json.loads(папка.get("source_config") or "{}")
+        except ValueError:
+            return {}
+
+    def _расшифровать_настройки(self, вид: str, настройки: dict[str, Any]) -> dict[str, Any]:
+        from . import источники_сеть as сеть
+        from . import секрет
+
+        return {к: (секрет.достать(з) if к in сеть.СЕКРЕТЫ.get(вид, ()) else з) for к, з in настройки.items()}
+
+    def _сетевой_источник(self, папка: dict[str, Any]):
+        from . import источники_сеть as сеть
+
+        вид = папка.get("source_kind") or "disk"
+        настройки = self._настройки_источника(папка)
+        return сеть.собрать(вид, self._расшифровать_настройки(вид, настройки)), настройки.get("since")
+
+    def _сдвинуть_курсор(self, папка_id: str, когда: float) -> None:
+        папка = next((п for п in self.store.list_folders() if п["id"] == папка_id), None)
+        if not папка:
+            return
+        настройки = self._настройки_источника(папка)
+        настройки["since"] = float(когда)
+        self.store.set_folder_source_config(папка_id, json.dumps(настройки, ensure_ascii=False))
+
+    def _поля_источника(self, вид: str, поля: dict[str, Any], папка_id: str | None) -> dict[str, Any]:
+        """Поля из окна плюс прежние секреты, если человек их не менял (поле пустое)."""
+        from . import источники_сеть as сеть
+
+        чистые = {к: (з.strip() if isinstance(з, str) else з) for к, з in (поля or {}).items()}
+        if папка_id:
+            папка = next((п for п in self.store.list_folders() if п["id"] == папка_id), None)
+            if папка and (папка.get("source_kind") or "disk") == вид:
+                прежние = self._расшифровать_настройки(вид, self._настройки_источника(папка))
+                for к in сеть.СЕКРЕТЫ.get(вид, ()):
+                    if not чистые.get(к):
+                        чистые[к] = прежние.get(к, "")
+                if вид == "sftp" and прежние.get("host") == чистые.get("host"):
+                    чистые.setdefault("host_key", прежние.get("host_key", ""))
+        return чистые
+
+    def folder_source_test(self, kind: str, fields: dict[str, Any], folder_id: str | None = None) -> dict[str, Any]:
+        """Проверить подключение, ничего не сохраняя."""
+        from . import источники_сеть as сеть
+
+        if kind not in сеть.ВИДЫ or kind == "disk":
+            return {"ok": False, "error": "kind"}
+        try:
+            сеть.собрать(kind, self._поля_источника(kind, fields, folder_id)).проверить()
+        except сеть.ОшибкаИсточника as беда:
+            return {"ok": False, "error": беда.code}
+        except Exception:
+            log.warning("Проверка источника %s упала", kind, exc_info=True)
+            return {"ok": False, "error": "api"}
+        return {"ok": True}
+
+    def folder_set_remote_source(self, folder_id: str, kind: str, fields: dict[str, Any],
+                                 take: str = "new") -> dict[str, Any]:
+        """Подключить сетевой источник к папке.
+
+        take для телефоний: new, day, week, month — за сколько назад взять
+        звонки при подключении. Для SFTP и FTP: new или all.
+        """
+        from . import источники_сеть as сеть
+        from . import секрет
+
+        if kind not in сеть.ВИДЫ or kind == "disk":
+            return {"ok": False, "error": "kind"}
+        поля = self._поля_источника(kind, fields, folder_id)
+        источник = сеть.собрать(kind, поля)
+        try:
+            отпечаток_сервера = источник.проверить()
+        except сеть.ОшибкаИсточника as беда:
+            return {"ok": False, "error": беда.code}
+        if kind == "sftp" and отпечаток_сервера:
+            поля["host_key"] = отпечаток_сервера
+        настройки = {к: (секрет.спрятать(str(з)) if к in сеть.СЕКРЕТЫ.get(kind, ()) else з)
+                     for к, з in поля.items() if з not in (None, "")}
+        дней = {"new": 0, "day": 1, "week": 7, "month": 30}.get(take, 0)
+        настройки["since"] = time.time() - дней * 86400
+        if kind in ("sftp", "ftp") and take != "all":
+            try:
+                self._источники().пометить_сетевые(folder_id, сеть.собрать(kind, поля))
+            except сеть.ОшибкаИсточника as беда:
+                return {"ok": False, "error": беда.code}
+        if not self.store.set_folder_source(folder_id, сеть.описание(kind, поля), kind,
+                                            json.dumps(настройки, ensure_ascii=False)):
+            return {"ok": False, "error": "folder"}
+        self.запустить_источники()
+        bus.emit(MEETINGS_CHANGED)
+        return {"ok": True}
+
+    def folder_source_info(self, folder_id: str) -> dict[str, Any]:
+        """Настройки источника для окна правки: без секретов, только отметки, что они есть."""
+        from . import источники_сеть as сеть
+
+        папка = next((п for п in self.store.list_folders() if п["id"] == folder_id), None)
+        if not папка or not папка.get("source"):
+            return {"kind": ""}
+        вид = папка.get("source_kind") or "disk"
+        if вид == "disk":
+            return {"kind": "disk", "fields": {"path": папка["source"]}}
+        настройки = self._настройки_источника(папка)
+        секреты = сеть.СЕКРЕТЫ.get(вид, ())
+        return {
+            "kind": вид,
+            "fields": {к: з for к, з in настройки.items() if к not in секреты and к not in ("since", "host_key")},
+            "secrets": [к for к in секреты if настройки.get(к)],
+        }
 
     def _импорт_из_источника(self, путь, папка_id: str, название: str, когда: float | None) -> str:
         """Новая запись из папки-источника: в очередь разбора, в ту же папку."""
@@ -3118,7 +3241,7 @@ class AppService:
             # подключение папки с архивом в тысячу звонков тут же съело бы
             # пробный период и полдня работы процессора.
             self._источники().взять_как_есть(folder_id, каталог)
-        if not self.store.set_folder_source(folder_id, str(каталог)):
+        if not self.store.set_folder_source(folder_id, str(каталог), "disk", ""):
             return {"ok": False, "error": "folder"}
         self.запустить_источники()
         bus.emit(MEETINGS_CHANGED)
@@ -3135,6 +3258,8 @@ class AppService:
         сторож = self._сторож_папок
         for п in папки:
             п["source_state"] = сторож.состояние(п["id"]) if (сторож and п.get("source")) else {}
+            # В окно настройки источника не уходят: там зашифрованные секреты.
+            п.pop("source_config", None)
         return папки
 
     # --- свой бот в Telegram ----------------------------------------------

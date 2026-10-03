@@ -551,6 +551,15 @@ class Api:
     def folder_clear_source(self, folder_id: str) -> dict[str, Any]:
         return self._service.folder_clear_source(str(folder_id))
 
+    def folder_source_test(self, kind: str, fields: dict, folder_id: str | None = None) -> dict[str, Any]:
+        return self._service.folder_source_test(str(kind), dict(fields or {}), folder_id or None)
+
+    def folder_set_remote_source(self, folder_id: str, kind: str, fields: dict, take: str = "new") -> dict[str, Any]:
+        return self._service.folder_set_remote_source(str(folder_id), str(kind), dict(fields or {}), str(take))
+
+    def folder_source_info(self, folder_id: str) -> dict[str, Any]:
+        return self._service.folder_source_info(str(folder_id))
+
     def folder_set_notify(self, folder_id: str, on: bool) -> dict[str, Any]:
         return self._service.folder_set_notify(str(folder_id), bool(on))
 

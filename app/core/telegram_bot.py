@@ -35,37 +35,15 @@ from typing import Any, Callable, Protocol
 
 import httpx
 
+from . import секрет
 from .events import IMPORT_PROGRESS, SUMMARY_ERROR, SUMMARY_READY, bus
 
 log = logging.getLogger(__name__)
 
 
-class _БезТокена(logging.Filter):
-    """Вычистить токен бота из журнала.
-
-    httpx пишет в журнал каждый адрес запроса, а у Telegram токен стоит
-    прямо в адресе: /bot123456:AAH…/getUpdates. Журнал люди прикладывают
-    к жалобам, и с ним уходил бы ключ от их бота.
-    """
-
-    _образец = re.compile(r"/(file/)?bot\d+:[A-Za-z0-9_-]+")
-
-    def filter(self, запись: logging.LogRecord) -> bool:
-        try:
-            текст = запись.getMessage()
-        except Exception:
-            return True
-        if "bot" in текст:
-            чистый = self._образец.sub(lambda м: f"/{м.group(1) or ''}bot<токен скрыт>", текст)
-            if чистый != текст:
-                запись.msg, запись.args = чистый, None
-        return True
-
-
-_ФИЛЬТР = _БезТокена()
-for _имя in ("httpx", "httpcore"):
-    if _ФИЛЬТР not in logging.getLogger(_имя).filters:
-        logging.getLogger(_имя).addFilter(_ФИЛЬТР)
+# Токен бота стоит прямо в адресе запроса, а httpx пишет адреса в журнал.
+# Общий фильтр вычищает его (core/секрет.py).
+секрет.прикрыть_журнал_запросов()
 
 API = "https://api.telegram.org"
 # Bot API отдаёт боту файлы не больше 20 МБ. Голосовые и кружки влезают

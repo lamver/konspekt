@@ -12,6 +12,8 @@ DPAPI шифрует ключом учётной записи Windows: расш�
 from __future__ import annotations
 
 import base64
+import logging
+import re
 import sys
 
 ПРИСТАВКА_DPAPI = "dpapi:"
@@ -78,3 +80,43 @@ def достать(запись: str) -> str:
     except (OSError, ValueError, UnicodeDecodeError):
         return ""
     return ""
+
+
+class ФильтрЖурнала(logging.Filter):
+    """Вычистить секреты из записей журнала.
+
+    httpx пишет в журнал адрес каждого запроса, а секреты бывают прямо в
+    адресе: токен бота Telegram (/bot<токен>/…), ключ входящего вебхука
+    Битрикс24 (/rest/<номер>/<ключ>/…), подписи и ключи во временных
+    ссылках на записи (?token=…). Журнал прикладывают к жалобам.
+    """
+
+    _образцы = (
+        (re.compile(r"/(file/)?bot\d+:[A-Za-z0-9_-]+"), lambda м: f"/{м.group(1) or ''}bot<токен скрыт>"),
+        (re.compile(r"/rest/(\d+)/[A-Za-z0-9]+/"), lambda м: f"/rest/{м.group(1)}/<ключ скрыт>/"),
+        (re.compile(r"(https?://[^\s\"?]+)\?[^\s\"]+"), lambda м: f"{м.group(1)}?<скрыто>"),
+    )
+
+    def filter(self, запись: logging.LogRecord) -> bool:
+        try:
+            текст = запись.getMessage()
+        except Exception:
+            return True
+        чистый = текст
+        for образец, замена in self._образцы:
+            чистый = образец.sub(замена, чистый)
+        if чистый != текст:
+            запись.msg, запись.args = чистый, None
+        return True
+
+
+_ФИЛЬТР = ФильтрЖурнала()
+
+
+def прикрыть_журнал_запросов() -> None:
+    """Повесить фильтр на журналы httpx и httpcore. Повторный вызов ничего не делает."""
+    for имя in ("httpx", "httpcore"):
+        журнал = logging.getLogger(имя)
+        if _ФИЛЬТР not in журнал.filters:
+            журнал.addFilter(_ФИЛЬТР)
+
