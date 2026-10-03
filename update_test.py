@@ -256,6 +256,36 @@ def check_installs_after_idle() -> None:
     print("[ok] после простоя обновление ставится и программа возвращается")
 
 
+def check_button_restarts() -> None:
+    """Кнопка «Установить и перезапустить» поднимает программу обратно.
+
+    Жалоба 04.10: после нажатия программа закрывалась, ставилась и не
+    запускалась. Кнопка звала установку без просьбы о перезапуске, и
+    установщик в тихом режиме программу не поднимал.
+    """
+    from types import SimpleNamespace
+
+    from app.ui.api import Api
+
+    with tempfile.TemporaryDirectory() as d:
+        path = Path(d) / "setup.exe"
+        path.write_bytes(PAYLOAD)
+        started: list = []
+        real_popen = up.subprocess.Popen
+        up.subprocess.Popen = lambda *a, **kw: started.append(list(a[0]))
+        try:
+            u = up.Updater(FakeService())
+            u.ready = up.Ready("9.9.9", path)
+            мост = SimpleNamespace(_service=SimpleNamespace(updater=u))
+            assert Api.install_update(мост) is True, "кнопка не запустила установку"
+        finally:
+            up.subprocess.Popen = real_popen
+        assert started and "/RESTARTKONSPEKT" in started[0], (
+            "после установки по кнопке программа не запустится сама"
+        )
+    print("[ok] кнопка «Установить и перезапустить» перезапускает программу")
+
+
 def check_retries_after_break() -> None:
     """Оборванная загрузка повторяется, а не ждёт сутки.
 
@@ -302,6 +332,7 @@ def main() -> int:
     check_reuses_downloaded()
     check_waits_for_idle()
     check_installs_after_idle()
+    check_button_restarts()
     check_retries_after_break()
     print("\nВсе проверки пройдены.")
     return 0

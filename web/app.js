@@ -236,14 +236,28 @@ let levelResetTimer = null;
 
 /* --- Мост к Python ------------------------------------------------------ */
 
-/** pywebview появляется асинхронно; ждём его перед первым запросом. */
-function apiReady() {
+/**
+ * pywebview появляется асинхронно; ждём его перед первым запросом.
+ *
+ * Готовым считаем мост, в котором уже есть нужный метод, а не сам
+ * `window.pywebview.api`: pywebview сначала кладёт пустую заготовку, а
+ * методы добавляет позже. На холодном старте после обновления первый
+ * `get_settings` попадал в этот промежуток, и сохранённый масштаб не
+ * восстанавливался. Если событие pywebviewready уже было, а метода нет,
+ * значит, его нет вовсе: не ждём вечно, пусть вызов честно упадёт.
+ */
+let apiAnnounced = false;
+window.addEventListener('pywebviewready', () => { apiAnnounced = true; }, { once: true });
+
+function apiReady(name) {
+  const ready = () => apiAnnounced
+    || (window.pywebview && window.pywebview.api && typeof window.pywebview.api[name] === 'function');
   return new Promise((resolve) => {
-    if (window.pywebview && window.pywebview.api) return resolve();
+    if (ready()) return resolve();
     window.addEventListener('pywebviewready', () => resolve(), { once: true });
     // Подстраховка: событие могло уйти до подписки.
     const poll = setInterval(() => {
-      if (window.pywebview && window.pywebview.api) {
+      if (ready()) {
         clearInterval(poll);
         resolve();
       }
@@ -253,7 +267,7 @@ function apiReady() {
 
 const api = new Proxy({}, {
   get: (_t, name) => async (...args) => {
-    await apiReady();
+    await apiReady(name);
     try {
       return await window.pywebview.api[name](...args);
     } catch (err) {
