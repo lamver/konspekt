@@ -152,7 +152,7 @@ class WhisperTranscriber:
         duration = waveform.size / float(sample_rate)
 
         try:
-            text = self._model.recognize(waveform, sample_rate=sample_rate)
+            text = self._recognize(waveform, sample_rate, lang)
         except Exception:
             log.exception("Ошибка распознавания через Whisper")
             return []
@@ -163,6 +163,8 @@ class WhisperTranscriber:
         text = _clean(text)
         if not text:
             return []
+        if (lang or "").lower().startswith("sr"):
+            text = латиница(text)
 
         return [
             TranscriptSegment(
@@ -174,6 +176,42 @@ class WhisperTranscriber:
                 lang=lang or "",
             )
         ]
+
+
+    def _recognize(self, waveform: np.ndarray, sample_rate: int, lang: str) -> str:
+        """Распознать, подсказав язык, если он известен.
+
+        Без подсказки Whisper определяет язык сам по первым секундам и на
+        сербском нередко решает, что это русский или хорватский: текст
+        выходит на чужом языке. Подсказку даём, только когда язык назван
+        явно (сербский от роутера, выбор человека при пересчёте фразы).
+        Языка нет в словаре модели — распознаём без подсказки.
+        """
+        код = (lang or "").split("-")[0].lower()
+        if код:
+            try:
+                return self._model.recognize(waveform, sample_rate=sample_rate, language=код)
+            except KeyError:
+                log.info("Whisper не знает язык %s, распознаём без подсказки", код)
+        return self._model.recognize(waveform, sample_rate=sample_rate)
+
+
+# Сербская кириллица в латиницу. Буква к букве, без догадок: в сербском
+# обе азбуки равноправны и переводятся однозначно. Латиница потому, что
+# так переведён сербский интерфейс и так пишет большинство в сети, а
+# Whisper выдаёт то одно, то другое, и расшифровка выходила пёстрой.
+_СЕРБСКАЯ_ЛАТИНИЦА = {
+    "А": "A", "Б": "B", "В": "V", "Г": "G", "Д": "D", "Ђ": "Đ", "Е": "E", "Ж": "Ž",
+    "З": "Z", "И": "I", "Ј": "J", "К": "K", "Л": "L", "Љ": "Lj", "М": "M", "Н": "N",
+    "Њ": "Nj", "О": "O", "П": "P", "Р": "R", "С": "S", "Т": "T", "Ћ": "Ć", "У": "U",
+    "Ф": "F", "Х": "H", "Ц": "C", "Ч": "Č", "Џ": "Dž", "Ш": "Š",
+}
+_СЕРБСКАЯ_ЛАТИНИЦА.update({к.lower(): з.lower() for к, з in list(_СЕРБСКАЯ_ЛАТИНИЦА.items())})
+
+
+def латиница(text: str) -> str:
+    """Сербский текст кириллицей — латиницей. Остальное не трогаем."""
+    return "".join(_СЕРБСКАЯ_ЛАТИНИЦА.get(ch, ch) for ch in text)
 
 
 def _to_float32(pcm: np.ndarray | bytes) -> np.ndarray:

@@ -70,10 +70,109 @@ def _мин(секунды: float) -> str:
     return f"{с // 60}:{с % 60:02d}"
 
 
+# --- подписи на языке встречи --------------------------------------------------
+
+# Разбор пишется словами, и слова должны быть на языке встречи: в
+# испанской встрече «Кто сколько говорил» выглядит как недоперевод.
+# Языки те же, что у интерфейса; для остальных берётся язык интерфейса
+# (см. core/язык_итогов.py).
+ТЕКСТЫ: dict[str, dict[str, str]] = {
+    "ru": {
+        "who_talked": "**Кто сколько говорил**",
+        "wpm": ", {n} слов в минуту",
+        "others": "- Короткие реплики других голосов ({n}) — {share}% ({time})",
+        "flow": "**Ход разговора**",
+        "duration": "- Длительность {time}, заметных говорящих {n}",
+        "turns": "- Смен говорящего: {n}",
+        "turns_per_min": ", {n} в минуту",
+        "longest": "- Самый длинный монолог: {who}, {time} (с {at})",
+        "questions": "- Вопросов: {n}",
+        "interruptions": "- Перебиваний: {n}",
+        "pauses": "- Пауз дольше {sec} секунд: {n}",
+        "notice": "**На что обратить внимание**",
+        "monologue_share": "{who} говорил {share}% времени: это скорее монолог, чем разговор.",
+        "even": "Время разделено почти поровну: настоящий диалог.",
+        "long_monologue": "Монолог дольше трёх минут ({time}): собеседника в это время почти наверняка потеряли.",
+        "no_questions": "За всю встречу ни одного вопроса.",
+        "many_interruptions": "Перебивали друг друга {n} раз.",
+        "tone_only_ru": "Тон по словам пока считается только для русской речи.",
+        "tone_too_little": "Слишком мало речи, чтобы судить о тоне.",
+    },
+    "en": {
+        "who_talked": "**Who talked how much**",
+        "wpm": ", {n} words per minute",
+        "others": "- Short remarks from other voices ({n}) — {share}% ({time})",
+        "flow": "**How the conversation went**",
+        "duration": "- Duration {time}, noticeable speakers {n}",
+        "turns": "- Speaker changes: {n}",
+        "turns_per_min": ", {n} per minute",
+        "longest": "- Longest monologue: {who}, {time} (from {at})",
+        "questions": "- Questions: {n}",
+        "interruptions": "- Interruptions: {n}",
+        "pauses": "- Pauses longer than {sec} seconds: {n}",
+        "notice": "**Worth noticing**",
+        "monologue_share": "{who} talked {share}% of the time: more of a monologue than a conversation.",
+        "even": "Time was split almost evenly: a real dialogue.",
+        "long_monologue": "A monologue longer than three minutes ({time}): the listener was most likely lost by then.",
+        "no_questions": "Not a single question in the whole meeting.",
+        "many_interruptions": "People interrupted each other {n} times.",
+        "tone_only_ru": "Tone by words is only counted for Russian speech so far.",
+        "tone_too_little": "Too little speech to judge the tone.",
+    },
+    "es": {
+        "who_talked": "**Quién habló cuánto**",
+        "wpm": ", {n} palabras por minuto",
+        "others": "- Intervenciones breves de otras voces ({n}) — {share}% ({time})",
+        "flow": "**Cómo fue la conversación**",
+        "duration": "- Duración {time}, hablantes destacados {n}",
+        "turns": "- Cambios de hablante: {n}",
+        "turns_per_min": ", {n} por minuto",
+        "longest": "- Monólogo más largo: {who}, {time} (desde {at})",
+        "questions": "- Preguntas: {n}",
+        "interruptions": "- Interrupciones: {n}",
+        "pauses": "- Pausas de más de {sec} segundos: {n}",
+        "notice": "**A tener en cuenta**",
+        "monologue_share": "{who} habló el {share}% del tiempo: más un monólogo que una conversación.",
+        "even": "El tiempo se repartió casi por igual: un diálogo de verdad.",
+        "long_monologue": "Un monólogo de más de tres minutos ({time}): para entonces el interlocutor casi seguro se había perdido.",
+        "no_questions": "Ni una sola pregunta en toda la reunión.",
+        "many_interruptions": "Se interrumpieron {n} veces.",
+        "tone_only_ru": "Por ahora el tono por palabras solo se calcula para el habla en ruso.",
+        "tone_too_little": "Hay muy poca habla para juzgar el tono.",
+    },
+    "sr": {
+        "who_talked": "**Ko je koliko govorio**",
+        "wpm": ", {n} reči u minutu",
+        "others": "- Kratke replike drugih glasova ({n}) — {share}% ({time})",
+        "flow": "**Tok razgovora**",
+        "duration": "- Trajanje {time}, primetnih govornika {n}",
+        "turns": "- Smena govornika: {n}",
+        "turns_per_min": ", {n} u minutu",
+        "longest": "- Najduži monolog: {who}, {time} (od {at})",
+        "questions": "- Pitanja: {n}",
+        "interruptions": "- Upadanja u reč: {n}",
+        "pauses": "- Pauza dužih od {sec} sekundi: {n}",
+        "notice": "**Na šta obratiti pažnju**",
+        "monologue_share": "{who} je govorio {share}% vremena: to je pre monolog nego razgovor.",
+        "even": "Vreme je podeljeno skoro podjednako: pravi dijalog.",
+        "long_monologue": "Monolog duži od tri minuta ({time}): sagovornik je tada skoro sigurno izgubljen.",
+        "no_questions": "Na celom sastanku nijedno pitanje.",
+        "many_interruptions": "Upadali su jedni drugima u reč {n} puta.",
+        "tone_only_ru": "Ton po rečima se za sada računa samo za govor na ruskom.",
+        "tone_too_little": "Premalo govora da bi se procenio ton.",
+    },
+}
+
+
+def _т(язык: str, ключ: str, **vars: object) -> str:
+    return ТЕКСТЫ.get(язык, ТЕКСТЫ["ru"])[ключ].format(**vars)
+
+
+
 # --- разбор разговора ----------------------------------------------------------
 
 
-def разговор(segments: list[dict[str, Any]]) -> dict[str, Any]:
+def разговор(segments: list[dict[str, Any]], язык: str = "ru") -> dict[str, Any]:
     """Цифры по времени и очерёдности реплик.
 
     Возвращает словарь: `people` — по каждому говорящему, `totals` —
@@ -153,49 +252,47 @@ def разговор(segments: list[dict[str, Any]]) -> dict[str, Any]:
     заметные = [ч for ч in по_доле if ч["seconds"] >= МЕЛКИЙ_ГОЛОС * всего_речи]
     прочие = [ч for ч in по_доле if ч not in заметные]
     итоги["speakers"] = len(заметные)
-    строки = ["**Кто сколько говорил**"]
+    т = lambda ключ, **vars: _т(язык, ключ, **vars)  # noqa: E731
+    строки = [т("who_talked")]
     for ч in заметные:
-        темп = f", {ч['wpm']} слов в минуту" if ч["wpm"] else ""
+        темп = т("wpm", n=ч["wpm"]) if ч["wpm"] else ""
         строки.append(f"- {ч['who']} — {ч['share']}% ({_мин(ч['seconds'])}){темп}")
     if прочие:
         сек = sum(ч["seconds"] for ч in прочие)
-        строки.append(f"- Короткие реплики других голосов ({len(прочие)}) — "
-                      f"{round(100 * сек / всего_речи)}% ({_мин(сек)})")
-    строки += ["", "**Ход разговора**"]
-    строки.append(f"- Длительность {_мин(длительность)}, заметных говорящих {len(заметные)}")
-    строки.append(f"- Смен говорящего: {итоги['turn_changes']}"
-                  + (f", {итоги['turns_per_min']} в минуту" if итоги["turns_per_min"] else ""))
-    строки.append(f"- Самый длинный монолог: {самый_длинный[1]}, {_мин(самый_длинный[0])}"
-                  f" (с {_мин(самый_длинный[2])})")
+        строки.append(т("others", n=len(прочие), share=round(100 * сек / всего_речи), time=_мин(сек)))
+    строки += ["", т("flow")]
+    строки.append(т("duration", time=_мин(длительность), n=len(заметные)))
+    строки.append(т("turns", n=итоги["turn_changes"])
+                  + (т("turns_per_min", n=итоги["turns_per_min"]) if итоги["turns_per_min"] else ""))
+    строки.append(т("longest", who=самый_длинный[1], time=_мин(самый_длинный[0]),
+                    at=_мин(самый_длинный[2])))
     if итоги["questions"] is not None:
-        строки.append(f"- Вопросов: {итоги['questions']}")
+        строки.append(т("questions", n=итоги["questions"]))
     # Перебивание видно только по наложению двух дорожек: у записи из
     # одного файла реплики идут строго по очереди, и «ноль перебиваний»
     # там был бы враньём.
     дорожки = {str(seg.get("track") or "") for seg in segments}
     if len(дорожки - {""}) >= 2:
-        строки.append(f"- Перебиваний: {итоги['interruptions']}")
+        строки.append(т("interruptions", n=итоги["interruptions"]))
     else:
         итоги["interruptions"] = None
-    строки.append(f"- Пауз дольше {int(ДЛИННАЯ_ПАУЗА)} секунд: {паузы}")
+    строки.append(т("pauses", sec=int(ДЛИННАЯ_ПАУЗА), n=паузы))
 
     замечания = []
     if len(заметные) >= 2 and по_доле[0]["share"] >= 65:
-        замечания.append(f"{по_доле[0]['who']} говорил {по_доле[0]['share']}% времени: "
-                         "это скорее монолог, чем разговор.")
+        замечания.append(т("monologue_share", who=по_доле[0]["who"], share=по_доле[0]["share"]))
     if len(заметные) == 2 and all(35 <= ч["share"] <= 65 for ч in заметные):
-        замечания.append("Время разделено почти поровну: настоящий диалог.")
+        замечания.append(т("even"))
     # Монолог при одном заметном голосе — это диктовка или лекция, а не
     # потерянный собеседник.
     if самый_длинный[0] >= 180 and len(заметные) >= 2:
-        замечания.append(f"Монолог дольше трёх минут ({_мин(самый_длинный[0])}): "
-                         "собеседника в это время почти наверняка потеряли.")
+        замечания.append(т("long_monologue", time=_мин(самый_длинный[0])))
     if итоги["questions"] == 0 and длительность >= 300:
-        замечания.append("За всю встречу ни одного вопроса.")
+        замечания.append(т("no_questions"))
     if итоги["interruptions"] and итоги["interruptions"] >= 10:
-        замечания.append(f"Перебивали друг друга {итоги['interruptions']} раз.")
+        замечания.append(т("many_interruptions", n=итоги["interruptions"]))
     if замечания:
-        строки += ["", "**На что обратить внимание**"] + [f"- {з}" for з in замечания]
+        строки += ["", т("notice")] + [f"- {з}" for з in замечания]
     return {"people": по_доле, "totals": итоги, "markdown": "\n".join(строки)}
 
 
@@ -243,11 +340,22 @@ def _счёт(текст: str) -> tuple[int, dict[str, int]]:
     return len(слова), счёт
 
 
-def тон(segments: list[dict[str, Any]]) -> dict[str, Any]:
-    """Доли слов из словарей по каждому говорящему и в целом, на 100 слов."""
+def тон(segments: list[dict[str, Any]], язык: str = "ru") -> dict[str, Any]:
+    """Доли слов из словарей по каждому говорящему и в целом, на 100 слов.
+
+    Словари русские, поэтому нерусскую речь честно не считаем: в
+    английской речи русские основы не найдут ничего, и разбор вышел бы
+    уверенным «ноль сомнений, ноль недовольства». Русская ли речь, решаем
+    по буквам самого текста, а не по языку подписей: подписи могут быть
+    английскими у русской встречи и наоборот.
+    """
     реплики = _реплики(segments)
     if not реплики:
         return {"people": [], "markdown": ""}
+    буквы = [ch for р in реплики for ch in р.text if ch.isalpha()]
+    кириллица = sum(1 for ch in буквы if "а" <= ch.lower() <= "я" or ch.lower() == "ё")
+    if буквы and кириллица * 2 < len(буквы):
+        return {"people": [], "markdown": _т(язык, "tone_only_ru")}
     по_людям: dict[str, str] = {}
     for р in реплики:
         по_людям[р.who] = по_людям.get(р.who, "") + " " + р.text
@@ -260,7 +368,7 @@ def тон(segments: list[dict[str, Any]]) -> dict[str, Any]:
                      "per100": {к: round(100 * v / n, 1) for к, v in счёт.items()}})
     люди.sort(key=lambda ч: -ч["words"])
     if not люди:
-        return {"people": [], "markdown": "Слишком мало речи, чтобы судить о тоне."}
+        return {"people": [], "markdown": _т(язык, "tone_too_little")}
 
     строки = ["**На 100 слов**"]
     for ч in люди:

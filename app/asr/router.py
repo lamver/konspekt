@@ -139,9 +139,12 @@ class LanguageRouter:
         russian = lang in CYRILLIC_LANGS
         engine = self.russian if russian else (self.foreign or self.russian)
 
+        # Сербский подсказываем Whisper явно: сам он на сербской речи
+        # часто решает, что слышит русский или хорватский.
+        подсказка = {"lang": "sr"} if lang == "sr" and engine is self.foreign else {}
         segments = list(engine.transcribe(
             pcm, sample_rate=sample_rate, meeting_id=meeting_id,
-            offset=offset, speaker=speaker,
+            offset=offset, speaker=speaker, **подсказка,
         ))
         # Помечаем язык честно: по нему потом строится саммари, и знать,
         # что реплика была немецкой, а не просто «нерусской», полезно.

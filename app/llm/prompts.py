@@ -1,7 +1,9 @@
 """Промпты для саммари и чата.
 
 Тексты по-русски намеренно: основной язык продукта русский, и модели
-на русском промпте отвечают по-русски без отдельного указания.
+на русском промпте отвечают по-русски без отдельного указания. Встречу
+на другом языке модель пишет на её языке: строка «Отвечай на русском
+языке» заменяется указанием языка (см. на_языке и core/язык_итогов.py).
 
 Главная забота здесь — не дать модели пересказывать. Маленькие модели
 склонны переписывать транскрипт своими словами вместо того, чтобы
@@ -12,7 +14,85 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..core.язык_итогов import код, название
+
 Message = dict[str, str]
+
+ПО_РУССКИ = "Отвечай на русском языке."
+
+
+def на_языке(system: str, lang: str = "ru") -> str:
+    """Системная инструкция, которая велит писать на языке встречи.
+
+    Заголовки разделов в шаблонах русские, и маленькая модель охотно
+    оставляет их как есть посреди испанского текста. Поэтому про
+    заголовки сказано отдельно и прямо.
+    """
+    if код(lang) in ("", "ru"):
+        return system
+    return system.replace(
+        ПО_РУССКИ,
+        f"Пиши весь ответ на {название(lang)}, включая заголовки разделов: "
+        "переведи их. Имена людей оставляй как есть.",
+    )
+
+
+# Последняя строка запроса на языке самой встречи. Русская инструкция
+# «пиши по-сербски» маленькую модель не убеждает: проба на Qwen3-4B
+# (03.10) дала сербской встрече итоги по-русски, а разбору — сербскую
+# кириллицу под русскими заголовками. Просьба на нужном языке в самом
+# конце запроса перетягивает: модель продолжает тем языком, которым с
+# ней заговорили последним.
+ПРОСЬБА_НА_ЯЗЫКЕ = {
+    "en": "Write the whole answer in English, including the section headings: translate them.",
+    "es": "Escribe toda la respuesta en español, incluidos los títulos de las secciones: tradúcelos.",
+    "sr": "Napiši ceo odgovor na srpskom jeziku, latinicom, uključujući naslove odeljaka: prevedi ih.",
+    "de": "Schreibe die ganze Antwort auf Deutsch, auch die Überschriften: übersetze sie.",
+    "fr": "Rédige toute la réponse en français, titres des sections compris : traduis-les.",
+    "it": "Scrivi tutta la risposta in italiano, compresi i titoli delle sezioni: traducili.",
+    "pt": "Escreva toda a resposta em português, incluindo os títulos das seções: traduza-os.",
+}
+
+
+def _про_заголовки(lang: str) -> str:
+    """Напоминание в конце запроса: последнее модель помнит лучше всего."""
+    к = код(lang)
+    if к in ("", "ru"):
+        return ""
+    return "\n\n" + ПРОСЬБА_НА_ЯЗЫКЕ.get(
+        к, f"Заголовки разделов переведи, а весь текст пиши на {название(lang)}.")
+
+
+# Заголовки итогов на языках интерфейса. Итоги — главное, что человек
+# уносит со встречи, поэтому тут не надеемся на перевод моделью, а даём
+# готовые слова. Разборы по методикам переводит модель: их форм много.
+ЗАГОЛОВКИ_ИТОГОВ = {
+    "en": ("Summary", "Decisions", "Tasks", "Questions"),
+    "es": ("Resumen", "Decisiones", "Tareas", "Preguntas"),
+    "sr": ("Ukratko", "Odluke", "Zadaci", "Pitanja"),
+}
+
+
+def _шаблон_итогов(lang: str) -> str:
+    заголовки = ЗАГОЛОВКИ_ИТОГОВ.get(код(lang))
+    if not заголовки:
+        return SUMMARY_TEMPLATE
+    шаблон = SUMMARY_TEMPLATE
+    for ru, свой in zip(("Кратко", "Решения", "Задачи", "Вопросы"), заголовки):
+        шаблон = шаблон.replace(f"**{ru}**", f"**{свой}**").replace(f"«{ru}»", f"«{свой}»")
+    return шаблон
+
+
+def после_ответа(text: str, lang: str) -> str:
+    """Поправить готовый ответ модели под язык встречи.
+
+    Сербский модель пишет то латиницей, то кириллицей, а сербский
+    интерфейс у нас латиницей: переводим буква к букве.
+    """
+    if код(lang) == "sr":
+        from ..asr.whisper import латиница
+        return латиница(text)
+    return text
 
 SUMMARY_SYSTEM = """Ты помощник, который превращает запись встречи в короткие заметки.
 
@@ -122,6 +202,7 @@ def summary_messages(
     transcript: str,
     notes: str = "",
     template: str = "general",
+    lang: str = "ru",
 ) -> list[Message]:
     """Собрать запрос на саммари встречи.
 
@@ -133,15 +214,15 @@ def summary_messages(
     if notes.strip():
         notes_block = NOTES_BLOCK.format(notes=notes.strip())
 
-    system = SUMMARY_SYSTEM
+    system = на_языке(SUMMARY_SYSTEM, lang)
     extra = TEMPLATE_HINTS.get(template, "")
     if extra:
         system = f"{system}\n\n{extra}"
 
-    user = SUMMARY_TEMPLATE.format(
+    user = _шаблон_итогов(lang).format(
         notes_block=notes_block,
         transcript=transcript.strip() or "(расшифровки нет)",
-    )
+    ) + _про_заголовки(lang)
     if title.strip():
         user = f"Название встречи: {title.strip()}\n\n{user}"
     return [
@@ -237,10 +318,10 @@ MERGE_SYSTEM = """Ты собираешь заметки о встрече из 
 - Отвечай на русском языке. Без вступлений и заключений."""
 
 
-def chunk_messages(text: str) -> list[Message]:
+def chunk_messages(text: str, lang: str = "ru") -> list[Message]:
     """Выжимка из куска длинной встречи."""
     return [
-        {"role": "system", "content": CHUNK_SYSTEM},
+        {"role": "system", "content": на_языке(CHUNK_SYSTEM, lang)},
         {"role": "user", "content": text.strip()},
     ]
 
@@ -250,13 +331,14 @@ def merge_messages(
     drafts: list[str],
     notes: str = "",
     template: str = "general",
+    lang: str = "ru",
 ) -> list[Message]:
     """Собрать итоговые заметки из черновиков частей.
 
     Работает по тому же шаблону вывода, что и обычное саммари: человеку
     не должно быть видно, что длинную встречу разбирали по частям.
     """
-    system = MERGE_SYSTEM
+    system = на_языке(MERGE_SYSTEM, lang)
     extra = TEMPLATE_HINTS.get(template, "")
     if extra:
         system = f"{system}\n\n{extra}"
@@ -268,8 +350,8 @@ def merge_messages(
     if notes.strip():
         notes_block = NOTES_BLOCK.format(notes=notes.strip())
 
-    user = SUMMARY_TEMPLATE.format(notes_block=notes_block, transcript=body)
-    user = user.replace("Вот запись встречи.", "Вот черновики частей встречи.")
+    user = _шаблон_итогов(lang).format(notes_block=notes_block, transcript=body)
+    user = user.replace("Вот запись встречи.", "Вот черновики частей встречи.") + _про_заголовки(lang)
     if title.strip():
         user = f"Название встречи: {title.strip()}\n\n{user}"
     return [

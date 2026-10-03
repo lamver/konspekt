@@ -116,9 +116,10 @@ from ..llm import context as chat_context
 from . import personal
 from ..llm.local import tier_or_default
 from ..llm.chunking import fits, split_transcript
-from ..llm.prompts import chunk_messages, merge_messages
+from ..llm.prompts import chunk_messages, merge_messages, после_ответа
 from ..llm import calc, lenses
 from . import analysis as analysis_mod
+from . import язык_итогов
 from ..storage import Store
 
 log = logging.getLogger(__name__)
@@ -2465,15 +2466,17 @@ class AppService:
                                          "error": self._msg("python.summary.nothing")})
                 return
 
+            язык = self._язык_итогов(meeting_id)
             messages = summary_messages(
                 title=meeting.title,
                 transcript=transcript,
                 notes=meeting.notes,
                 template=self.settings.llm.template or meeting.template,
+                lang=язык,
             )
 
             def on_chunk(piece: str) -> None:
-                bus.emit(SUMMARY_CHUNK, {"meeting_id": meeting_id, "text": piece})
+                bus.emit(SUMMARY_CHUNK, {"meeting_id": meeting_id, "text": после_ответа(piece, язык)})
 
             self._ensure_llm_model()
             client = self.llm.client()
@@ -2485,10 +2488,10 @@ class AppService:
                     meeting, transcript, client, meeting_id
                 )
 
-            text = client.stream(
+            text = после_ответа(client.stream(
                 self._for_model(messages), on_chunk=on_chunk,
                 should_stop=lambda: self._llm_cancel,
-            )
+            ), язык)
             # Пустой результат не затирает прежнее саммари: человек мог
             # прервать генерацию, и терять готовый текст обиднее всего.
             if text.strip():
@@ -2519,6 +2522,17 @@ class AppService:
             return f"remote:{self.settings.llm.model or ''}"
         return f"local:{self.llm.tier}"
 
+    def _язык_итогов(self, meeting_id: str) -> str:
+        """На каком языке писать итоги и разборы: на языке самой встречи.
+
+        Язык интерфейса — запасной, для встречи без расшифровки
+        (см. core/язык_итогов.py).
+        """
+        return язык_итогов.язык_встречи(
+            ((s.lang, s.text) for s in self.store.list_segments(meeting_id) if not s.doubtful),
+            self.settings.language,
+        )
+
     def _segments_for_analysis(self, meeting_id: str) -> list[dict[str, Any]]:
         return [
             {"text": s.text, "start": s.start, "end": s.end,
@@ -2535,6 +2549,11 @@ class AppService:
         пока расшифровка та же. Сохраняем, чтобы у карточки было время.
         """
         signature = self.store.meaning_signature(meeting_id)
+        # Разборы без модели пишутся словами на языке встречи. Язык входит
+        # в отпечаток: сменил человек язык интерфейса у встречи без
+        # перевода подписей — разбор пересчитается на новом языке.
+        подписи = язык_итогов.язык_подписей(self._язык_итогов(meeting_id), self.settings.language)
+        счётный = f"{signature}|{подписи}"
         готовые = {a["kind"]: a for a in self.store.list_analyses(meeting_id)}
         meeting = self.store.get_meeting(meeting_id)
         # Старые встречи: саммари лежит в поле встречи, а карточки ещё не было.
@@ -2546,13 +2565,13 @@ class AppService:
         for kind in lenses.ПОРЯДОК:
             р = lenses.РАЗРЕЗЫ[kind]
             a = готовые.get(kind)
-            if р.engine == "счёт" and (a is None or a["signature"] != signature):
+            if р.engine == "счёт" and (a is None or a["signature"] != счётный):
                 if сегменты is None:
                     сегменты = self._segments_for_analysis(meeting_id)
-                text = self._count_analysis(kind, сегменты)
+                text = self._count_analysis(kind, сегменты, подписи)
                 if text:
-                    self.store.save_analysis(meeting_id, kind, text, signature, "счёт")
-                    a = {"kind": kind, "text": text, "signature": signature,
+                    self.store.save_analysis(meeting_id, kind, text, счётный, "счёт")
+                    a = {"kind": kind, "text": text, "signature": счётный,
                          "model": "счёт", "created_at": time.time()}
             out.append({
                 "kind": kind,
@@ -2562,16 +2581,17 @@ class AppService:
                 "model": (a or {}).get("model", ""),
                 # Встреча дополнилась после разбора. У старых саммари без
                 # отпечатка не знаем — и не пугаем зря.
-                "stale": bool(a and a["signature"] and a["signature"] != signature),
+                "stale": bool(a and a["signature"]
+                              and a["signature"] != (счётный if р.engine == "счёт" else signature)),
             })
         return out
 
     @staticmethod
-    def _count_analysis(kind: str, segments: list[dict[str, Any]]) -> str:
+    def _count_analysis(kind: str, segments: list[dict[str, Any]], язык: str = "ru") -> str:
         if kind == "talk":
-            return analysis_mod.разговор(segments)["markdown"]
+            return analysis_mod.разговор(segments, язык)["markdown"]
         if kind == "tone":
-            return analysis_mod.тон(segments)["markdown"]
+            return analysis_mod.тон(segments, язык)["markdown"]
         return ""
 
     def run_analysis(self, meeting_id: str, kind: str) -> dict[str, Any]:
@@ -2607,6 +2627,7 @@ class AppService:
                                           "error": self._msg("python.summary.meeting_not_found")})
                 return
             signature = self.store.meaning_signature(meeting_id)
+            язык = self._язык_итогов(meeting_id)
             transcript = self.transcript_text(meeting_id)
             if not transcript.strip():
                 bus.emit(ANALYSIS_ERROR, {"meeting_id": meeting_id, "kind": kind,
@@ -2624,16 +2645,17 @@ class AppService:
                         break
                     bus.emit(ANALYSIS_CHUNK, {"meeting_id": meeting_id, "kind": kind, "status":
                                               self._msg("python.analysis.part", i=i, n=len(parts))})
-                    drafts.append(client.complete(self._for_model(chunk_messages(part)), max_tokens=700))
+                    drafts.append(client.complete(self._for_model(chunk_messages(part, язык)), max_tokens=700))
                 transcript = "\n\n".join(f"Часть {i + 1}:\n{d.strip()}" for i, d in enumerate(drafts))
 
             def on_chunk(piece: str) -> None:
-                bus.emit(ANALYSIS_CHUNK, {"meeting_id": meeting_id, "kind": kind, "text": piece})
+                bus.emit(ANALYSIS_CHUNK, {"meeting_id": meeting_id, "kind": kind,
+                                          "text": после_ответа(piece, язык)})
 
-            text = client.stream(
-                self._for_model(lenses.messages(kind, meeting.title, transcript, meeting.notes)),
+            text = после_ответа(client.stream(
+                self._for_model(lenses.messages(kind, meeting.title, transcript, meeting.notes, язык)),
                 on_chunk=on_chunk, should_stop=lambda: self._llm_cancel,
-            )
+            ), язык)
             if text.strip():
                 self.store.save_analysis(meeting_id, kind, text.strip(), signature, self._model_label())
             bus.emit(ANALYSIS_READY, {"meeting_id": meeting_id, "kind": kind, "text": text.strip()})
@@ -2656,23 +2678,25 @@ class AppService:
         """
         parts = split_transcript(transcript, TRANSCRIPT_BUDGET)
         log.info("Встреча длинная, разбираем по частям: %d", len(parts))
+        язык = self._язык_итогов(meeting_id)
         drafts: list[str] = []
         for i, part in enumerate(parts, 1):
             if self._llm_cancel:
                 break
             bus.emit(SUMMARY_STATUS, {
                 "meeting_id": meeting_id,
-                "text": f"Встреча длинная, разбираем часть {i} из {len(parts)}…",
+                "text": self._msg("python.analysis.part", i=i, n=len(parts)),
             })
-            drafts.append(client.complete(self._for_model(chunk_messages(part)), max_tokens=700))
+            drafts.append(client.complete(self._for_model(chunk_messages(part, язык)), max_tokens=700))
 
         bus.emit(SUMMARY_STATUS, {"meeting_id": meeting_id,
-                                  "text": "Сводим части вместе…"})
+                                  "text": self._msg("python.summary.merging")})
         return merge_messages(
             title=meeting.title,
             drafts=drafts,
             notes=meeting.notes,
             template=self.settings.llm.template or meeting.template,
+            lang=язык,
         )
 
     def _chat_context(

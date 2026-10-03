@@ -221,6 +221,12 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "No existe ese análisis",
         "sr": "Takva analiza ne postoji",
     },
+    "python.summary.merging": {
+        "ru": "Сводим части вместе…",
+        "en": "Putting the parts together…",
+        "es": "Uniendo las partes…",
+        "sr": "Spajamo delove…",
+    },
     "python.analysis.part": {
         "ru": "Встреча длинная, читаем часть {i} из {n}…",
         "en": "Long meeting, reading part {i} of {n}…",
