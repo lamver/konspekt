@@ -3067,7 +3067,27 @@ class AppService:
         bus.emit(MEETINGS_CHANGED)
         if not задачи or задачи[0].get("status") == "failed":
             return "failed"
+        self._сообщить_в_телеграм(задачи[0]["id"], папка_id, название)
         return "ok"
+
+    def _сообщить_в_телеграм(self, id_задачи: str, папка_id: str, название: str) -> None:
+        """Папка просит присылать итоги: бот пришлёт их владельцу, когда запись расшифруется."""
+        бот = self._бот
+        хозяин = self.settings.telegram.chat_id
+        if бот is None or not хозяин:
+            return
+        папка = next((п for п in self.store.list_folders() if п["id"] == папка_id), None)
+        if not папка or not папка.get("notify_telegram"):
+            return
+        бот.следить(id_задачи, хозяин, f"📁 {папка['name']} · {название}")
+
+    def folder_set_notify(self, folder_id: str, on: bool) -> dict[str, Any]:
+        """Присылать ли в Telegram итоги новых записей этой папки."""
+        if on and not (self._бот is not None and self.settings.telegram.chat_id):
+            return {"ok": False, "error": "no_bot"}
+        self.store.set_folder_notify(folder_id, bool(on))
+        bus.emit(MEETINGS_CHANGED)
+        return {"ok": True, "on": bool(on)}
 
     def запустить_источники(self) -> None:
         """Обход папок-источников в фоне. Зовётся при старте."""

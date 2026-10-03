@@ -551,6 +551,9 @@ class Api:
     def folder_clear_source(self, folder_id: str) -> dict[str, Any]:
         return self._service.folder_clear_source(str(folder_id))
 
+    def folder_set_notify(self, folder_id: str, on: bool) -> dict[str, Any]:
+        return self._service.folder_set_notify(str(folder_id), bool(on))
+
     def telegram_state(self) -> dict[str, Any]:
         return self._service.telegram_state()
 

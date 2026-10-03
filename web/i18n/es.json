@@ -608,7 +608,11 @@
     "source_stopped": "La carpeta ya no toma grabaciones del disco. Las ya transcritas se quedan",
     "source_trial": "Se agotaron las reuniones de prueba: no se toman nuevas grabaciones de la carpeta. Con licencia llegarán solas",
     "source_missing": "No se encontró la carpeta {path}",
-    "source_unreadable": "No se puede leer la carpeta {path}: sin acceso"
+    "source_unreadable": "No se puede leer la carpeta {path}: sin acceso",
+    "notify_telegram": "Enviar resúmenes a Telegram",
+    "notify_started": "Los resúmenes de las nuevas grabaciones de esta carpeta te llegarán a Telegram",
+    "notify_stopped": "Los resúmenes de esta carpeta ya no van a Telegram",
+    "notify_no_bot": "Primero conecta tu bot: Ajustes → Telegram"
   },
   "link": {
     "button": "Transcribir una grabación desde un enlace",

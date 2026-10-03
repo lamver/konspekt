@@ -168,8 +168,14 @@ class ТелеграмБот:
         self.код = f"{secrets.randbelow(900000) + 100000}"
         self.имя = ""
         self.ошибка = ""
-        self._ждём_расшифровку: dict[str, int] = {}   # id задачи → чат
-        self._ждём_итоги: dict[str, int] = {}          # id встречи → чат
+        # id задачи → (чат, заголовок). Заголовок есть у записей из
+        # папки-источника: «📁 Звонки · Звонок +7 …», чтобы было видно, что
+        # это и откуда, — человек их боту не присылал.
+        self._ждём_расшифровку: dict[str, tuple[int, str | None]] = {}
+        self._ждём_итоги: dict[str, tuple[int, str | None]] = {}   # id встречи → (чат, заголовок)
+        # Модель одна: пачка звонков из АТС ждёт итогов по очереди, а не
+        # теряется с «модель занята».
+        self._очередь_итогов: list[tuple[str, int, str | None]] = []
         self._отписки: list[Callable[[], None]] = []
 
     # --- снаружи ----------------------------------------------------------
@@ -363,7 +369,7 @@ class ТелеграмБот:
             self.отправить(chat_id, м("python.telegram.not_audio"))
             return
         with self._замок:
-            self._ждём_расшифровку[задача["id"]] = chat_id
+            self._ждём_расшифровку[задача["id"]] = (chat_id, None)
         self.отправить(chat_id, м("python.telegram.accepted"))
 
     def _принять_ссылку(self, chat_id: int, текст: str) -> None:
@@ -376,48 +382,87 @@ class ТелеграмБот:
                 self.отправить(chat_id, м("python.telegram.help"))
             return
         with self._замок:
-            self._ждём_расшифровку[итог["task"]["id"]] = chat_id
+            self._ждём_расшифровку[итог["task"]["id"]] = (chat_id, None)
         self.отправить(chat_id, м("python.telegram.accepted_link"))
 
     # --- события программы ------------------------------------------------
 
+    def следить(self, id_задачи: str, chat_id: int, заголовок: str) -> None:
+        """Запись из папки-источника: прислать итоги, когда она расшифруется."""
+        with self._замок:
+            self._ждём_расшифровку[id_задачи] = (chat_id, заголовок)
+
     def _на_импорт(self, данные: dict[str, Any]) -> None:
         задача = (данные or {}).get("task") or {}
         with self._замок:
-            chat_id = self._ждём_расшифровку.get(задача.get("id"))
-            if chat_id is None or задача.get("status") not in ("done", "failed", "cancelled"):
+            ждём = self._ждём_расшифровку.get(задача.get("id"))
+            if ждём is None or задача.get("status") not in ("done", "failed", "cancelled"):
                 return
             del self._ждём_расшифровку[задача["id"]]
+        chat_id, заголовок = ждём
         м = self.сервис._msg
+        шапка = f"{заголовок}\n\n" if заголовок else ""
         встреча = задача.get("meeting_id")
         if задача["status"] != "done" or not встреча:
-            self.отправить(chat_id, м("python.telegram.failed"))
+            self.отправить(chat_id, шапка + м("python.telegram.failed"))
             return
         текст = self.сервис.transcript_text(встреча)
         if not текст.strip():
-            self.отправить(chat_id, м("python.telegram.empty"))
+            self.отправить(chat_id, шапка + м("python.telegram.empty"))
             return
-        self.отправить(chat_id, м("python.telegram.transcript") + "\n\n" + текст)
-        if not self.сервис.telegram_can_summarize():
-            self.отправить(chat_id, м("python.telegram.no_model"))
+        можно_итоги = self.сервис.telegram_can_summarize()
+        if заголовок and можно_итоги:
+            # Запись из папки: человек её не присылал, ему нужна суть, а не
+            # получасовая расшифровка звонка в двадцати сообщениях.
+            self._запросить_итоги(встреча, chat_id, заголовок)
             return
+        self.отправить(chat_id, шапка + м("python.telegram.transcript") + "\n\n" + текст)
+        if not можно_итоги:
+            if not заголовок:
+                self.отправить(chat_id, м("python.telegram.no_model"))
+            return
+        self._запросить_итоги(встреча, chat_id, None)
+
+    def _запросить_итоги(self, встреча: str, chat_id: int, заголовок: str | None) -> None:
         запуск = self.сервис.generate_summary(встреча)
         if запуск.get("ok"):
             with self._замок:
-                self._ждём_итоги[встреча] = chat_id
+                self._ждём_итоги[встреча] = (chat_id, заголовок)
+        elif запуск.get("trial"):
+            self.отправить(chat_id, (f"{заголовок}\n\n" if заголовок else "") + self.сервис._msg("python.telegram.summary_later"))
         else:
-            self.отправить(chat_id, м("python.telegram.summary_later"))
+            # Модель занята другой встречей: дождёмся её и попробуем снова.
+            with self._замок:
+                self._очередь_итогов.append((встреча, chat_id, заголовок))
+
+    def _следующие_итоги(self) -> None:
+        with self._замок:
+            if not self._очередь_итогов:
+                return
+            встреча, chat_id, заголовок = self._очередь_итогов.pop(0)
+        запуск = self.сервис.generate_summary(встреча)
+        if запуск.get("ok"):
+            with self._замок:
+                self._ждём_итоги[встреча] = (chat_id, заголовок)
+        else:
+            with self._замок:
+                self._очередь_итогов.insert(0, (встреча, chat_id, заголовок))
 
     def _на_итоги(self, данные: dict[str, Any]) -> None:
         with self._замок:
-            chat_id = self._ждём_итоги.pop((данные or {}).get("meeting_id"), None)
-        if chat_id is None:
-            return
-        self.отправить(chat_id, self.сервис._msg("python.telegram.summary") + "\n\n"
-                       + без_разметки(данные.get("summary", "")))
+            ждём = self._ждём_итоги.pop((данные or {}).get("meeting_id"), None)
+        if ждём is not None:
+            chat_id, заголовок = ждём
+            шапка = f"{заголовок}\n\n" if заголовок else ""
+            self.отправить(chat_id, шапка + self.сервис._msg("python.telegram.summary") + "\n\n"
+                           + без_разметки(данные.get("summary", "")))
+        self._следующие_итоги()
 
     def _на_ошибку_итогов(self, данные: dict[str, Any]) -> None:
         with self._замок:
-            chat_id = self._ждём_итоги.pop((данные or {}).get("meeting_id"), None)
-        if chat_id is not None:
-            self.отправить(chat_id, self.сервис._msg("python.telegram.summary_later"))
+            ждём = self._ждём_итоги.pop((данные or {}).get("meeting_id"), None)
+        if ждём is not None:
+            chat_id, заголовок = ждём
+            self.отправить(chat_id, (f"{заголовок}\n\n" if заголовок else "")
+                           + self.сервис._msg("python.telegram.summary_later"))
+        self._следующие_итоги()

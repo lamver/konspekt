@@ -354,6 +354,9 @@ class Store:
             self._conn.executescript(ANALYSES_SCHEMA)
             self._conn.executescript(TRIAL_SCHEMA)
             self._conn.executescript(FOLDERS_SCHEMA)
+            # Присылать ли итоги записей этой папки в Telegram. Колонка
+            # только добавляется: прежняя версия её просто не замечает.
+            self._add_columns("folders", {"notify_telegram": "INTEGER NOT NULL DEFAULT 0"})
             self._начать_пробный_период()
             if was < 2:
                 self._add_columns(
@@ -453,7 +456,7 @@ class Store:
     def list_folders(self) -> list[dict[str, Any]]:
         with self._lock:
             rows = self._conn.execute(
-                """SELECT f.id, f.name, f.created_at, f.source,
+                """SELECT f.id, f.name, f.created_at, f.source, f.notify_telegram,
                           (SELECT COUNT(*) FROM meeting_folders mf WHERE mf.folder_id = f.id) AS count
                    FROM folders f ORDER BY f.name COLLATE NOCASE, f.created_at"""
             ).fetchall()
@@ -463,6 +466,14 @@ class Store:
         """Каталог на диске, из которого папка берёт записи. Пусто — не следит."""
         with self._lock:
             cur = self._conn.execute("UPDATE folders SET source=? WHERE id=?", (source, folder_id))
+            self._conn.commit()
+        return cur.rowcount > 0
+
+    def set_folder_notify(self, folder_id: str, on: bool) -> bool:
+        with self._lock:
+            cur = self._conn.execute(
+                "UPDATE folders SET notify_telegram=? WHERE id=?", (1 if on else 0, folder_id)
+            )
             self._conn.commit()
         return cur.rowcount > 0
 

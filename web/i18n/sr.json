@@ -608,7 +608,11 @@
     "source_stopped": "Fascikla više ne uzima snimke sa diska. Već prepisani ostaju",
     "source_trial": "Probni sastanci su potrošeni: novi snimci iz fascikle se ne uzimaju. Uz licencu stići će sami",
     "source_missing": "Fascikla {path} nije pronađena",
-    "source_unreadable": "Fascikla {path} ne može da se pročita: nema pristupa"
+    "source_unreadable": "Fascikla {path} ne može da se pročita: nema pristupa",
+    "notify_telegram": "Šalji rezimee u Telegram",
+    "notify_started": "Rezimei novih snimaka iz ove fascikle stizaće vam u Telegram",
+    "notify_stopped": "Rezimei ove fascikle više ne idu u Telegram",
+    "notify_no_bot": "Prvo povežite svog bota: Podešavanja → Telegram"
   },
   "link": {
     "button": "Transkribuj snimak sa linka",

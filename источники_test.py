@@ -169,6 +169,41 @@ with tempfile.TemporaryDirectory() as tmp:
     база = Store(str(Path(tmp) / "k.db"))
     проверить(база.source_taken(папка["id"], "abc") and not база.source_taken(папка["id"], "zzz"),
               "взятые файлы помнятся после перезапуска")
+    # --- Итоги папки в Telegram ----------------------------------------
+    проверить(not база.list_folders()[0]["notify_telegram"], "по умолчанию итоги в Telegram не шлются")
+    from app.core import service as service_mod
+    from app.core import settings as settings_mod
+
+    class Бот:
+        def __init__(self):
+            self.слежка = []
+
+        def следить(self, задача, чат, заголовок):
+            self.слежка.append((задача, чат, заголовок))
+
+    сохр = settings_mod.save
+    settings_mod.save = lambda s: None
+    try:
+        сервис = service_mod.AppService.__new__(service_mod.AppService)
+        сервис.store = база
+        сервис.settings = settings_mod.Settings()
+        сервис._бот = None
+        проверить(сервис.folder_set_notify(папка["id"], True) == {"ok": False, "error": "no_bot"},
+                  "без подключённого бота итоги в Telegram не включить")
+        бот = Бот()
+        сервис._бот = бот
+        сервис.settings.telegram.chat_id = 555
+        проверить(сервис.folder_set_notify(папка["id"], True)["ok"], "с ботом включается")
+        проверить(база.list_folders()[0]["notify_telegram"] == 1, "флаг сохранён в базе")
+        сервис._сообщить_в_телеграм("t1", папка["id"], "Звонок +7 916 123-45-67")
+        проверить(бот.слежка == [("t1", 555, "📁 Звонки · Звонок +7 916 123-45-67")],
+                  "бот ждёт итоги этой записи для владельца, с подписью папки")
+        сервис.folder_set_notify(папка["id"], False)
+        сервис._сообщить_в_телеграм("t2", папка["id"], "Звонок")
+        проверить(len(бот.слежка) == 1, "выключили — новые записи в Telegram не идут")
+    finally:
+        settings_mod.save = сохр
+
     база.delete_folder(папка["id"])
     проверить(not база.source_taken(папка["id"], "abc"), "удалили папку — её отпечатки ушли вместе с ней")
     база.close()

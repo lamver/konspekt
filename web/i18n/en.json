@@ -608,7 +608,11 @@
     "source_stopped": "The folder no longer takes recordings from disk. Already transcribed ones stay",
     "source_trial": "Trial meetings are used up: new recordings from the folder aren't taken. With a license they'll arrive by themselves",
     "source_missing": "Folder {path} not found",
-    "source_unreadable": "Can't read folder {path}: access denied"
+    "source_unreadable": "Can't read folder {path}: access denied",
+    "notify_telegram": "Send summaries to Telegram",
+    "notify_started": "Summaries of new recordings in this folder will come to you in Telegram",
+    "notify_stopped": "Summaries of this folder no longer go to Telegram",
+    "notify_no_bot": "Connect your bot first: Settings → Telegram"
   },
   "link": {
     "button": "Transcribe a recording from a link",

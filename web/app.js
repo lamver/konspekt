@@ -2004,10 +2004,16 @@ function openFolderMenu(f, anchor, x, y) {
   const источник = f.source
     ? { text: t('folders.source_stop'), run: () => stopSource(f) }
     : { text: t('folders.source_watch'), run: () => watchSource(f) };
+  // Итоги в Telegram — только у папки, которая сама берёт записи: обычную
+  // папку человек наполняет руками и видит сам.
+  const вТелеграм = f.source
+    ? [{ text: (f.notify_telegram ? '✓ ' : '') + t('folders.notify_telegram'), run: () => toggleNotify(f) }]
+    : [];
   showCtxMenu([
     { text: t('folders.add_meeting'), run: () => createMeeting(f.id) },
     { text: t('folders.rename'), run: () => renameFolder(f) },
     источник,
+    ...вТелеграм,
     { sep: true },
     { text: t('folders.delete'), danger: true, run: () => deleteFolder(f) },
   ], anchor, x, y);
@@ -2041,6 +2047,16 @@ async function watchSource(f) {
     return;
   }
   showToast(t('folders.source_started'));
+  await loadMeetings();
+}
+
+async function toggleNotify(f) {
+  const итог = await api.folder_set_notify(f.id, !f.notify_telegram);
+  if (!итог || !итог.ok) {
+    showToast(t(итог && итог.error === 'no_bot' ? 'folders.notify_no_bot' : 'telegram.failed'));
+    return;
+  }
+  showToast(t(итог.on ? 'folders.notify_started' : 'folders.notify_stopped'));
   await loadMeetings();
 }
 
