@@ -75,7 +75,8 @@ window.addEventListener('load', () => setTimeout(() => {
   и.меню_у_правого_края_кнопки = Math.abs(меню.right - ui.summaryCopyGroup.getBoundingClientRect().right) <= 1;
   и.меню_открылось = видно(ui.summaryCopyMenu);
   и.меню_в_окне = меню.left >= 0 && меню.right <= innerWidth && меню.bottom <= innerHeight;
-  и.пунктов = ui.summaryCopyMenu.querySelectorAll('[role="menuitem"]').length;
+  и.пунктов = ui.summaryCopyMenu.querySelectorAll('[data-copy-mode]').length;
+  и.в_телеграм = !!ui.summaryCopyMenu.querySelector('#summary-send-telegram');
   и.подписи = Array.from(ui.summaryCopyMenu.querySelectorAll('.split__name')).map((x) => x.textContent.trim());
   // Щелчок мимо закрывает меню.
   document.body.click();
@@ -146,6 +147,7 @@ else:
     проверить(и["меню_в_окне"], "меню целиком в окне, не обрезано краем")
     проверить(и["меню_у_правого_края_кнопки"], f"меню раскрывается влево от кнопки, а не за край окна: {и['меню_края']}")
     проверить(и["пунктов"] == 3, f"в меню три вида копирования: с разметкой, простым текстом, без личных данных; а не {и['пунктов']}")
+    проверить(и["в_телеграм"], "в том же меню — «Отправить в Telegram»")
     проверить(all(и["подписи"]), f"у пунктов меню есть подписи: {и['подписи']}")
     проверить(и["закрылось_щелчком_мимо"], "щелчок мимо закрывает меню")
     проверить(и["закрылось_esc"], "Esc закрывает меню")

@@ -12,10 +12,12 @@
   Telegram, как любое сообщение. Это и есть смысл бота.
 Нашего сервера в этой цепочке нет.
 
-Бот отвечает только хозяину. Кто нашёл бота по имени, не заставит чужой
-компьютер расшифровывать его записи и не потратит чужую лицензию:
-привязка идёт одноразовым кодом из окна программы, а сообщения из других
-чатов получают вежливый отказ.
+Бот слушается хозяина и тех, кому хозяин открыл доступ. Кто нашёл бота по
+имени, не заставит чужой компьютер расшифровывать его записи и не потратит
+чужую лицензию: хозяин привязывается одноразовым кодом из окна программы,
+остальные без доступа получают вежливый отказ и попадают в список во
+вкладке «Telegram», где хозяин отмечает их галочкой. Можно открыть бота и
+всем — это решение хозяина, и вкладка честно предупреждает, чем оно грозит.
 
 Работает, только пока программа запущена: спросить Telegram о сообщениях
 больше некому. Сообщения, присланные, пока компьютер выключен, Telegram
@@ -116,11 +118,18 @@ class ТелеграмБот:
         при_привязке: Callable[[int, str], None] | None = None,
         папка: Path | None = None,
         клиент: httpx.Client | None = None,
+        доступ: Callable[[int], bool] | None = None,
+        при_сообщении: Callable[[int, str, str], None] | None = None,
     ) -> None:
         self.сервис = сервис
         self.токен = токен
         self.хозяин = int(хозяин or 0)
         self.при_привязке = при_привязке or (lambda chat_id, имя: None)
+        # Кому кроме хозяина можно. Решает программа: список и режим живут
+        # в настройках, а бот только спрашивает.
+        self.доступ = доступ or (lambda chat_id: False)
+        # Кто написал (кроме хозяина): чтобы человек появился в списке.
+        self.при_сообщении = при_сообщении or (lambda chat_id, имя, ник: None)
         self.папка = папка or Path(".")
         self._клиент = клиент
         self._стоп = threading.Event()
@@ -205,15 +214,24 @@ class ТелеграмБот:
                 log.warning("Телеграм: сообщение не ушло", exc_info=True)
                 return
 
-    def _скачать(self, описание: dict[str, Any], расширение: str) -> Path:
+    def _скачать(self, описание: dict[str, Any], расширение: str, отправитель: str = "") -> Path:
         файл = self._вызов("getFile", file_id=описание["file_id"])
         путь_на_сервере = файл["file_path"]
         if not расширение:
             расширение = Path(путь_на_сервере).suffix or ".bin"
-        self.папка.mkdir(parents=True, exist_ok=True)
-        имя = описание.get("file_name") or f"telegram-{time.strftime('%Y%m%d-%H%M%S')}"
-        имя = re.sub(r'[\\/:*?"<>|]+', "_", Path(имя).stem)[:80] or "telegram"
-        путь = self.папка / f"{имя}-{описание['file_unique_id']}{расширение}"
+        # Имя файла станет названием встречи: «Анна · голосовое 03.10 11.30»
+        # находится в списке глазами, а «telegram-20261003-113012» — нет.
+        # Свой каталог на каждый файл, чтобы имена не сталкивались.
+        if описание.get("file_name"):
+            имя = Path(описание["file_name"]).stem
+        else:
+            когда = time.strftime("%d.%m %H.%M")
+            имя = f"{отправитель} · {self.сервис._msg('python.telegram.voice_title')} {когда}" if отправитель \
+                else f"Telegram {когда}"
+        имя = re.sub(r'[\\/:*?"<>|]+', "_", имя).strip()[:80] or "telegram"
+        каталог = self.папка / str(описание["file_unique_id"])
+        каталог.mkdir(parents=True, exist_ok=True)
+        путь = каталог / f"{имя}{расширение}"
         with self._http().stream("GET", f"{API}/file/bot{self.токен}/{путь_на_сервере}") as поток:
             поток.raise_for_status()
             with путь.open("wb") as вывод:
@@ -268,12 +286,13 @@ class ТелеграмБот:
         chat_id = int(чат["id"])
         текст = (сообщение.get("text") or "").strip()
         м = self.сервис._msg
+        имя = " ".join(x for x in (чат.get("first_name"), чат.get("last_name")) if x) or чат.get("username") or ""
+        ник = str(чат.get("username") or "")
 
         if not self.хозяин:
             if self.код in re.findall(r"\d{6}", текст):
                 with self._замок:
                     self.хозяин = chat_id
-                имя = " ".join(x for x in (чат.get("first_name"), чат.get("last_name")) if x) or чат.get("username") or ""
                 self.при_привязке(chat_id, имя)
                 self.отправить(chat_id, м("python.telegram.paired"))
             else:
@@ -281,25 +300,28 @@ class ТелеграмБот:
             return
 
         if chat_id != self.хозяин:
-            self.отправить(chat_id, м("python.telegram.foreign"))
-            return
+            self.при_сообщении(chat_id, имя, ник)
+            if not self.доступ(chat_id):
+                self.отправить(chat_id, м("python.telegram.foreign"))
+                return
 
         файл = _файл_из_сообщения(сообщение)
         if файл:
-            self._принять_файл(chat_id, *файл)
+            self._принять_файл(chat_id, *файл, отправитель=имя)
             return
         if текст and not текст.startswith("/"):
             self._принять_ссылку(chat_id, текст)
             return
         self.отправить(chat_id, м("python.telegram.help"))
 
-    def _принять_файл(self, chat_id: int, описание: dict[str, Any], расширение: str) -> None:
+    def _принять_файл(self, chat_id: int, описание: dict[str, Any], расширение: str,
+                      отправитель: str = "") -> None:
         м = self.сервис._msg
         if int(описание.get("file_size") or 0) > ЛИМИТ_ФАЙЛА:
             self.отправить(chat_id, м("python.telegram.too_big"))
             return
         try:
-            путь = self._скачать(описание, расширение)
+            путь = self._скачать(описание, расширение, отправитель)
         except (ОшибкаТелеграма, httpx.HTTPError, OSError):
             log.warning("Телеграм: файл не скачался", exc_info=True)
             self.отправить(chat_id, м("python.telegram.download_failed"))

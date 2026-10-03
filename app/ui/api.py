@@ -530,6 +530,12 @@ class Api:
     def telegram_forget(self) -> dict[str, Any]:
         return self._service.telegram_forget()
 
+    def telegram_set_access(self, mode: str) -> dict[str, Any]:
+        return self._service.telegram_set_access(str(mode))
+
+    def telegram_set_user(self, chat_id: int, allowed: bool) -> dict[str, Any]:
+        return self._service.telegram_set_user(int(chat_id), bool(allowed))
+
     def telegram_open_botfather(self) -> bool:
         from ..core import telegram as telegram_mod
 

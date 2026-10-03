@@ -3069,7 +3069,43 @@ class AppService:
         return бот_mod.ТелеграмБот(
             self, токен, хозяин=self.settings.telegram.chat_id,
             при_привязке=привязали, папка=paths.data_dir() / "telegram",
+            доступ=self._telegram_allowed, при_сообщении=self._telegram_seen,
         )
+
+    def _telegram_allowed(self, chat_id: int) -> bool:
+        настройки = self.settings.telegram
+        if настройки.access == "all":
+            return True
+        return any(int(u.get("id", 0)) == int(chat_id) and u.get("allowed") for u in настройки.users)
+
+    def _telegram_seen(self, chat_id: int, имя: str, ник: str) -> None:
+        """Человек написал боту: занести в список или обновить имя."""
+        настройки = self.settings.telegram
+        for u in настройки.users:
+            if int(u.get("id", 0)) == int(chat_id):
+                if u.get("name") == имя and u.get("username") == ник:
+                    return
+                u["name"], u["username"] = имя, ник
+                break
+        else:
+            # Новичку доступа нет, пока хозяин не отметит: молча пускать
+            # всех, кто нашёл бота по имени, нельзя.
+            настройки.users.append({"id": int(chat_id), "name": имя, "username": ник, "allowed": False})
+        settings_mod.save(self.settings)
+        bus.emit(TELEGRAM_CHANGED, self.telegram_state())
+
+    def telegram_set_access(self, mode: str) -> dict[str, Any]:
+        """Кому можно пользоваться ботом: chosen — отмеченным, all — всем."""
+        self.settings.telegram.access = "all" if mode == "all" else "chosen"
+        settings_mod.save(self.settings)
+        return self.telegram_state()
+
+    def telegram_set_user(self, chat_id: int, allowed: bool) -> dict[str, Any]:
+        for u in self.settings.telegram.users:
+            if int(u.get("id", 0)) == int(chat_id):
+                u["allowed"] = bool(allowed)
+        settings_mod.save(self.settings)
+        return self.telegram_state()
 
     def запустить_телеграм(self) -> None:
         """Поднять бота, если он включён и токен есть. Зовётся при старте."""
@@ -3105,6 +3141,12 @@ class AppService:
             "running": бот.get("работает", False),
             "error": бот.get("ошибка", ""),
             "code": бот.get("код", ""),
+            "access": настройки.access,
+            "users": [
+                {"id": int(u.get("id", 0)), "name": u.get("name", ""),
+                 "username": u.get("username", ""), "allowed": bool(u.get("allowed"))}
+                for u in настройки.users
+            ],
         }
 
     def telegram_set_token(self, token: str) -> dict[str, Any]:
@@ -3128,9 +3170,12 @@ class AppService:
         настройки = self.settings.telegram
         настройки.token = секрет.спрятать(токен)
         настройки.enabled = True
-        # Новый бот — новая привязка: прежний хозяин мог быть у другого бота.
+        # Новый бот — новая привязка: прежний хозяин и список могли быть у
+        # другого бота.
         настройки.chat_id = 0
         настройки.chat_name = ""
+        настройки.users = []
+        настройки.access = "chosen"
         settings_mod.save(self.settings)
         self.запустить_телеграм()
         return {"ok": True, "bot_name": имя, **self.telegram_state()}

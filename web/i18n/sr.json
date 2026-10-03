@@ -641,6 +641,12 @@
       "bad_token": "Telegram ne zna ovaj token. Proverite da ste ga kopirali celog.",
       "network": "Telegram nije dostupan. Proverite internet vezu.",
       "api": "Telegram je vratio grešku. Pokušajte ponovo."
-    }
+    },
+    "access_title": "Ko može da koristi bota",
+    "access_chosen": "Samo označeni",
+    "access_all": "Svi koji pišu botu",
+    "access_all_warn": "Svako ko pronađe bota po imenu moći će da šalje snimke: prepisaće ih vaš računar i računaće se u vaše probne sastanke.",
+    "users_empty": "Za sada ste botu pisali samo vi. Zamolite nekoga da piše botu — pojaviće se ovde i označićete da li sme.",
+    "owner": "— vi, vlasnik"
   }
 }

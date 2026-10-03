@@ -3474,6 +3474,61 @@ function renderTelegram(s) {
   const ждём = s.enabled && !s.linked && !!s.code;
   el('tg-pair').hidden = !ждём;
   el('tg-code').textContent = ждём ? s.code : '';
+  renderTelegramAccess(s);
+}
+
+/**
+ * Кто может пользоваться ботом. Хозяин в списке всегда и всегда с доступом;
+ * остальные появляются сами, когда напишут боту, и ждут галочки. Список
+ * перерисовываем, только если он изменился: опрос идёт раз в две секунды,
+ * и пересборка под пальцем сбивала бы щелчок по галочке.
+ */
+let tgUsersDrawn = '';
+function renderTelegramAccess(s) {
+  const блок = el('tg-access');
+  блок.hidden = !s.linked;
+  if (!s.linked) return;
+  const всем = s.access === 'all';
+  el('tg-access-all').checked = всем;
+  el('tg-access-chosen').checked = !всем;
+  el('tg-access-warn').hidden = !всем;
+  const люди = [{ id: 0, name: s.chat_name, owner: true, allowed: true }, ...(s.users || [])];
+  el('tg-users-empty').hidden = (s.users || []).length > 0;
+  const отпечаток = JSON.stringify([всем, люди]);
+  if (отпечаток === tgUsersDrawn) return;
+  tgUsersDrawn = отпечаток;
+  const список = el('tg-users');
+  список.textContent = '';
+  for (const ч of люди) {
+    const li = document.createElement('li');
+    const метка = document.createElement('label');
+    метка.className = 'check';
+    const галка = document.createElement('input');
+    галка.type = 'checkbox';
+    галка.checked = ч.owner || всем || !!ч.allowed;
+    галка.disabled = ч.owner || всем;
+    if (!ч.owner) {
+      галка.addEventListener('change', async () => {
+        renderTelegram(await api.telegram_set_user(ч.id, галка.checked));
+      });
+    }
+    const имя = document.createElement('span');
+    имя.textContent = ч.name || (ч.username ? `@${ч.username}` : String(ч.id));
+    метка.append(галка, имя);
+    if (ч.owner) {
+      const пометка = document.createElement('span');
+      пометка.className = 'tg-owner';
+      пометка.textContent = t('telegram.owner');
+      метка.append(пометка);
+    } else if (ч.username && ч.name) {
+      const ник = document.createElement('span');
+      ник.className = 'tg-nick';
+      ник.textContent = `@${ч.username}`;
+      метка.append(ник);
+    }
+    li.append(метка);
+    список.append(li);
+  }
 }
 
 async function connectTelegram() {
@@ -4433,6 +4488,11 @@ function bindUi() {
   el('tg-botfather').addEventListener('click', () => api.telegram_open_botfather());
   el('tg-enabled').addEventListener('change', async (e) => renderTelegram(await api.telegram_set_enabled(e.target.checked)));
   el('tg-forget').addEventListener('click', async () => renderTelegram(await api.telegram_forget()));
+  for (const id of ['tg-access-chosen', 'tg-access-all']) {
+    el(id).addEventListener('change', async (e) => {
+      if (e.target.checked) renderTelegram(await api.telegram_set_access(e.target.value));
+    });
+  }
   if (ui.personalFind) ui.personalFind.addEventListener('click', togglePersonal);
   if (ui.chatModel) {
     ui.chatModel.addEventListener('click', async () => {

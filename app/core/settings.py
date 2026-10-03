@@ -220,8 +220,12 @@ class TelegramSettings:
 
     enabled: bool = False
     token: str = ""          # спрятанный токен, см. секрет.спрятать
-    chat_id: int = 0         # хозяин бота: отвечаем только ему
+    chat_id: int = 0         # хозяин бота: ему можно всегда
     chat_name: str = ""
+    # Кому ещё можно: chosen — только отмеченным в списке, all — всем.
+    access: str = "chosen"
+    # Кто писал боту, кроме хозяина: {"id", "name", "username", "allowed"}.
+    users: list = field(default_factory=list)
 
 
 @dataclass

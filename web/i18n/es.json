@@ -641,6 +641,12 @@
       "bad_token": "Telegram no conoce este token. Comprueba que lo copiaste completo.",
       "network": "No se pudo contactar con Telegram. Comprueba tu conexión.",
       "api": "Telegram devolvió un error. Inténtalo de nuevo."
-    }
+    },
+    "access_title": "Quién puede usar el bot",
+    "access_chosen": "Solo los marcados",
+    "access_all": "Cualquiera que escriba al bot",
+    "access_all_warn": "Cualquiera que encuentre el bot por su nombre podrá enviar grabaciones: las transcribirá tu ordenador y contarán como tus reuniones de prueba.",
+    "users_empty": "Por ahora solo tú has escrito al bot. Pide a alguien que le escriba: aparecerá aquí y podrás marcar si tiene acceso.",
+    "owner": "— tú, el propietario"
   }
 }

@@ -668,6 +668,20 @@
               <input type="checkbox" id="tg-enabled">
               <span data-i18n="telegram.enabled">Бот работает</span>
             </label>
+            <div class="tg-access" id="tg-access" hidden>
+              <p class="field__label" data-i18n="telegram.access_title">Кто может пользоваться ботом</p>
+              <label class="check">
+                <input type="radio" name="tg-access" value="chosen" id="tg-access-chosen">
+                <span data-i18n="telegram.access_chosen">Только отмеченные</span>
+              </label>
+              <label class="check">
+                <input type="radio" name="tg-access" value="all" id="tg-access-all">
+                <span data-i18n="telegram.access_all">Все, кто напишет боту</span>
+              </label>
+              <p class="hint tg-warn" id="tg-access-warn" hidden data-i18n="telegram.access_all_warn">Любой, кто найдёт бота по имени, сможет присылать записи: их расшифрует ваш компьютер, и они пойдут в счёт ваших пробных встреч.</p>
+              <ul class="tg-users" id="tg-users"></ul>
+              <p class="hint" id="tg-users-empty" data-i18n="telegram.users_empty">Пока боту писали только вы. Попросите человека написать боту — он появится здесь, и вы отметите, можно ли ему.</p>
+            </div>
             <div class="voice-enroll__row">
               <button class="btn-ghost" type="button" id="tg-forget" data-i18n="telegram.forget">Отключить бота от Конспекта</button>
             </div>

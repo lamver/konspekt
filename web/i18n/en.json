@@ -641,6 +641,12 @@
       "bad_token": "Telegram doesn't know this token. Check that you copied it in full.",
       "network": "Couldn't reach Telegram. Check your internet connection.",
       "api": "Telegram returned an error. Please try again."
-    }
+    },
+    "access_title": "Who can use the bot",
+    "access_chosen": "Only the ones checked",
+    "access_all": "Anyone who messages the bot",
+    "access_all_warn": "Anyone who finds the bot by name can send recordings: your computer will transcribe them, and they count toward your trial meetings.",
+    "users_empty": "So far only you have messaged the bot. Ask someone to message it — they'll appear here, and you can check whether they're allowed.",
+    "owner": "— you, the owner"
   }
 }

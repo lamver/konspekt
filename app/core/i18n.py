@@ -14,6 +14,12 @@ from __future__ import annotations
 
 MESSAGES: dict[str, dict[str, str]] = {
     # Ответы своего бота в Telegram (core/telegram_bot.py).
+    "python.telegram.voice_title": {
+        "ru": "голосовое",
+        "en": "voice message",
+        "es": "nota de voz",
+        "sr": "glasovna poruka",
+    },
     "python.telegram.paired": {
         "ru": "Готово, бот привязан к этому чату. Пересылайте голосовые, кружки или аудио — пришлю расшифровку, а если в Конспекте есть модель для заметок, то и итоги. Ссылку на видео тоже можно прислать.",
         "en": "Done, the bot is linked to this chat. Forward voice messages, video notes or audio — I'll send back the transcript, and the summary too if Konspekt has a notes model. You can also send a video link.",
@@ -27,10 +33,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "sr": "Ovo je Konspekt bot. Da biste ga povezali, pošaljite kod iz programa: Podešavanja → Telegram.",
     },
     "python.telegram.foreign": {
-        "ru": "Этот бот работает только для своего владельца.",
-        "en": "This bot only works for its owner.",
-        "es": "Este bot solo funciona para su propietario.",
-        "sr": "Ovaj bot radi samo za svog vlasnika.",
+        "ru": "Нет доступа к этому боту. Владелец может открыть его вам в Конспекте.",
+        "en": "You don't have access to this bot. The owner can grant it in Konspekt.",
+        "es": "No tienes acceso a este bot. El propietario puede dártelo en Konspekt.",
+        "sr": "Nemate pristup ovom botu. Vlasnik može da vam ga otvori u Konspektu.",
     },
     "python.telegram.help": {
         "ru": "Пришлите голосовое, кружок, аудио или видео (до 20 МБ) либо ссылку на запись — расшифрую на компьютере и пришлю текст.",
