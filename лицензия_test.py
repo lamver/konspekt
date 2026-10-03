@@ -187,6 +187,26 @@ except lic.LicenseError as беда:
 проверить(код_ошибки(lic.make(СЕКРЕТ, dict(ПОЛЯ, upd="когда-нибудь")), public_keys=СВОЙ) == "format",
           "upd не дата: format, а не молчаливое «навсегда»")
 
+# Ключ «на полгода» с aisearch.tech (решение 03.10): тот же формат, только
+# upd ближе. Программа не должна знать про «3 года» нигде, кроме текста.
+полугодовой = lic.make(СЕКРЕТ, dict(ПОЛЯ, iat="2026-10-01", upd="2027-03-31"))
+проверить(код_ошибки(полугодовой, public_keys=СВОЙ, built=dt.date(2027, 3, 31)) == "принят",
+          "ключ на полгода: версия последнего дня обновлений принимает его")
+проверить(код_ошибки(полугодовой, public_keys=СВОЙ, built=dt.date(2027, 4, 1)) == "updates_ended",
+          "ключ на полгода: версия после срока обновлений его не берёт")
+
+# Страница покупки по языку интерфейса: у России и остального мира свои
+# условия, цены и способы оплаты.
+проверить(lic.buy_url("ru").startswith("https://aisearch.ru/pricing/license/konspekt?"),
+          "русский интерфейс покупает на aisearch.ru")
+проверить(lic.buy_url("en").startswith("https://aisearch.tech/pricing/license/konspekt?"),
+          "английский покупает на aisearch.tech без префикса языка")
+проверить(lic.buy_url("es").startswith("https://aisearch.tech/es/pricing/license/konspekt?")
+          and lic.buy_url("sr").startswith("https://aisearch.tech/sr/pricing/license/konspekt?"),
+          "испанский и сербский покупают на aisearch.tech на своём языке")
+проверить(all("utm_source=app" in lic.buy_url(я) for я in ("ru", "en", "es", "sr")),
+          "у всех страниц покупки есть метка «из программы»")
+
 # Настоящий ключ, выданный сервером продаж при пробной покупке 02.10:
 # сервер и программа подписывают и читают одинаково. В репозиторий его
 # не кладём: репозиторий открытый, а это рабочая лицензия с почтой
@@ -252,6 +272,13 @@ if настоящий:
     сервис.settings.license_key = настоящий
     проверить(сервис.remove_license()["licensed"] is False and сервис.settings.license_key == "",
               "«Убрать ключ» убирает его")
+
+сервис.settings.language = "es"
+проверить(сервис.license_state()["buy_url"] == lic.buy_url("es"),
+          "кнопка «Купить» в испанском интерфейсе ведёт на испанскую страницу")
+сервис.settings.language = "ru"
+проверить(сервис.license_state()["buy_url"] == lic.buy_url("ru"),
+          "в русском интерфейсе — на aisearch.ru")
 
 # --- масштаб: пределы на стороне программы -----------------------------------
 

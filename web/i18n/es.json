@@ -479,7 +479,7 @@
     "owned_title": "Licencia activa",
     "owned_hint": "Gracias por apoyar Konspekt. La clave se comprueba en este ordenador, sin internet.",
     "missing_title": "Sin licencia",
-    "missing_hint": "Las primeras {limit} reuniones funcionan por completo. Después puedes ver y copiar grabaciones, y grabar y analizar nuevas con una licencia. Pago único: 3 años de actualizaciones o para siempre. La clave llega por correo tras el pago.",
+    "missing_hint": "Las primeras {limit} reuniones funcionan por completo. Después puedes ver y copiar grabaciones, y grabar y analizar nuevas con una licencia. Pago único: 6 meses de actualizaciones o para siempre. La clave llega por correo tras el pago.",
     "key_label": "Clave del correo",
     "key_placeholder": "Pega la clave completa, empieza por KSPK1.",
     "activate": "Activar",

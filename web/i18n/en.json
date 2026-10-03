@@ -479,7 +479,7 @@
     "owned_title": "License active",
     "owned_hint": "Thank you for supporting Konspekt. The key is checked on this computer, without internet.",
     "missing_title": "No license",
-    "missing_hint": "The first {limit} meetings work fully. After that you can view and copy recordings, and record and analyze new ones with a license. One-time purchase: 3 years of updates or forever. The key arrives by email after payment.",
+    "missing_hint": "The first {limit} meetings work fully. After that you can view and copy recordings, and record and analyze new ones with a license. One-time purchase: 6 months of updates or forever. The key arrives by email after payment.",
     "key_label": "Key from the email",
     "key_placeholder": "Paste the whole key, it starts with KSPK1.",
     "activate": "Activate",

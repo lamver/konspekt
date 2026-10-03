@@ -3006,7 +3006,7 @@ class AppService:
         key = self.settings.license_key
         trial = self.trial_state()
         if not key:
-            return {"licensed": False, "buy_url": license_mod.BUY_URL, "trial": trial}
+            return {"licensed": False, "buy_url": license_mod.buy_url(self.settings.language), "trial": trial}
         try:
             lic = license_mod.parse(key)
         except license_mod.LicenseError as err:
@@ -3015,8 +3015,8 @@ class AppService:
             # захочет посмотреть, что было вставлено.
             log.warning("Сохранённый ключ лицензии не подошёл: %s", err.code)
             return {"licensed": False, "error": err.code, "detail": err.detail,
-                    "buy_url": license_mod.BUY_URL, "trial": trial}
-        return {"licensed": True, "license": lic.to_dict(), "buy_url": license_mod.BUY_URL,
+                    "buy_url": license_mod.buy_url(self.settings.language), "trial": trial}
+        return {"licensed": True, "license": lic.to_dict(), "buy_url": license_mod.buy_url(self.settings.language),
                 "trial": trial}
 
     def activate_license(self, key: str) -> dict[str, Any]:
@@ -3436,7 +3436,7 @@ class AppService:
         from . import license as license_mod
 
         try:
-            return bool(webbrowser.open(license_mod.BUY_URL))
+            return bool(webbrowser.open(license_mod.buy_url(self.settings.language)))
         except Exception:
             log.exception("Не удалось открыть страницу покупки")
             return False

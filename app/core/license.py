@@ -61,6 +61,21 @@ PUBLIC_KEYS: tuple[bytes, ...] = (
 # лишний шаг — лишнее место, где покупка может сломаться (решение 02.10).
 BUY_URL = "https://aisearch.ru/pricing/license/konspekt?utm_source=app&utm_medium=banner"
 
+# Остальной мир покупает на aisearch.tech: там свои условия (полгода
+# обновлений вместо трёх лет), цены в евро и долларах и оплата, которая
+# работает вне России (решение 03.10). Выбираем по языку интерфейса:
+# русский интерфейс — российская страница, любой другой — мировая на том
+# же языке. Английская живёт без префикса языка, остальные с ним.
+BUY_URL_WORLD = "https://aisearch.tech{prefix}/pricing/license/konspekt?utm_source=app&utm_medium=banner"
+
+
+def buy_url(language: str) -> str:
+    """Страница покупки для языка интерфейса."""
+    if language == "ru":
+        return BUY_URL
+    prefix = f"/{language}" if language in ("es", "sr") else ""
+    return BUY_URL_WORLD.format(prefix=prefix)
+
 # Пробный период: столько встреч программа работает целиком без лицензии.
 # Считаются встречи, а не дни (решение 30.09): человек, который поставил
 # программу и неделю ею не пользовался, ничего не потерял, а тот, кто
