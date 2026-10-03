@@ -3080,13 +3080,25 @@ function setupResize() {
   };
 
   document.querySelectorAll('.rz').forEach((zone) => {
-    zone.addEventListener('mousedown', (e) => {
+    zone.addEventListener('mousedown', async (e) => {
       if (e.button !== 0) return;
       edge = zone.dataset.edge;
       lastX = e.screenX;
       lastY = e.screenY;
       document.body.classList.add('is-resizing');
       e.preventDefault();
+      // Нажатие сообщаем сразу: на Windows дальше окно ведёт свой поток,
+      // и смещения через мост больше не нужны. Во время записи мост
+      // отвечает с задержкой, и покадровые смещения дёргали окно.
+      const api_ = window.pywebview && window.pywebview.api;
+      if (api_ && api_.resize_window) {
+        const r = await api_.resize_window(0, 0, edge);
+        if (r && r.system) {
+          edge = null;
+          pendingX = 0;
+          pendingY = 0;
+        }
+      }
     });
   });
 
@@ -3100,10 +3112,10 @@ function setupResize() {
   });
 
   window.addEventListener('mouseup', () => {
+    document.body.classList.remove('is-resizing');
     if (!edge) return;
     flush();
     edge = null;
-    document.body.classList.remove('is-resizing');
   });
 }
 

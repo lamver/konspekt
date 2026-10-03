@@ -402,6 +402,15 @@ class Api:
         """
         if not self._window:
             return {}
+        # Обычный путь: растягивание ведёт свой поток Win32, мост зовётся
+        # один раз, на нажатие. Фронт по ответу system перестаёт слать
+        # смещения. Ниже — запасной путь для систем без Win32.
+        if win32.AVAILABLE:
+            try:
+                if win32.start_resize(self._window, edge, MIN_WIDTH, MIN_HEIGHT):
+                    return {"system": True}
+            except Exception:
+                log.debug("Системное растягивание не запустилось", exc_info=True)
         try:
             rect = win32.get_rect(self._window) if win32.AVAILABLE else None
             if rect:

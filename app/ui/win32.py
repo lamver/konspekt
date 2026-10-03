@@ -219,6 +219,75 @@ def _drag_loop(hwnd: int) -> None:
             _drag_active = False
 
 
+_resize_active = False
+
+
+def start_resize(window, edge: str, min_width: int, min_height: int) -> bool:
+    """Растягивать окно за край, пока держат левую кнопку.
+
+    Так же, как перетаскивание (см. start_drag): свой поток следит за
+    курсором и ставит размер через SetWindowPos. Раньше фронт слал через
+    мост смещение на каждом кадре, а Python ставил размер; во время записи
+    поток окна занят доставкой уровней и кусков расшифровки, мост отвечает
+    с задержкой, и окно при растягивании дёргалось. Теперь мост зовётся
+    один раз, на нажатие.
+
+    edge — сторона, как у полос по краям окна: n, s, e, w и углы ne, nw, se, sw.
+    """
+    global _resize_active
+    hwnd = _hwnd(window)
+    if not hwnd:
+        return False
+    with _drag_lock:
+        if _resize_active:
+            return True
+        _resize_active = True
+    k = scale(hwnd)
+    threading.Thread(
+        target=_resize_loop,
+        args=(hwnd, edge, int(min_width * k), int(min_height * k)),
+        daemon=True,
+    ).start()
+    return True
+
+
+def _resize_loop(hwnd: int, edge: str, min_w: int, min_h: int) -> None:
+    """Менять размер окна вслед за курсором, пока держат левую кнопку."""
+    global _resize_active
+    try:
+        r = wintypes.RECT()
+        if not _u.GetWindowRect(hwnd, ctypes.byref(r)):
+            return
+        left, top, right, bottom = int(r.left), int(r.top), int(r.right), int(r.bottom)
+        start_x, start_y = _cursor()
+        deadline = time.monotonic() + 0.2
+        while not _pressed() and time.monotonic() < deadline:
+            time.sleep(0.005)
+        прежний = None
+        while _pressed():
+            x, y = _cursor()
+            dx, dy = x - start_x, y - start_y
+            l, t, rr, b = left, top, right, bottom
+            if "e" in edge:
+                rr = max(left + min_w, right + dx)
+            if "w" in edge:
+                l = min(right - min_w, left + dx)
+            if "s" in edge:
+                b = max(top + min_h, bottom + dy)
+            if "n" in edge:
+                t = min(bottom - min_h, top + dy)
+            новый = (l, t, rr - l, b - t)
+            if новый != прежний:
+                _u.SetWindowPos(hwnd, wintypes.HWND(0), *новый, SWP_NOZORDER | SWP_NOACTIVATE)
+                прежний = новый
+            time.sleep(0.008)
+    except Exception:
+        pass
+    finally:
+        with _drag_lock:
+            _resize_active = False
+
+
 def свёрнуто(window) -> bool:
     """Свёрнуто ли окно в панель задач."""
     hwnd = _hwnd(window)
