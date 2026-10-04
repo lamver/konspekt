@@ -48,6 +48,7 @@ from ..asr.langid import CYRILLIC_LANGS, LanguageDetector
 from ..asr.router import LanguageRouter
 from ..asr.whisper import DEFAULT_SIZE as WHISPER_DEFAULT_SIZE
 from ..asr.whisper import MODEL_FILES as WHISPER_FILES
+from ..asr.whisper import SERBIAN as WHISPER_SERBIAN
 from ..asr.whisper import SIZES as WHISPER_SIZES
 from ..asr.whisper import WhisperTranscriber
 from ..asr.enroll import (
@@ -200,6 +201,10 @@ class AppService:
     ) -> None:
         self.store = store or Store()
         self.settings = settings_mod.load()
+        # Сербскую модель качаем только тем, кому она нужна. Флаг ставит
+        # роутер, услышав сербскую речь, или выбор сербского в настройках.
+        self._сербский_услышан = False
+        self._докачка_идёт = threading.Lock()
         self.transcriber = transcriber or self._build_transcriber()
         # Кто говорит: отпечаток голоса и состав участников встречи.
         self.embedder = VoiceEmbedder(paths.models_dir() / EMBEDDER_DIR_NAME)
@@ -524,6 +529,10 @@ class AppService:
             out.append((f"Whisper {размер}", о["repo"], WHISPER_FILES,
                         paths.models_dir() / о["dir"],
                         lambda путь: WhisperTranscriber(путь).is_downloaded()))
+        if asr.detect_language and self._нужен_сербский():
+            out.append(("сербская модель", WHISPER_SERBIAN["repo"], WHISPER_FILES,
+                        paths.models_dir() / WHISPER_SERBIAN["dir"],
+                        lambda путь: WhisperTranscriber(путь).is_downloaded()))
         out.append(("модель голосов", EMBEDDER_REPO, EMBEDDER_FILES,
                     paths.models_dir() / EMBEDDER_DIR_NAME,
                     lambda путь: VoiceEmbedder(путь).is_downloaded()))
@@ -538,6 +547,12 @@ class AppService:
         """
         if os.environ.get("KONSPEKT_NO_PREFETCH") == "1" or not self.settings.asr.enabled:
             return
+        # Два захода разом (запуск и просьба роутера) делили бы канал и
+        # дважды пересобирали распознавание: второй просто подождёт.
+        with self._докачка_идёт:
+            self._докачать_недостающие()
+
+    def _докачать_недостающие(self) -> None:
         скачано = False
         for имя, repo, files, папка, готова in self._остальные_модели():
             if готова(папка):
@@ -555,6 +570,28 @@ class AppService:
             скачано = True
         if скачано:
             self._включить_новые_модели()
+
+    def _нужен_сербский(self) -> bool:
+        """Сербский интерфейс, сербский язык встреч или сербская речь."""
+        return (self.settings.language == "sr" or self.settings.asr.language == "sr"
+                or self._сербский_услышан)
+
+    def _нужна_модель_языка(self, язык: str) -> None:
+        """Роутер услышал язык, для которого есть своя модель, а её нет.
+
+        Зовётся из потока распознавания на каждой такой фразе, поэтому
+        только ставит флаг и один раз запускает докачку в фоне. До конца
+        загрузки фраза идёт в обычный Whisper, как раньше.
+        """
+        if язык != "sr" or self._сербский_услышан:
+            return
+        self._сербский_услышан = True
+        log.info("Услышан сербский: докачиваем сербскую модель")
+        self._докачать_в_фоне()
+
+    def _докачать_в_фоне(self) -> None:
+        threading.Thread(target=self._докачать_остальные_модели,
+                         name="models-more", daemon=True).start()
 
     def _включить_новые_модели(self) -> None:
         """Пересобрать распознавание под только что скачанные модели.
@@ -652,9 +689,16 @@ class AppService:
             log.info("Определение языка выключено: нет весов")
             return russian
         log.info("Нерусская речь идёт в %s", foreign.name)
+        serbian = WhisperTranscriber(paths.models_dir() / WHISPER_SERBIAN["dir"])
+        if serbian.is_downloaded():
+            log.info("Сербская речь идёт в %s", serbian.name)
+        else:
+            serbian = None
         return LanguageRouter(
             russian, detector, foreign,
             fallback_lang=self.settings.asr.language,
+            serbian=serbian,
+            нужна_модель=self._нужна_модель_языка,
         )
 
     def _whisper_dir(self) -> str:
@@ -1105,6 +1149,8 @@ class AppService:
         стало = (asr.language, asr.detect_language, asr.whisper_size)
         if стало != было and not self.capture.is_recording:
             self.transcriber = self._build_transcriber()
+        if стало != было and asr.language == "sr":
+            self._докачать_в_фоне()  # своя модель для сербского
         return self.asr_settings()
 
     def _ensure_asr_model(self) -> bool:
@@ -1599,6 +1645,8 @@ class AppService:
             return self.transcriber
         if lang in CYRILLIC_LANGS:
             return russian
+        if lang == "sr" and getattr(self.transcriber, "serbian", None) is not None:
+            return self.transcriber.serbian
         return getattr(self.transcriber, "foreign", None)
 
     def _segment_pcm(self, seg) -> tuple:
@@ -2940,8 +2988,11 @@ class AppService:
         """Сохранить язык интерфейса."""
         if language not in ("ru", "en", "es", "sr"):
             language = "ru"
+        было = self.settings.language
         self.settings.language = language
         settings_mod.save(self.settings)
+        if language == "sr" and было != "sr":
+            self._докачать_в_фоне()  # своя модель для сербского
         return language
 
     def get_i18n_dict(self, language: str) -> dict[str, Any]:

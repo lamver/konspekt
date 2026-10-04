@@ -44,7 +44,7 @@ from __future__ import annotations
 
 import logging
 import threading
-from typing import Iterable
+from typing import Callable, Iterable
 
 import numpy as np
 import py3langid as langid
@@ -85,10 +85,17 @@ class LanguageRouter:
         detector: LanguageDetector | None = None,
         foreign: Transcriber | None = None,
         fallback_lang: str = "ru",
+        serbian: Transcriber | None = None,
+        нужна_модель: Callable[[str], None] | None = None,
     ) -> None:
         self.russian = russian
         self.detector = detector
         self.foreign = foreign
+        # Своя модель для сербского (whisper.SERBIAN). Её может не быть:
+        # она качается только тем, кому нужна, и до тех пор сербский идёт
+        # в обычный Whisper, а программе говорим, что модель нужна.
+        self.serbian = serbian
+        self._нужна_модель = нужна_модель
         # Язык на случай, когда определить нечего и вспомнить нечего:
         # самая первая фраза встречи. Берётся из настроек распознавания,
         # а не зашит намертво, иначе не по-русски говорящий человек
@@ -138,6 +145,14 @@ class LanguageRouter:
         lang, уверенно = self._decide_why(pcm, sample_rate, speaker)
         russian = lang in CYRILLIC_LANGS
         engine = self.russian if russian else (self.foreign or self.russian)
+        if lang == "sr" and not russian and engine is self.foreign:
+            if self.serbian is not None:
+                engine = self.serbian
+            elif self._нужна_модель is not None:
+                try:
+                    self._нужна_модель("sr")
+                except Exception:
+                    log.exception("Не получилось попросить сербскую модель")
 
         # Язык подсказываем Whisper явно, когда в нём уверены: определитель
         # услышал его в этой самой фразе, или это основной язык встреч из
@@ -147,7 +162,7 @@ class LanguageRouter:
         # унаследованный от прошлой фразы, не подсказываем: если он неверен,
         # Whisper с подсказкой не распознаёт, а переводит.
         подсказка = {}
-        if engine is self.foreign and (уверенно or lang in ("sr", self.fallback_lang))                 and _умеет_язык(engine):
+        if engine is not self.russian and (уверенно or lang in ("sr", self.fallback_lang))                 and _умеет_язык(engine):
             подсказка = {"lang": lang}
         segments = list(engine.transcribe(
             pcm, sample_rate=sample_rate, meeting_id=meeting_id,

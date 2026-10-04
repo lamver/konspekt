@@ -44,6 +44,9 @@ for stream in (sys.stdout, sys.stderr):
 # Проверки ждут русского интерфейса, а сборочный сервер на английской
 # Windows: без этого первый запуск в песочнице стал бы английским.
 os.environ.setdefault("KONSPEKT_SYSTEM_LANG", "ru")
+# И в сеть за моделями без спроса не ходят: проверка, которой нужна
+# докачка, снимает запрет сама и на время.
+os.environ.setdefault("KONSPEKT_NO_PREFETCH", "1")
 
 if not os.environ.get("KONSPEKT_DATA_DIR"):
     _песочница = tempfile.mkdtemp(prefix="konspekt-проверка-")

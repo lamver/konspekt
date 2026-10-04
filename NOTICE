@@ -30,6 +30,15 @@ Whisper small (распознавание остальных языков)
   Лицензия: Apache License 2.0, как у исходных весов
   https://huggingface.co/onnx-community/whisper-small
 
+Whisper small, дообученный на сербском (распознавание сербского)
+  Автор: Sagicc
+  Лицензия: Apache License 2.0
+  https://huggingface.co/Sagicc/whisper-small-sr-yodas-v2
+
+  Вариант в формате ONNX, сжатый в int8
+  Выгрузили сами из исходных весов, без изменения их смысла.
+  Лицензия: Apache License 2.0, как у исходных весов
+
 VoxLingua107 ECAPA (определение языка по звуку)
   Автор: SpeechBrain, Tanel Alumäe
   Лицензия: Apache License 2.0

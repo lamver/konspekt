@@ -51,6 +51,24 @@ SIZES = {
 }
 DEFAULT_SIZE = "small"
 
+# Сербский — своя модель. Обычный Whisper small на сербском ошибается в
+# каждом третьем слове (замер 04.10 на речи в парламенте ParlaSpeech-RS:
+# 31 %), этот — в каждом шестом (16 %), при том же размере и скорости.
+# Это whisper-small, дообученный на сербской речи (Sagicc/whisper-small-
+# sr-yodas-v2, Apache 2.0): YODAS, FLEURS, Common Voice. Готового ONNX у
+# автора нет, выгрузили сами в ту же раскладку, что у onnx-community, и
+# сжали в int8 вместе с ветвями декодера (иначе 870 МБ вместо 290).
+# Качается только тем, кому нужен сербский: сербский интерфейс, сербский
+# основной язык встреч или сербская речь, услышанная на встрече.
+# Лежит только на нашем CDN (docs/модели_cdn.md): на Hugging Face этой
+# выгрузки нет, и запасной источник ответит 404. CDN недоступен — сербский
+# идёт в обычный Whisper, как до 0.15.3.
+SERBIAN = {
+    "repo": "konspekt/whisper-small-sr",
+    "dir": "whisper-small-sr",
+    "bytes": 289_000_000,
+}
+
 MODEL_REPO = SIZES[DEFAULT_SIZE]["repo"]
 MODEL_DIR_NAME = SIZES[DEFAULT_SIZE]["dir"]
 QUANTIZATION = "int8"
@@ -165,6 +183,9 @@ class WhisperTranscriber:
             return []
         if (lang or "").lower().startswith("sr"):
             text = латиница(text)
+            # Сербская модель иногда начинает фразу со строчной буквы.
+            if text[:1].islower():
+                text = text[:1].upper() + text[1:]
 
         return [
             TranscriptSegment(

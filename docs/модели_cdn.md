@@ -108,6 +108,29 @@ CDN) тоже не нужно: программа его не просит, и �
 | [normalizer.json](https://huggingface.co/onnx-community/whisper-base/resolve/1846881b6b3a3024392c1eea3ad983695bc23925/normalizer.json) | 52 666 | `(мелкий файл  не LFS)` |
 | [merges.txt](https://huggingface.co/onnx-community/whisper-base/resolve/1846881b6b3a3024392c1eea3ad983695bc23925/merges.txt) | 493 869 | `(мелкий файл  не LFS)` |
 
+### Распознавание сербского (своя выгрузка)
+
+Только на CDN, на Hugging Face этой выгрузки нет: путь
+`konspekt/whisper-small-sr/<файл>`. Исходник —
+[`Sagicc/whisper-small-sr-yodas-v2`](https://huggingface.co/Sagicc/whisper-small-sr-yodas-v2)
+(Apache 2.0), выгружен в ONNX через optimum и сжат в int8 вместе с
+ветвями декодера (`EnableSubgraph`), иначе декодер весит 774 МБ вместо
+195. Качается только тем, кому нужен сербский. 289.5 МБ.
+
+| Файл | Размер | sha256 |
+|---|---:|---|
+| onnx/encoder_model_int8.onnx | 92 231 161 | `4ee67529ef776ca924b878ff3000c8a0edc0b842bfbd2d710eb4017f5266ec6c` |
+| onnx/decoder_model_merged_int8.onnx | 195 141 611 | `cd1aae47a7a13a572a4b2fe553f3384765d5efb5f641eae61c6c1a4c2b43eeae` |
+| vocab.json | 1 086 844 | `40a31d8bd67dd6b8a8c7531b30595557adbadad6578a2f657c60bcffca7feabd` |
+| added_tokens.json | 36 213 | `8a5856a00b438f6fc40d2c6d9d93fea54f2c169bdc817a58d1feddb9ac96302e` |
+| config.json | 1 489 | `cec82fa5d9223adcb3ddfe126cf94d877513b7e4ac85fe4871cac67e76aff898` |
+| generation_config.json | 4 103 | `7d701171561ad9d00158a3d2cce76f1e3ee455fd4e8baa7761c6dfdf6271609f` |
+| preprocessor_config.json | 353 | `86c752c0f26ae2cc92699a1805eb66366b01c9260b7d31c7bd142d6b9e56017a` |
+| tokenizer_config.json | 295 703 | `f46e9819a8910572da1b528afde146a56c63068e1a130ffc66f7b5315093b0e1` |
+| special_tokens_map.json | 2 333 | `aa84bd013194e2bf2450397e49e656d8b8d9e1f971c0f1702409870b2cf14106` |
+| normalizer.json | 54 408 | `6c40cc36b4bb9c5aa8be0ff9023ea4e78a3ab718b3490a1d9cd3cb7ec56f130f` |
+| merges.txt | 543 870 | `0b4a5df397fd681b15714777a7ce4af868bac7591eccde0f124b628dce9fba64` |
+
 ### Определение языка (VoxLingua107)
 
 Репозиторий [`beginning-ai/speechbrain-lang-id-voxlingua107-ecapa-onnx`](https://huggingface.co/beginning-ai/speechbrain-lang-id-voxlingua107-ecapa-onnx), ревизия `746b6a8f7ec7687f637470086a401e77414bf02e`,
