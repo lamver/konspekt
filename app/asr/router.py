@@ -135,13 +135,20 @@ class LanguageRouter:
         offset: float = 0.0,
         speaker: str = "them",
     ) -> Iterable[TranscriptSegment]:
-        lang = self._decide(pcm, sample_rate, speaker)
+        lang, уверенно = self._decide_why(pcm, sample_rate, speaker)
         russian = lang in CYRILLIC_LANGS
         engine = self.russian if russian else (self.foreign or self.russian)
 
-        # Сербский подсказываем Whisper явно: сам он на сербской речи
-        # часто решает, что слышит русский или хорватский.
-        подсказка = {"lang": "sr"} if lang == "sr" and engine is self.foreign else {}
+        # Язык подсказываем Whisper явно, когда в нём уверены: определитель
+        # услышал его в этой самой фразе, или это основной язык встреч из
+        # настроек, или сербский (сам Whisper на сербской речи часто решает,
+        # что слышит русский или хорватский). Замер на FLEURS 04.10: немецкий
+        # с подсказкой 10 % ошибок в словах против 39 % без неё. Язык,
+        # унаследованный от прошлой фразы, не подсказываем: если он неверен,
+        # Whisper с подсказкой не распознаёт, а переводит.
+        подсказка = {}
+        if engine is self.foreign and (уверенно or lang in ("sr", self.fallback_lang))                 and _умеет_язык(engine):
+            подсказка = {"lang": lang}
         segments = list(engine.transcribe(
             pcm, sample_rate=sample_rate, meeting_id=meeting_id,
             offset=offset, speaker=speaker, **подсказка,
@@ -159,7 +166,7 @@ class LanguageRouter:
         #
         # Поэтому язык берём по тому, кто на самом деле распознавал:
         # раз это русская модель, то и язык русский.
-        итоговый = self.fallback_lang if russian else lang
+        итоговый = "ru" if russian else lang
         for segment in segments:
             segment.lang = итоговый
             self._recheck_by_text(segment, speaker)
@@ -198,13 +205,17 @@ class LanguageRouter:
 
     def _decide(self, pcm, sample_rate: int, speaker: str) -> str:
         """Код языка фразы. Ошибаться в сторону настроенного языка безопаснее."""
+        return self._decide_why(pcm, sample_rate, speaker)[0]
+
+    def _decide_why(self, pcm, sample_rate: int, speaker: str) -> tuple[str, bool]:
+        """Код языка фразы и услышан ли он в ней самой, а не догадка."""
         if self.detector is None or self.foreign is None:
-            return self.fallback_lang
+            return self.fallback_lang, False
         try:
             verdict = self.detector.detect(pcm, sample_rate)
         except Exception:
             log.exception("Определение языка упало, берём язык по умолчанию")
-            return self.fallback_lang
+            return self.fallback_lang, False
 
         with self._lock:
             if verdict is None:
@@ -216,8 +227,8 @@ class LanguageRouter:
                 # должна сажать дорожку в Whisper до конца встречи — это
                 # и есть источник лага на длинной записи.
                 last = self._last.get(speaker, self.fallback_lang)
-                if last in CYRILLIC_LANGS:
-                    return last
+                if last in CYRILLIC_LANGS or last == self.fallback_lang:
+                    return last, False
                 streak = self._inherited_streak.get(speaker, 0) + 1
                 if streak > MAX_UNCONFIRMED_INHERIT:
                     log.info(
@@ -227,10 +238,23 @@ class LanguageRouter:
                     )
                     self._last[speaker] = self.fallback_lang
                     self._inherited_streak[speaker] = 0
-                    return self.fallback_lang
+                    return self.fallback_lang, False
                 self._inherited_streak[speaker] = streak
-                return last
+                return last, False
             lang = verdict[0]
             self._last[speaker] = lang
             self._inherited_streak[speaker] = 0
-        return lang
+        return lang, True
+
+
+def _умеет_язык(engine) -> bool:
+    """Принимает ли распознаватель подсказку языка (заглушки в тестах нет)."""
+    import inspect
+
+    try:
+        параметры = inspect.signature(engine.transcribe).parameters
+    except (TypeError, ValueError):
+        return False
+    return "lang" in параметры or any(
+        п.kind is inspect.Parameter.VAR_KEYWORD for п in параметры.values()
+    )

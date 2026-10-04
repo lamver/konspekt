@@ -188,6 +188,7 @@ FAST = [
     "язык_итогов_test.py",
     "докачка_моделей_test.py",
     "медленный_мост_edge_test.py",
+    "язык_по_умолчанию_test.py",
     "разборы_test.py",
     "разборы_edge_test.py",
     "clip_test.py",

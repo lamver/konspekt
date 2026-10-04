@@ -64,6 +64,16 @@ MIN_CONFIDENCE = 0.85
 # но не испортит текст: сверка по тексту вернёт фразу русскому.
 CYRILLIC_LANGS = frozenset({"ru", "uk", "be", "bg", "mk"})
 
+# Один язык под разными ярлыками. VoxLingua различает сербский,
+# боснийский и хорватский, но для распознавания это одна речь: на 40
+# сербских фразах набора FLEURS (замер 04.10) модель ни разу не сказала
+# «русский», но раскидала их между sr, bs и hr, и каждый ответ по
+# отдельности был неуверенным. Фраза падала ниже порога и уходила в
+# русскую модель кашей. Складываем вероятности соседей в один язык, и
+# порог уверенности проверяем уже у суммы. Люксембургский так же
+# оказывается немецкой речью.
+ОДИН_ЯЗЫК = {"bs": "sr", "hr": "sr", "sh": "sr", "lb": "de"}
+
 # Признаки, которых ждёт модель.
 N_MELS = 60
 FRAME_LENGTH = 400   # 25 мс
@@ -167,13 +177,16 @@ class LanguageDetector:
         total = float(probs.sum())
         if total > 0:
             probs = probs / total
-        best = int(np.argmax(probs))
-        confidence = float(probs[best])
+        суммы: dict[str, float] = {}
+        for метка, p in zip(self._labels, probs.tolist()):
+            язык = ОДИН_ЯЗЫК.get(метка, метка)
+            суммы[язык] = суммы.get(язык, 0.0) + float(p)
+        язык, confidence = max(суммы.items(), key=lambda kv: kv[1])
         if confidence < MIN_CONFIDENCE:
             # Неуверенный ответ хуже, чем никакой: он уведёт фразу в чужую
             # модель распознавания, и текст будет испорчен целиком.
             return None
-        return self._labels[best], confidence
+        return язык, confidence
 
     def is_russian(self, pcm: np.ndarray, sample_rate: int = SAMPLE_RATE) -> bool | None:
         """Годится ли фраза для GigaAM. None означает «не знаю».

@@ -41,6 +41,10 @@ for stream in (sys.stdout, sys.stderr):
 # Подменяем каталог данных, если проверка не выбрала свой. Именно до
 # того, как программа успеет его прочитать: `paths` запоминает значение
 # при первом обращении.
+# Проверки ждут русского интерфейса, а сборочный сервер на английской
+# Windows: без этого первый запуск в песочнице стал бы английским.
+os.environ.setdefault("KONSPEKT_SYSTEM_LANG", "ru")
+
 if not os.environ.get("KONSPEKT_DATA_DIR"):
     _песочница = tempfile.mkdtemp(prefix="konspekt-проверка-")
     os.environ["KONSPEKT_DATA_DIR"] = _песочница

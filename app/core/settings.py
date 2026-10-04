@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from dataclasses import dataclass, asdict, field
 from typing import Any
 
@@ -294,10 +295,94 @@ class Settings:
         return asdict(self)
 
 
+# Язык системы → язык интерфейса. Русский берут и соседи, кому русский
+# интерфейс понятнее английского; сербский — и хорваты с боснийцами.
+_ИНТЕРФЕЙС_ПО_СИСТЕМЕ = {
+    "ru": "ru", "uk": "ru", "be": "ru", "kk": "ru", "ky": "ru", "uz": "ru",
+    "es": "es", "ca": "es", "gl": "es",
+    "sr": "sr", "hr": "sr", "bs": "sr", "sh": "sr", "me": "sr",
+}
+# Основной язык встреч, если это не язык интерфейса. Русский, украинский,
+# белорусский распознаёт русская модель: ей и отдаём.
+_РЕЧЬ_ПО_СИСТЕМЕ = {"uk": "ru", "be": "ru", "kk": "ru", "ky": "ru", "uz": "ru",
+                    "hr": "sr", "bs": "sr", "sh": "sr", "me": "sr", "ca": "es", "gl": "es"}
+# Языки, которые предлагает выпадающий список «Основной язык встреч».
+# Те же, что ASR_LANG_CODES в web/app.js.
+ЯЗЫКИ_ВСТРЕЧ = ("ru", "en", "de", "fr", "es", "it", "pt", "pl", "uk", "sr", "tr", "nl")
+
+
+# Кто из языков системы делает человека русскоговорящим. Отдельно, потому
+# что русский у нас главный: русскую речь лучше всех знает русская модель.
+_РУССКИЕ = frozenset({"ru", "uk", "be", "kk", "ky", "uz"})
+
+
+def языки_системы() -> list[str]:
+    """Языки Windows по порядку: интерфейс, формат региона, раскладки.
+
+    Одного языка интерфейса мало. Многие русскоговорящие (и сам автор)
+    сидят на английской Windows, но русская раскладка у них есть всегда.
+    KONSPEKT_SYSTEM_LANG подменяет ответ («de» или «en,ru»): проверки на
+    сборочном сервере идут на английской Windows, а ждут русского.
+    """
+    свой = os.environ.get("KONSPEKT_SYSTEM_LANG")
+    if свой:
+        return [к.strip().lower()[:2] for к in свой.split(",") if к.strip()]
+    коды: list[str] = []
+    try:
+        import ctypes
+
+        k32, u32 = ctypes.windll.kernel32, ctypes.windll.user32
+
+        def имя(lcid: int) -> str:
+            буфер = ctypes.create_unicode_buffer(85)
+            return буфер.value if k32.LCIDToLocaleName(lcid, буфер, 85, 0) else ""
+
+        коды.append(имя(k32.GetUserDefaultUILanguage()))
+        буфер = ctypes.create_unicode_buffer(85)
+        if k32.GetUserDefaultLocaleName(буфер, 85):
+            коды.append(буфер.value)
+        n = u32.GetKeyboardLayoutList(0, None)
+        раскладки = (ctypes.c_void_p * max(n, 1))()
+        for h in раскладки[: u32.GetKeyboardLayoutList(n, раскладки)]:
+            коды.append(имя((h or 0) & 0xFFFF))
+    except Exception:
+        log.debug("Языки Windows не прочитались", exc_info=True)
+    итог: list[str] = []
+    for код in коды:
+        код = код.replace("_", "-").split("-")[0].lower().strip()
+        if код and код not in итог:
+            итог.append(код)
+    return итог
+
+
+def по_языку_системы(settings: Settings, коды: list[str]) -> Settings:
+    """Первый запуск: интерфейс и основной язык встреч по языкам Windows.
+
+    Раньше было «ru» всегда. Немец получал русский интерфейс, а его
+    неуверенно опознанные фразы уходили в русскую модель: замер на FLEURS
+    04.10 дал 39 % ошибок в словах на немецком против 10 %, когда язык
+    назван. Есть русский где угодно, хоть в раскладке, — русский. Иначе
+    первый неанглийский язык, а нет такого — английский.
+    """
+    if not коды:
+        return settings
+    if any(к in _РУССКИЕ for к in коды):
+        главный = "ru"
+    else:
+        главный = next((к for к in коды if к != "en"), "en")
+    settings.language = _ИНТЕРФЕЙС_ПО_СИСТЕМЕ.get(главный, "en")
+    речь = _РЕЧЬ_ПО_СИСТЕМЕ.get(главный, главный)
+    settings.asr.language = речь if речь in ЯЗЫКИ_ВСТРЕЧ else "en"
+    return settings
+
+
 def load() -> Settings:
     path = paths.settings_path()
     if not path.exists():
-        return Settings()
+        settings = по_языку_системы(Settings(), языки_системы())
+        log.info("Первый запуск: интерфейс %s, основной язык встреч %s",
+                 settings.language, settings.asr.language)
+        return settings
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
         window = WindowGeometry(**raw.pop("window", {}))
