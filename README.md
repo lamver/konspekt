@@ -3,11 +3,15 @@
 A smart notepad for meetings — a local, privacy-first alternative to Granola.
 Everything runs on your computer; nothing leaves your machine.
 Always-on-top window, lives in the system tray.
+Windows 10/11, works offline once the speech models are downloaded.
 
 **[Download for Windows](https://github.com/lamver/konspekt-releases/releases/latest)**
+ · [Website](https://aisearch.tech/programs/konspekt)
  · [Project page](https://lamver.github.io/konspekt/)
 
 ![Konspekt](docs/screenshots/en/summary.png)
+
+![Live transcript](docs/screenshots/en/03-rasshifrovka.png)
 
 ## What it does
 
