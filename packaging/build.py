@@ -24,6 +24,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from app import __version__  # noqa: E402
+from app.core.целостность import опись  # noqa: E402
 
 DIST = ROOT / "dist"
 SPEC = ROOT / "packaging" / "konspekt.spec"
@@ -129,9 +130,13 @@ def main() -> int:
 
     # Дата сборки едет внутрь программы: с ней сверяется срок обновлений
     # в ключе «на 3 года» (app/core/license.py). Пишется каждый раз заново.
+    # Опись файлов окна: программа сверяет с ней папку web/ при запуске
+    # (app/core/целостность.py), иначе недоехавшее обновление окна
+    # выглядит как «обновилась, а обещанного нет».
     (ROOT / "app" / "build_info.py").write_text(
         '"""Создаётся packaging/build.py при каждой сборке. Не править."""\n'
-        f'BUILD_DATE = "{dt.date.today().isoformat()}"\n',
+        f'BUILD_DATE = "{dt.date.today().isoformat()}"\n'
+        f"WEB_FILES = {опись(ROOT / 'web')!r}\n",
         encoding="utf-8",
     )
 

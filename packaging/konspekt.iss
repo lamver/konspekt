@@ -56,6 +56,11 @@ SolidCompression=yes
 WizardStyle=modern
 ; Windows 10 и новее: WebView2 на более старых недоступен.
 MinVersion=10.0
+; Пока идёт установка, этот замок держит установщик, а программа на
+; старте ждёт, пока он освободится (packaging/launcher.py). Иначе
+; Конспект, запущенный посреди тихого обновления (значок пропал, человек
+; жмёт ярлык), занимает файлы, и обновление встаёт наполовину.
+SetupMutex=KonspektSetup
 
 [Languages]
 Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"
@@ -102,12 +107,26 @@ begin
     end;
 end;
 
-// Перед установкой закрываем запущенную копию: иначе файлы заняты и
-// обновление поверх падает на середине.
-function InitializeSetup(): Boolean;
+// Перед подменой файлов закрываем все запущенные копии: иначе файлы
+// заняты, и обновление встаёт наполовину. Задача №5 (05.10): новый exe
+// с номером 0.15.3, а в _internal окно от 0.11, и «DeleteFile: код 5»
+// на PIL\_imaging.pyd.
+//
+// Закрываем прямо перед копированием, а не при старте установщика: пока
+// человек листает страницы, Конспект успевает запуститься снова. И ждём,
+// пока копий не останется: taskkill только просит систему завершить
+// процесс, а файлы освобождаются, когда он умер на самом деле.
+function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
-  ResultCode: Integer;
+  ResultCode, i: Integer;
 begin
-  Exec('taskkill.exe', '/f /im {#AppExe}', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  Result := True;
+  for i := 1 to 40 do
+  begin
+    // 128 — таких процессов нет.
+    if not Exec('taskkill.exe', '/f /im {#AppExe}', '', SW_HIDE, ewWaitUntilTerminated, ResultCode)
+       or (ResultCode = 128) then
+      Break;
+    Sleep(250);
+  end;
+  Result := '';
 end;

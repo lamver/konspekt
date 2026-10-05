@@ -190,6 +190,7 @@ FAST = [
     "медленный_мост_edge_test.py",
     "язык_по_умолчанию_test.py",
     "сербская_модель_test.py",
+    "целостность_окна_test.py",
     "разборы_test.py",
     "разборы_edge_test.py",
     "clip_test.py",
