@@ -43,7 +43,7 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 def прогон() -> bool:
     """True, если проверка прошла."""
-    итог = subprocess.run([sys.executable, "version_test.py"],
+    итог = subprocess.run([sys.executable, "tests/version_test.py"],
                           capture_output=True, text=True, encoding="utf-8")
     return итог.returncode == 0
 

@@ -143,6 +143,9 @@ uv run python run_tests.py --full  # slow ones too: live audio, real models
 uv run python run_tests.py --list  # what exists
 ```
 
+The checks themselves live in `tests/` and run from the project root, so a
+single one is `uv run python tests/<name>_test.py`.
+
 Run them through `.venv\Scripts\python.exe` rather than the system Python: the
 latter does not see all the libraries, and a dozen checks fail with "no such
 module", which looks like broken code but is the wrong interpreter.

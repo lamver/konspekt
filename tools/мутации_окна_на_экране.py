@@ -11,7 +11,7 @@ from pathlib import Path
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 КОРЕНЬ = Path(__file__).parent.parent
-ПРОВЕРКА = КОРЕНЬ / "окно_на_экране_test.py"
+ПРОВЕРКА = КОРЕНЬ / "tests/окно_на_экране_test.py"
 
 # (файл, что заменить, на что, описание беды)
 МУТАЦИИ = [

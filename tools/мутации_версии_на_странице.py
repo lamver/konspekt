@@ -67,7 +67,7 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 
 def прогон() -> bool:
-    итог = subprocess.run([sys.executable, "версия_на_странице_test.py"],
+    итог = subprocess.run([sys.executable, "tests/версия_на_странице_test.py"],
                           capture_output=True, text=True, encoding="utf-8")
     # Пропуск (нет node) считается провалом: молча ничего не проверить.
     if "[skip]" in (итог.stdout or ""):

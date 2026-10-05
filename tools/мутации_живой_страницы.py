@@ -50,7 +50,7 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 
 def прогон() -> tuple[bool, str]:
-    итог = subprocess.run([sys.executable, "живая_страница_test.py"],
+    итог = subprocess.run([sys.executable, "tests/живая_страница_test.py"],
                           capture_output=True, text=True, encoding="utf-8")
     вывод = (итог.stdout or "") + (итог.stderr or "")
     return итог.returncode == 0, вывод

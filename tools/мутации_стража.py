@@ -12,7 +12,7 @@ from pathlib import Path
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 КОРЕНЬ = Path(__file__).resolve().parent.parent
-ПРОВЕРКА = КОРЕНЬ / "страж_test.py"
+ПРОВЕРКА = КОРЕНЬ / "tests/страж_test.py"
 
 МУТАЦИИ = [
     ("tools/страж_выпуска.py",

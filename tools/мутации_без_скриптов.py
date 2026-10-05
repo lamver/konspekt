@@ -21,7 +21,7 @@ import testenv  # noqa: F401,E402  русский вывод в консоли W
 
 КОРЕНЬ = Path(__file__).resolve().parent.parent
 СТРАНИЦА = КОРЕНЬ / "docs" / "index.html"
-ПРОВЕРКА = КОРЕНЬ / "без_скриптов_test.py"
+ПРОВЕРКА = КОРЕНЬ / "tests/без_скриптов_test.py"
 
 исходник = СТРАНИЦА.read_text(encoding="utf-8")
 

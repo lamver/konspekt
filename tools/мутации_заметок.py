@@ -11,8 +11,8 @@ from pathlib import Path
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 КОРЕНЬ = Path(__file__).resolve().parent.parent
-ПРОВЕРКИ = [КОРЕНЬ / "заметки_edge_test.py", КОРЕНЬ / "заметки_настройки_test.py"]
-УЗЕЛ = [КОРЕНЬ / "копирование_test.js"]
+ПРОВЕРКИ = [КОРЕНЬ / "tests/заметки_edge_test.py", КОРЕНЬ / "tests/заметки_настройки_test.py"]
+УЗЕЛ = [КОРЕНЬ / "tests/копирование_test.js"]
 
 МУТАЦИИ = [
     ("web/app.js",

@@ -13,8 +13,8 @@ from pathlib import Path
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 КОРЕНЬ = Path(__file__).resolve().parent.parent
-ПРОВЕРКИ = [КОРЕНЬ / "смысл_test.py", КОРЕНЬ / "смысл_модель_test.py",
-            КОРЕНЬ / "поиск_окно_test.py"]
+ПРОВЕРКИ = [КОРЕНЬ / "tests/смысл_test.py", КОРЕНЬ / "tests/смысл_модель_test.py",
+            КОРЕНЬ / "tests/поиск_окно_test.py"]
 
 # (файл, что заменить, на что, описание беды)
 МУТАЦИИ = [

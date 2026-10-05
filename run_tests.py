@@ -19,6 +19,9 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
+# Сами проверки лежат в tests/, а запускаются из корня: пути вроде
+# web/app.js и audio_examples в них считаются от корня проекта.
+TESTS = ROOT / "tests"
 
 FAST = [
     # Первой: проверки не имеют права трогать данные человека. Однажды
@@ -279,7 +282,7 @@ def run(test: str) -> int:
     # Консоль Windows живёт в cp1251, и русский вывод теста роняет его
     # с UnicodeEncodeError, хотя сам тест прошёл. Просим utf-8 у всех.
     env = dict(os.environ, PYTHONIOENCODING="utf-8", PYTHONUTF8="1")
-    return subprocess.run([sys.executable, test], cwd=ROOT, env=env).returncode
+    return subprocess.run([sys.executable, str(TESTS / test)], cwd=ROOT, env=env).returncode
 
 
 def main() -> int:

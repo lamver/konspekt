@@ -11,8 +11,8 @@ APPJS = КОРЕНЬ / "web" / "app.js"
 SERVICE = КОРЕНЬ / "app" / "core" / "service.py"
 PY = sys.executable
 
-JS = ["node", str(КОРЕНЬ / "диктовка_поле_test.js")]
-PYT = [PY, str(КОРЕНЬ / "диктовка_поле_test.py")]
+JS = ["node", str(КОРЕНЬ / "tests/диктовка_поле_test.js")]
+PYT = [PY, str(КОРЕНЬ / "tests/диктовка_поле_test.py")]
 
 МУТАЦИИ = [
     (APPJS, "вопрос уходит сразу, без правки",

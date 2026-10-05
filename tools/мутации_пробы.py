@@ -12,7 +12,7 @@ from pathlib import Path
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 КОРЕНЬ = Path(__file__).resolve().parent.parent
-ПРОВЕРКИ = [КОРЕНЬ / "пробный_период_test.py", КОРЕНЬ / "пробный_период_edge_test.py"]
+ПРОВЕРКИ = [КОРЕНЬ / "tests/пробный_период_test.py", КОРЕНЬ / "tests/пробный_период_edge_test.py"]
 Б = "app/storage/db.py"
 С = "app/core/service.py"
 Ф = "web/app.js"

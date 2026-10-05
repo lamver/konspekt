@@ -8,7 +8,7 @@ from pathlib import Path
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 КОРЕНЬ = Path(__file__).parent.parent
-ПРОВЕРКА_ФАЙЛ = КОРЕНЬ / "обещания_test.py"
+ПРОВЕРКА_ФАЙЛ = КОРЕНЬ / "tests/обещания_test.py"
 ПРОВЕРКА = [sys.executable, str(ПРОВЕРКА_ФАЙЛ)]
 СТОРОЖ = КОРЕНЬ / "app" / "audio" / "сторож.py"
 СЛОВАРЬ = КОРЕНЬ / "dist" / "Konspekt" / "_internal" / "web" / "i18n" / "es.json"

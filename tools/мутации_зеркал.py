@@ -11,7 +11,7 @@ from pathlib import Path
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 КОРЕНЬ = Path(__file__).resolve().parent.parent
-ПРОВЕРКИ = [КОРЕНЬ / "зеркала_test.py", КОРЕНЬ / "resume_test.py"]
+ПРОВЕРКИ = [КОРЕНЬ / "tests/зеркала_test.py", КОРЕНЬ / "tests/resume_test.py"]
 Ф = "app/asr/download.py"
 
 МУТАЦИИ = [

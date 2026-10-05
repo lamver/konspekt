@@ -86,7 +86,7 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 
 def прогон() -> tuple[bool, str]:
-    итог = subprocess.run([sys.executable, "язык_в_разметке_test.py"],
+    итог = subprocess.run([sys.executable, "tests/язык_в_разметке_test.py"],
                           capture_output=True, text=True,
                           encoding="utf-8", cwd=КОРЕНЬ)
     return итог.returncode == 0, (итог.stdout or "") + (итог.stderr or "")

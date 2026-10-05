@@ -7,7 +7,7 @@ from pathlib import Path
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 КОРЕНЬ = Path(__file__).resolve().parent.parent
-ПРОВЕРКИ = [КОРЕНЬ / "ссылки_test.py"]
+ПРОВЕРКИ = [КОРЕНЬ / "tests/ссылки_test.py"]
 Л = "app/core/link.py"
 О = "app/core/importer.py"
 С = "app/core/service.py"

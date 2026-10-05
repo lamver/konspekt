@@ -11,7 +11,7 @@ from pathlib import Path
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 КОРЕНЬ = Path(__file__).resolve().parent.parent
-ПРОВЕРКИ = [КОРЕНЬ / "модели_выбор_test.py", КОРЕНЬ / "llm_download_test.py", КОРЕНЬ / "модели_edge_test.py"]
+ПРОВЕРКИ = [КОРЕНЬ / "tests/модели_выбор_test.py", КОРЕНЬ / "tests/llm_download_test.py", КОРЕНЬ / "tests/модели_edge_test.py"]
 М = "app/llm/manager.py"
 Л = "app/llm/local.py"
 С = "app/core/service.py"

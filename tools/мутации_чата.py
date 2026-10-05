@@ -13,7 +13,7 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 КОРЕНЬ = Path(__file__).resolve().parent.parent
 # summary_test с живой моделью идёт восемь минут: для сотни прогонов
 # мутаций это сутки. Живую модель проверяет run_tests.
-ПРОВЕРКИ = [КОРЕНЬ / "чат_контекст_test.py"]
+ПРОВЕРКИ = [КОРЕНЬ / "tests/чат_контекст_test.py"]
 
 МУТАЦИИ = [
     ("app/llm/context.py",

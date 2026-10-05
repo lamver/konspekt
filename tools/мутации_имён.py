@@ -8,7 +8,7 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 КОРЕНЬ = Path(__file__).parent.parent
 ФАЙЛ = КОРЕНЬ / "app" / "asr" / "audiofile.py"
-ПРОВЕРКА = [sys.executable, str(КОРЕНЬ / "имена_записей_test.py")]
+ПРОВЕРКА = [sys.executable, str(КОРЕНЬ / "tests/имена_записей_test.py")]
 
 МУТАЦИИ = [
     (

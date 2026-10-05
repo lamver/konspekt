@@ -53,3 +53,6 @@ app/build_info.py
 /promo/голос/c/
 /promo/голос/пробы/
 /promo/голос/сравнение-голосов.wav
+
+# Временный звук audiofile_test, создаётся и удаляется на каждом прогоне.
+/_t_audiofile.wav

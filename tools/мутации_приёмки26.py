@@ -10,7 +10,7 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 APPJS = КОРЕНЬ / "web" / "app.js"
 HTML = КОРЕНЬ / "web" / "index.html"
 SERVICE = КОРЕНЬ / "app" / "core" / "service.py"
-ПРОВЕРКА = [sys.executable, str(КОРЕНЬ / "приёмка26_test.py")]
+ПРОВЕРКА = [sys.executable, str(КОРЕНЬ / "tests/приёмка26_test.py")]
 
 МУТАЦИИ = [
     (HTML, "кнопку копирования убрали из разметки",

@@ -12,8 +12,8 @@ from pathlib import Path
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 КОРЕНЬ = Path(__file__).resolve().parent.parent
-ПРОВЕРКИ = [КОРЕНЬ / "лицензия_test.py", КОРЕНЬ / "лицензия_окно_test.py",
-            КОРЕНЬ / "масштаб_edge_test.py"]
+ПРОВЕРКИ = [КОРЕНЬ / "tests/лицензия_test.py", КОРЕНЬ / "tests/лицензия_окно_test.py",
+            КОРЕНЬ / "tests/масштаб_edge_test.py"]
 
 МУТАЦИИ = [
     # --- срок обновлений (ключ «на 3 года», решение 01.10) ---
