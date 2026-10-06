@@ -83,7 +83,9 @@ Name: "{userstartup}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: autostart
 Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
 ; Тихое обновление из самой программы: она закрылась ради подмены файлов
 ; и должна вернуться, иначе пропавший значок в трее выглядит поломкой.
-; Обычная тихая установка (без ключа) ничего не запускает.
+; Второй случай — файл restart.flag рядом с exe: его оставляет ярлык,
+; нажатый посреди установки (программа тогда сразу выходит, чтобы не
+; занять свой exe). Обычная тихая установка ничего не запускает.
 Filename: "{app}\{#AppExe}"; Flags: nowait skipifnotsilent; Check: RestartRequested
 
 [UninstallDelete]
@@ -94,17 +96,31 @@ Type: filesandordirs; Name: "{localappdata}\{#AppName}\EBWebView"
 
 [Code]
 // Ключ /RESTARTKONSPEKT передаёт сама программа при тихом обновлении.
+// Или программа оставила файл-просьбу (app/core/целостность.py).
+function RestartFlag(): String;
+begin
+  Result := ExpandConstant('{app}\restart.flag');
+end;
+
 function RestartRequested(): Boolean;
 var
   i: Integer;
 begin
-  Result := False;
+  Result := FileExists(RestartFlag());
   for i := 1 to ParamCount do
     if CompareText(ParamStr(i), '/RESTARTKONSPEKT') = 0 then
     begin
       Result := True;
       Exit;
     end;
+end;
+
+// Просьба одноразовая: стираем, когда [Run] уже отработал. Иначе через
+// месяц обычная тихая установка ни с того ни с сего подняла бы окно.
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssDone then
+    DeleteFile(RestartFlag());
 end;
 
 // Перед подменой файлов закрываем все запущенные копии: иначе файлы
