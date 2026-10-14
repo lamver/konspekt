@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import logging
+import sys
 import threading
 from dataclasses import dataclass
 from typing import Any
@@ -120,8 +121,22 @@ def list_microphones() -> list[Device]:
         return []
 
 
+# Системный звук снимается loopback-устройством, и на macOS его нет: в
+# самом soundcard написано «macOS does not support loopback recording».
+# Нужен драйвер вроде BlackHole или ScreenCaptureKit, это отдельная работа
+# (ROADMAP, «Порт на macOS»). Пока на Mac пишется только микрофон.
+LOOPBACK_AVAILABLE = sys.platform != "darwin"
+
+# CoreAudio принимает блок не больше 512 отсчётов (soundcard проверяет
+# «blocksize must be between 15 and 512»); WASAPI 1600 переваривает.
+# Сколько отсчётов читать за раз, это не меняет: record() склеит блоки.
+RECORDER_BLOCK = 512 if sys.platform == "darwin" else 1600
+
+
 def list_speakers() -> list[Device]:
     """Устройства вывода: с них снимаем звук собеседника через loopback."""
+    if not LOOPBACK_AVAILABLE:
+        return []
     try:
         sc = _sc()
         try:
@@ -162,6 +177,8 @@ def open_loopback(device_id: str | None):
     В `soundcard` системный звук снимается «микрофоном», созданным по id
     динамика с include_loopback=True.
     """
+    if not LOOPBACK_AVAILABLE:
+        raise RuntimeError("на macOS системный звук пока не записывается")
     sc = _sc()
     if device_id:
         try:

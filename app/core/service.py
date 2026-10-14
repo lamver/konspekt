@@ -1923,7 +1923,9 @@ class AppService:
         всё внутри try.
         """
         try:
-            if self.settings.внимание.сторож:
+            from ..audio import devices as _devices
+
+            if self.settings.внимание.сторож and _devices.LOOPBACK_AVAILABLE:
                 self.сторож.запустить()
         except Exception:
             log.exception("Не удалось поднять сторожа системного звука")

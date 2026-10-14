@@ -327,7 +327,7 @@ class _Track:
             # и оставаться поднятым до конца записи.
             devices.hold_com()
             device = self._opener()
-            recorder = device.recorder(samplerate=SAMPLE_RATE, channels=1, blocksize=BLOCK_FRAMES)
+            recorder = device.recorder(samplerate=SAMPLE_RATE, channels=1, blocksize=devices.RECORDER_BLOCK)
             recorder.__enter__()
             # В режиме прослушивания файла не заводим вовсе: пустой WAV
             # выглядел бы как записанная встреча, которой не было.
@@ -460,7 +460,11 @@ class WasapiCapture:
                 on_chunk=self.on_chunk,
                 сосед_живой=lambda: self._дорожка_слышит(devices.TRACK_THEM),
             )
-        if self.capture_system:
+        if not devices.LOOPBACK_AVAILABLE:
+            # Системного звука на этой системе нет: ни писать, ни слушать.
+            # Иначе человек видел бы «no device with id» вместо записи.
+            log.info("Системный звук на этой системе недоступен, пишем только микрофон")
+        elif self.capture_system:
             self._tracks[devices.TRACK_THEM] = _Track(
                 name=devices.TRACK_THEM,
                 opener=lambda: devices.open_loopback(self.loopback_device_id),

@@ -167,7 +167,7 @@ class Сторож:
         """Один заход с открытым устройством."""
         устройство = devices.open_loopback(self.loopback_device_id)
         with устройство.recorder(
-            samplerate=SAMPLE_RATE, channels=1, blocksize=BLOCK_FRAMES
+            samplerate=SAMPLE_RATE, channels=1, blocksize=devices.RECORDER_BLOCK
         ) as запись:
             self._ошибка = None
             log.debug("Сторож слушает «%s»", getattr(устройство, "name", "?"))
