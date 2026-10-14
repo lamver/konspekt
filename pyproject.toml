@@ -16,6 +16,12 @@ dependencies = [
     "onnxruntime<1.24; sys_platform == 'darwin' and platform_machine == 'x86_64'",
     # Зеркальная строка нужна: без неё uv берёт одну версию 1.23 на всех.
     "onnxruntime>=1.29,<1.30; sys_platform != 'darwin' or platform_machine != 'x86_64'",
+    # Та же история с cryptography (её тянет paramiko): с 49 колёс под
+    # Intel Mac нет, uv собирает её из исходников с Homebrew OpenSSL, а
+    # PyInstaller кладёт в образ старую libssl из Python, и импорт
+    # падает на недостающем символе. 48.0.1 — последняя с колёсами.
+    "cryptography<49; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    "cryptography>=50; sys_platform != 'darwin' or platform_machine != 'x86_64'",
     "av>=18.1.0",
     # Сверка языка по уже распознанному тексту (issue #2): акустический
     # определитель иногда уверенно ошибается на 3-4 секундах речи, и без
