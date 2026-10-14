@@ -404,7 +404,7 @@ wheels = [
 
 [[package]]
 name = "konspekt"
-version = "0.15.5"
+version = "0.16.0"
 source = { editable = "." }
 dependencies = [
     { name = "av" },
