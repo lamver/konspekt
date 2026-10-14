@@ -343,6 +343,8 @@
   },
   "update": {
     "new_version": "Salió la versión {version}",
+    "mac_hint": "Descarga la imagen desde la página de la versión e instálala encima.",
+    "open_release": "Abrir página de la versión",
     "silent_hint": "La descargaremos e instalaremos por ti.",
     "manual_hint": "Las actualizaciones automáticas están desactivadas: descarga la nueva versión tú mismo.",
     "downloading": "Descargando la versión {version}",

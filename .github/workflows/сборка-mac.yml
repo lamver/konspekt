@@ -1,24 +1,33 @@
 # Сборка Konspekt под macOS: Konspekt.app в образе .dmg.
 #
-# Только по кнопке. Подписи и нотариата Apple пока нет, поэтому образ
-# не выкладывается на страницу релизов, а лежит в артефактах запуска:
-# скачать, проверить на живом Mac, решить, что дальше. Gatekeeper без
-# нотариата приложение не пустит; снять карантин после копирования:
+# Зовётся из build.yml на тег v* после сборки Windows и тогда выкладывает
+# образы в тот же релиз lamver/konspekt-releases. Кнопка «Run workflow»
+# собирает без выпуска: образы в артефактах запуска, для проверки.
+#
+# Подписи и нотариата Apple пока нет (ROADMAP, «Порт на macOS»): образ
+# подписан ad-hoc, Gatekeeper его не пустит, пока человек не снимет
+# карантин:
 #   xattr -dr com.apple.quarantine /Applications/Konspekt.app
+# Строка про это идёт в описание релиза, как у FileHunter.
 #
 # Две сборки: Apple Silicon (arm64) и Intel (x64). PyInstaller не
 # собирает универсальный .app с одной машины, зато у GitHub есть оба
-# вида раннеров. Intel живёт на onnxruntime 1.23.2: с 1.24 колёс под
-# x86_64 macOS нет (pyproject.toml).
+# вида раннеров. Intel живёт на onnxruntime 1.23.2 и cryptography 48.0.1:
+# новее колёс под x86_64 macOS нет (pyproject.toml).
 
 name: Сборка macOS
 
 on:
   workflow_dispatch:
-  # Кнопка видит только workflow с ветки по умолчанию. Пока сборка
-  # живёт в ветке mac, её запускает push туда.
-  push:
-    branches: ['mac']
+  workflow_call:
+    inputs:
+      publish:
+        description: Выложить образы в релиз konspekt-releases
+        type: boolean
+        default: false
+    secrets:
+      RELEASES_TOKEN:
+        required: false
 
 concurrency:
   group: mac-${{ github.ref }}
@@ -79,7 +88,7 @@ jobs:
           size=$(stat -f %z "$dmg")
           echo "образ: $dmg, $((size / 1024 / 1024)) МБ"
           test "$size" -gt 50000000
-          cat dist/SHA256SUMS
+          cat dist/SHA256SUMS-mac-${{ matrix.arch }}
           # Самопроверка: сборка импортирует всё, что ей нужно, и выходит.
           dist/Konspekt.app/Contents/MacOS/Konspekt --самопроверка
 
@@ -89,5 +98,19 @@ jobs:
           name: konspekt-mac-${{ matrix.arch }}
           path: |
             dist/konspekt-*-mac-*.dmg
-            dist/SHA256SUMS
+            dist/SHA256SUMS-mac-*
           if-no-files-found: error
+
+      # В тот же релиз, что создала сборка Windows: она идёт первой
+      # (needs в build.yml), так что релиз уже есть и файлы только
+      # добавляются.
+      - name: Выложить образ в релиз
+        if: inputs.publish
+        uses: softprops/action-gh-release@v2
+        with:
+          repository: lamver/konspekt-releases
+          token: ${{ secrets.RELEASES_TOKEN }}
+          tag_name: ${{ github.ref_name }}
+          files: |
+            dist/konspekt-*-mac-*.dmg
+            dist/SHA256SUMS-mac-*

@@ -343,6 +343,8 @@
   },
   "update": {
     "new_version": "Version {version} is out",
+    "mac_hint": "Download the image from the release page and install it over the current one.",
+    "open_release": "Open release page",
     "silent_hint": "We'll download and install it for you.",
     "manual_hint": "Auto-updates are off: download the new version yourself.",
     "downloading": "Downloading version {version}",

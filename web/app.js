@@ -3247,11 +3247,13 @@ async function createMeeting(folderId) {
  * занятость Python распознаванием перетаскиванию не мешает. На других
  * платформах — запасной путь через мост, по смещению за раз.
  */
+const IS_MAC = /Mac/i.test(navigator.platform || navigator.userAgent);
+
 function setupDrag() {
   // На macOS окно тащит сам pywebview: элемент с этим классом он ведёт за
   // курсором из своего кода, по смещениям. Win32-захвата там нет, а
   // move_window(0, 0) через мост окно не сдвинет.
-  if (/Mac/i.test(navigator.platform || navigator.userAgent)) {
+  if (IS_MAC) {
     ui.titlebar.classList.add('pywebview-drag-region');
     return;
   }
@@ -3991,6 +3993,14 @@ async function checkUpdatesNow() {
 function showUpdateNote(payload) {
   if (!payload || !payload.latest || !ui.updateNote) return;
   ui.updateNoteText.textContent = t('update.new_version', { version: payload.latest });
+  // На macOS тихой установки нет: образ ставит человек, даём ссылку.
+  if (IS_MAC) {
+    ui.updateNoteNotes.textContent = t('update.mac_hint');
+    ui.updateNoteNotes.hidden = false;
+    ui.updateNoteOpen.hidden = false;
+    ui.updateNote.hidden = false;
+    return;
+  }
   // Если человек запретил ставить обновления самим, обещать «установится
   // сама» нельзя: он останется на старой версии и будет ждать напрасно.
   const silent = !ui.updateSilent || ui.updateSilent.checked;
@@ -4476,6 +4486,7 @@ function bindUi() {
     prefsTitle: el('prefs-title'),
     updateAuto: el('update-auto'),
     updateSilent: el('update-silent'),
+    updateNoteOpen: el('update-note-open'),
     updateCheck: el('update-check'),
     updateResult: el('update-result'),
     updateNote: el('update-note'),
@@ -4639,6 +4650,7 @@ function bindUi() {
   ui.updateNoteHide.addEventListener('click', () => {
     ui.updateNote.hidden = true;
   });
+  ui.updateNoteOpen.addEventListener('click', () => api.open_release_page());
   el('cleanup-run').addEventListener('click', runCleanup);
   ui.updateAuto.addEventListener('change', async () => {
     await api.set_check_updates(ui.updateAuto.checked);

@@ -594,6 +594,14 @@ class Api:
         """Открыть страницу покупки в браузере."""
         return self._service.open_buy_page()
 
+    def open_release_page(self) -> bool:
+        """Страница последнего выпуска в браузере: для систем без тихой установки."""
+        import webbrowser
+
+        from ..core.updater import REPO
+
+        return webbrowser.open(f"https://github.com/{REPO}/releases/latest")
+
     def app_version(self) -> str:
         """Версия сборки.
 

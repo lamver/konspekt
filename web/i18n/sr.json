@@ -343,6 +343,8 @@
   },
   "update": {
     "new_version": "Izašla je verzija {version}",
+    "mac_hint": "Preuzmite sliku sa stranice izdanja i instalirajte preko postojeće.",
+    "open_release": "Otvori stranicu izdanja",
     "silent_hint": "Preuzećemo i instalirati sami.",
     "manual_hint": "Preuzimanje ažuriranja je isključeno: preuzmite novu verziju sami.",
     "downloading": "Preuzimamo verziju {version}",

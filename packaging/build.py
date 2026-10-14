@@ -228,11 +228,13 @@ def build_mac(no_image: bool) -> int:
          "-ov", "-format", "UDZO", str(image)])
     shutil.rmtree(stage, ignore_errors=True)
     print(f"образ: {image} ({image.stat().st_size / 1024 / 1024:.0f} МБ)")
-    write_checksums(image)
+    # Своё имя: в релизе рядом лежит SHA256SUMS установщика Windows, и
+    # по нему обновлятор ищет сумму exe. Затирать его нельзя.
+    write_checksums(image, f"SHA256SUMS-mac-{arch}")
     return 0
 
 
-def write_checksums(setup: Path) -> Path:
+def write_checksums(setup: Path, имя: str = "SHA256SUMS") -> Path:
     """Посчитать SHA256 установщика и положить рядом `SHA256SUMS`.
 
     Konspekt пишет микрофон и слушает системный звук: со стороны это
@@ -247,7 +249,7 @@ def write_checksums(setup: Path) -> Path:
         for block in iter(lambda: f.read(1024 * 1024), b""):
             digest.update(block)
 
-    sums = DIST / "SHA256SUMS"
+    sums = DIST / имя
     # Формат как у sha256sum: хеш, пробел, звёздочка (двоичный режим), имя.
     sums.write_text(f"{digest.hexdigest()} *{setup.name}\n", encoding="utf-8")
     print(f"контрольная сумма: {digest.hexdigest()}")
