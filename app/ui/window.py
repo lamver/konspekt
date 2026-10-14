@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import logging
+import sys
 import threading
 from typing import Any
 
@@ -123,6 +124,8 @@ class MainWindow:
         self._геометрия_таймер: threading.Timer | None = None
 
     def create(self) -> webview.Window:
+        if sys.platform == "darwin":
+            self._перехватить_выход_mac()
         geom = self.service.settings.window
         index = str(paths.web_dir() / "index.html")
         x, y = self._исправить_положение(geom)
@@ -321,6 +324,28 @@ class MainWindow:
             log.debug("Окно уже уничтожено", exc_info=True)
 
     # --- обработчики окна -------------------------------------------------
+
+    def _перехватить_выход_mac(self) -> None:
+        """«Завершить» в доке и Cmd+Q на macOS.
+
+        pywebview на этот вопрос системы спрашивает окно, можно ли его
+        закрыть, а наш ответ там «нет, спрячь в трей»: так работает
+        крестик. В итоге программа из дока не закрывалась вовсе. Здесь
+        завершение превращается в обычный выход через шину: запись
+        останавливается, место окна запоминается, процесс выходит сам.
+        Системе отвечаем «пока нет», чтобы она не убила процесс до того.
+        """
+        try:
+            import Foundation
+            from webview.platforms import cocoa
+
+            def applicationShouldTerminate_(_делегат, _приложение):
+                bus.emit(APP_QUIT, {})
+                return Foundation.NO
+
+            cocoa.BrowserView.AppDelegate.applicationShouldTerminate_ = applicationShouldTerminate_
+        except Exception:
+            log.exception("Не удалось перехватить выход из дока")
 
     def _on_closing(self) -> bool:
         """Крестик прячет окно в трей вместо выхода из приложения."""
