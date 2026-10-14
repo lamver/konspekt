@@ -174,8 +174,28 @@ def _сверить_окно(service: AppService) -> None:
     threading.Thread(target=сверить, name="web-integrity", daemon=True).start()
 
 
+def _доверять_сертификатам() -> None:
+    """Корневые сертификаты для https на macOS.
+
+    Python с python.org не читает связку ключей системы, и у его ssl нет
+    ни одного корневого сертификата: любая загрузка модели или проверка
+    версии падает с CERTIFICATE_VERIFY_FAILED. Берём набор из certifi,
+    он уже едет в сборке ради httpx. На Windows ssl берёт сертификаты
+    из системы, там ничего не трогаем.
+    """
+    if sys.platform != "darwin" or os.environ.get("SSL_CERT_FILE"):
+        return
+    try:
+        import certifi
+
+        os.environ["SSL_CERT_FILE"] = certifi.where()
+    except Exception:
+        log.debug("certifi не найден, https останется на сертификатах системы", exc_info=True)
+
+
 def main() -> int:
     _setup_logging()
+    _доверять_сертификатам()
     # Секреты в адресах запросов (токен бота, ключ вебхука Битрикс24) не
     # должны попасть в журнал, который прикладывают к жалобам.
     from .core import секрет
