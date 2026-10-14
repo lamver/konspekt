@@ -3248,6 +3248,13 @@ async function createMeeting(folderId) {
  * платформах — запасной путь через мост, по смещению за раз.
  */
 function setupDrag() {
+  // На macOS окно тащит сам pywebview: элемент с этим классом он ведёт за
+  // курсором из своего кода, по смещениям. Win32-захвата там нет, а
+  // move_window(0, 0) через мост окно не сдвинет.
+  if (/Mac/i.test(navigator.platform || navigator.userAgent)) {
+    ui.titlebar.classList.add('pywebview-drag-region');
+    return;
+  }
   ui.titlebar.addEventListener('mousedown', (e) => {
     if (e.button !== 0 || e.target.closest('.no-drag')) return;
     e.preventDefault();
