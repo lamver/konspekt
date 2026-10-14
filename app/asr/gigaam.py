@@ -68,6 +68,24 @@ MODEL_FILES = (
 MODEL_TOTAL_BYTES = 226_421_849
 
 
+
+def _подстраховать_длины(модель) -> None:
+    """Intel Mac: энкодер int8 на onnxruntime 1.23 отдаёт длину выхода
+    больше самого выхода, и декодер onnx_asr падает на проверке
+    (AssertionError в _decoding). У onnx_asr есть обход для таких сборок
+    (флаг use_low_precision, задуман для TensorRT): длина обрезается по
+    выходу. На Windows и Apple Silicon длины сходятся, там не трогаем.
+    """
+    import platform
+    import sys
+
+    if sys.platform != "darwin" or platform.machine() != "x86_64":
+        return
+    asr = getattr(модель, "asr", None)
+    if asr is not None and hasattr(asr, "use_low_precision"):
+        asr.use_low_precision = True
+        log.info("Intel Mac: длины энкодера подрезаем по выходу")
+
 class ModelMissing(RuntimeError):
     """Весов нет на диске. Не ошибка, а повод предложить скачивание."""
 
@@ -129,6 +147,7 @@ class GigaamTranscriber:
                 # размер верный. Понять, что дело в них, можно только
                 # здесь, в момент загрузки.
                 raise ModelBroken(f"Файлы модели повреждены: {exc}") from exc
+            _подстраховать_длины(self._model)
             log.info("Модель загружена")
 
     def discard(self) -> None:
