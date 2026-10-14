@@ -14,6 +14,10 @@ name: Сборка macOS
 
 on:
   workflow_dispatch:
+  # Кнопка видит только workflow с ветки по умолчанию. Пока сборка
+  # живёт в ветке mac, её запускает push туда.
+  push:
+    branches: ['mac']
 
 concurrency:
   group: mac-${{ github.ref }}
