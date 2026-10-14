@@ -25,6 +25,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
+import sys
 import platform
 import re
 import subprocess
@@ -121,6 +122,12 @@ class Updater:
         """Начать загрузку в фоне. Повторные вызовы не плодят потоков."""
         if not VERSION_RE.match(version or ""):
             log.warning("Странный номер версии, обновление пропущено: %r", version)
+            return
+        if sys.platform != "win32":
+            # Тихая установка пока только на Windows: там установщик
+            # умеет встать поверх. На macOS человек видит, что есть новая
+            # версия, и ставит её сам, образом с страницы релиза.
+            log.info("Обновление %s: на этой системе ставим руками", version)
             return
         with self._lock:
             if self.ready and self.ready.version == version:

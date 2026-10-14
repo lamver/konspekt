@@ -1,4 +1,4 @@
-"""Сделать .ico для exe, ярлыка и установщика.
+"""Сделать .ico для exe, ярлыка и установщика и .icns для сборки под macOS.
 
 Иконку рисует то же самое, что рисует значок в трее: два источника
 неизбежно разъезжаются, и в какой-то момент в трее одно, а на ярлыке
@@ -19,6 +19,9 @@ sys.path.insert(0, str(ROOT))
 from app.tray.icon import _make_icon  # noqa: E402
 
 OUT = ROOT / "packaging" / "konspekt.ico"
+# Тот же рисунок для macOS: Pillow пишет .icns на любой системе, а
+# PyInstaller под Mac требует именно его.
+OUT_MAC = ROOT / "packaging" / "konspekt.icns"
 # Windows берёт разный размер в разных местах: 16 в заголовке окна,
 # 32 на рабочем столе, 256 в крупных значках проводника.
 SIZES = [16, 24, 32, 48, 64, 128, 256]
@@ -32,6 +35,10 @@ def main() -> int:
     base = _make_icon(False, size=256)
     base.save(OUT, format="ICO", sizes=[(s, s) for s in SIZES])
     print(f"готово: {OUT.relative_to(ROOT)}, {OUT.stat().st_size} байт")
+    # В .icns размер 256 берётся из самой картинки, остальные macOS
+    # уменьшит сам: для значка в доке и Finder этого хватает.
+    base.save(OUT_MAC, format="ICNS")
+    print(f"готово: {OUT_MAC.relative_to(ROOT)}, {OUT_MAC.stat().st_size} байт")
     return 0
 
 

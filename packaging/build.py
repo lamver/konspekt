@@ -3,6 +3,9 @@
     python packaging/build.py            # папка и установщик
     python packaging/build.py --no-setup # только папка, быстрее
 
+На macOS тот же скрипт собирает Konspekt.app и кладёт его в образ .dmg.
+Подписи Apple пока нет: образ для своих, с проверкой на живой машине.
+
 Отдельный скрипт, а не строчка в документации: команд четыре, каждая со
 своими флагами, и вручную их рано или поздно запустят по-разному. Версия
 берётся из app/__init__.py, чтобы она не разъезжалась между программой,
@@ -15,6 +18,7 @@ import argparse
 import datetime as dt
 import hashlib
 import os
+import platform
 import shutil
 import subprocess
 import sys
@@ -27,6 +31,7 @@ from app import __version__  # noqa: E402
 from app.core.целостность import опись  # noqa: E402
 
 DIST = ROOT / "dist"
+MACOS = sys.platform == "darwin"
 SPEC = ROOT / "packaging" / "konspekt.spec"
 ISS = ROOT / "packaging" / "konspekt.iss"
 ENGINE_SRC = ROOT / "models" / "llm" / "engine"
@@ -92,13 +97,21 @@ def copy_engine(app_dir: Path) -> None:
     if not ENGINE_SRC.is_dir():
         print("движок llama.cpp не найден, заметки потребуют докачки")
         return
-    dest = app_dir / "_internal" / "engine"
+    # В .app ресурсы лежат в Contents/Frameworks: это sys._MEIPASS у
+    # PyInstaller 6, и там же программа ищет папку engine.
+    dest = (app_dir / "Contents" / "Frameworks" if MACOS else app_dir / "_internal") / "engine"
     dest.mkdir(parents=True, exist_ok=True)
     for item in ENGINE_SRC.iterdir():
-        # Варианты ggml-cpu-* нужны все: llama.cpp выбирает подходящий по
-        # набору инструкций процессора уже во время запуска.
-        if item.name in ENGINE_KEEP or item.name.startswith("ggml-cpu-"):
-            shutil.copy2(item, dest / item.name)
+        if MACOS:
+            # Сборка llama.cpp под Mac: один сервер и библиотеки .dylib
+            # (ggml с Metal, BLAS и процессором). Остальные утилиты лишние.
+            нужен = item.name in ("llama-server", "LICENSE") or item.suffix == ".dylib"
+        else:
+            # Варианты ggml-cpu-* нужны все: llama.cpp выбирает подходящий по
+            # набору инструкций процессора уже во время запуска.
+            нужен = item.name in ENGINE_KEEP or item.name.startswith("ggml-cpu-")
+        if нужен:
+            shutil.copy2(item, dest / item.name, follow_symlinks=True)
     size = sum(f.stat().st_size for f in dest.iterdir()) / 1024 / 1024
     print(f"движок: {size:.0f} МБ")
 
@@ -143,6 +156,9 @@ def main() -> int:
     run([sys.executable, "-m", "PyInstaller", str(SPEC), "--noconfirm",
          "--distpath", str(DIST), "--workpath", str(ROOT / "build")])
 
+    if MACOS:
+        return build_mac(args.no_setup)
+
     app_dir = DIST / "Konspekt"
     exe = app_dir / "Konspekt.exe"
     if not exe.exists():
@@ -171,6 +187,48 @@ def main() -> int:
     if setup.exists():
         print(f"установщик: {setup} ({setup.stat().st_size / 1024 / 1024:.0f} МБ)")
         write_checksums(setup)
+    return 0
+
+
+def build_mac(no_image: bool) -> int:
+    """Konspekt.app и образ konspekt-X.Y.Z-mac-<arch>.dmg.
+
+    Подписи разработчика Apple нет, поэтому после копирования движка
+    приложение подписывается заново «ad-hoc»: PyInstaller подписал его
+    сам, а добавленные потом файлы ломают печать, и macOS считает
+    приложение повреждённым. Без нотариата Gatekeeper всё равно спросит;
+    снять карантин: xattr -dr com.apple.quarantine /Applications/Konspekt.app
+    """
+    app = DIST / "Konspekt.app"
+    exe = app / "Contents" / "MacOS" / "Konspekt"
+    if not exe.exists():
+        raise SystemExit("PyInstaller отработал, но Konspekt.app нет")
+
+    copy_engine(app)
+    for f in (app / "Contents" / "Frameworks" / "engine").glob("*"):
+        if f.suffix != ".dylib" and f.name != "LICENSE":
+            f.chmod(0o755)
+    run(["codesign", "--force", "--deep", "--sign", "-", str(app)])
+    print(f"приложение: {app} ({folder_size_mb(app):.0f} МБ)")
+
+    if no_image:
+        return 0
+
+    arch = "arm64" if platform.machine() == "arm64" else "x64"
+    image = DIST / f"konspekt-{__version__}-mac-{arch}.dmg"
+    image.unlink(missing_ok=True)
+    # Образ собирается из отдельной папки: в ней приложение и ссылка на
+    # /Applications, чтобы перетащить одним движением.
+    stage = DIST / "dmg"
+    shutil.rmtree(stage, ignore_errors=True)
+    stage.mkdir()
+    shutil.copytree(app, stage / app.name, symlinks=True)
+    (stage / "Applications").symlink_to("/Applications")
+    run(["hdiutil", "create", "-volname", "Konspekt", "-srcfolder", str(stage),
+         "-ov", "-format", "UDZO", str(image)])
+    shutil.rmtree(stage, ignore_errors=True)
+    print(f"образ: {image} ({image.stat().st_size / 1024 / 1024:.0f} МБ)")
+    write_checksums(image)
     return 0
 
 

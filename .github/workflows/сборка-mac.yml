@@ -1,0 +1,88 @@
+# Сборка Konspekt под macOS: Konspekt.app в образе .dmg.
+#
+# Только по кнопке. Подписи и нотариата Apple пока нет, поэтому образ
+# не выкладывается на страницу релизов, а лежит в артефактах запуска:
+# скачать, проверить на живом Mac, решить, что дальше. Gatekeeper без
+# нотариата приложение не пустит; снять карантин после копирования:
+#   xattr -dr com.apple.quarantine /Applications/Konspekt.app
+#
+# Две сборки: Apple Silicon (arm64) и Intel (x64). PyInstaller не
+# собирает универсальный .app из одной машины, зато у GitHub есть оба
+# вида раннеров.
+
+name: Сборка macOS
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: mac-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Сборка llama.cpp с его страницы релизов. Движок едет внутри .app,
+  # как и на Windows, чтобы заметки работали без докачки.
+  LLAMA_TAG: b11617
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            arch: arm64
+          - os: macos-15-intel
+            arch: x64
+    name: macOS ${{ matrix.arch }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Настроить Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Установить uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: latest
+          enable-cache: true
+
+      - name: Установить зависимости
+        run: uv sync --frozen --no-editable
+
+      - name: Скачать движок llama.cpp
+        run: |
+          set -e
+          name="llama-${LLAMA_TAG}-bin-macos-${{ matrix.arch }}.tar.gz"
+          curl -fsSL -o engine.tgz "https://github.com/ggml-org/llama.cpp/releases/download/${LLAMA_TAG}/${name}"
+          mkdir -p models/llm/engine
+          tar xzf engine.tgz --strip-components=1 -C models/llm/engine
+          ls models/llm/engine | head -50
+
+      - name: Собрать приложение и образ
+        env:
+          PYTHONIOENCODING: utf-8
+        run: uv run python packaging/build.py
+
+      - name: Проверить сборку
+        run: |
+          set -e
+          dmg=$(ls dist/konspekt-*-mac-${{ matrix.arch }}.dmg)
+          size=$(stat -f %z "$dmg")
+          echo "образ: $dmg, $((size / 1024 / 1024)) МБ"
+          test "$size" -gt 50000000
+          cat dist/SHA256SUMS
+          # Самопроверка: сборка импортирует всё, что ей нужно, и выходит.
+          dist/Konspekt.app/Contents/MacOS/Konspekt --самопроверка
+
+      - name: Образ в артефакты
+        uses: actions/upload-artifact@v4
+        with:
+          name: konspekt-mac-${{ matrix.arch }}
+          path: |
+            dist/konspekt-*-mac-*.dmg
+            dist/SHA256SUMS
+          if-no-files-found: error
