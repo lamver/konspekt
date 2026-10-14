@@ -6,9 +6,10 @@
 # нотариата приложение не пустит; снять карантин после копирования:
 #   xattr -dr com.apple.quarantine /Applications/Konspekt.app
 #
-# Только Apple Silicon. Под Intel Mac у onnxruntime 1.29 нет колёс
-# вовсе (есть macosx_14_0_arm64, win и linux), и без него нет
-# распознавания; Intel для Apple уходящая платформа.
+# Две сборки: Apple Silicon (arm64) и Intel (x64). PyInstaller не
+# собирает универсальный .app с одной машины, зато у GitHub есть оба
+# вида раннеров. Intel живёт на onnxruntime 1.23.2: с 1.24 колёс под
+# x86_64 macOS нет (pyproject.toml).
 
 name: Сборка macOS
 
@@ -31,10 +32,13 @@ env:
 jobs:
   build:
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: macos-latest
             arch: arm64
+          - os: macos-15-intel
+            arch: x64
     name: macOS ${{ matrix.arch }}
     runs-on: ${{ matrix.os }}
     steps:
