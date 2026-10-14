@@ -8,6 +8,7 @@ pystray требует собственный цикл событий, а pywebv
 from __future__ import annotations
 
 import logging
+import sys
 import threading
 
 import pystray
@@ -193,6 +194,16 @@ class TrayIcon:
             log.debug("Не удалось обновить иконку трея", exc_info=True)
 
     def start(self) -> None:
+        if sys.platform == "darwin":
+            # На macOS у pystray нет своего цикла: его run() запускает
+            # общий цикл NSApplication, который уже крутит окно pywebview,
+            # да ещё из чужого потока, и окно от этого закрывается на
+            # первой же секунде. run_detached вешает значок на работающий
+            # цикл; делаем это в главном потоке, как требует AppKit.
+            from PyObjCTools import AppHelper
+
+            AppHelper.callAfter(self._icon.run_detached)
+            return
         self._thread = threading.Thread(target=self._icon.run, daemon=True)
         self._thread.start()
 
