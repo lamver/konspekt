@@ -57,6 +57,7 @@ class _Track:
         on_chunk: ChunkCallback | None,
         только_слушать: bool = False,
         сосед_живой: Callable[[], bool] | None = None,
+        спрашивать: Callable[[], bool] | None = None,
     ) -> None:
         self.name = name
         self._opener = opener
@@ -73,6 +74,10 @@ class _Track:
         # человека тишиной на одной дорожке, когда встреча спокойно
         # пишется со второй: слушать встречу молча — обычное дело.
         self._сосед_живой = сосед_живой
+        # Спрашивать ли про чужую речь в системном звуке. Подсказки по
+        # ходу разговора включают только ради собеседника в системном
+        # звуке, и вопрос «это ролик?» там лишний (проба 20.10).
+        self._спрашивать = спрашивать
         self._chunks = ChunkBuffer(chunk_seconds=chunk_seconds)
         self._writer: WavWriter | None = None
         self._thread: threading.Thread | None = None
@@ -302,6 +307,9 @@ class _Track:
 
         if not пора:
             return
+        if self._спрашивать is not None and not self._спрашивать():
+            log.info("В системном звуке слышен разговор, но человек ждёт собеседника: не спрашиваем")
+            return
         log.info(
             "В системном звуке слышен разговор (доля %.2f, переключений %.1f, "
             "тембр %.2f): спрашиваем человека",
@@ -393,6 +401,9 @@ class WasapiCapture:
     ) -> None:
         self.mic_device_id = mic_device_id
         self.loopback_device_id = loopback_device_id
+        # Задача №28: один раз за запись спросить, не ролик ли в системном
+        # звуке. Сервис выключает это, когда человек ждёт собеседника.
+        self.спрашивать_о_чужой_речи = True
         self.capture_mic = capture_mic
         self.capture_system = capture_system
         self.chunk_seconds = chunk_seconds
@@ -468,6 +479,7 @@ class WasapiCapture:
             self._tracks[devices.TRACK_THEM] = _Track(
                 name=devices.TRACK_THEM,
                 opener=lambda: devices.open_loopback(self.loopback_device_id),
+                спрашивать=lambda: self.спрашивать_о_чужой_речи,
                 wav_path=base / f"{stamp}-them.wav",
                 chunk_seconds=self.chunk_seconds,
                 on_chunk=self.on_chunk,
@@ -483,6 +495,7 @@ class WasapiCapture:
             self._tracks[devices.TRACK_THEM] = _Track(
                 name=devices.TRACK_THEM,
                 opener=lambda: devices.open_loopback(self.loopback_device_id),
+                спрашивать=lambda: self.спрашивать_о_чужой_речи,
                 wav_path=base / f"{stamp}-them.wav",
                 chunk_seconds=self.chunk_seconds,
                 on_chunk=None,
@@ -598,6 +611,7 @@ class WasapiCapture:
         новая = _Track(
             name=devices.TRACK_THEM,
             opener=lambda: devices.open_loopback(self.loopback_device_id),
+            спрашивать=lambda: self.спрашивать_о_чужой_речи,
             wav_path=base / f"{stamp}-them.wav",
             chunk_seconds=self.chunk_seconds,
             on_chunk=self.on_chunk,
@@ -669,6 +683,7 @@ class WasapiCapture:
         слушающая = _Track(
             name=devices.TRACK_THEM,
             opener=lambda: devices.open_loopback(self.loopback_device_id),
+            спрашивать=lambda: self.спрашивать_о_чужой_речи,
             wav_path=база / f"{stamp}-them.wav",
             chunk_seconds=self.chunk_seconds,
             on_chunk=None,
