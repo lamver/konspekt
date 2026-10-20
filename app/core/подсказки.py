@@ -90,8 +90,11 @@ class Подсказчик:
             self._meeting_id = meeting_id
             self._слов_на_подсказке = self._слов(meeting_id)
             self._последняя = ""
-            включены = self._включены
-        if включены:
+            # Греем и когда галочка снята, но разговор описан: человек
+            # собирается жать «Подсказать сейчас», и первая подсказка не
+            # должна идти 13 секунд (проба 20.10).
+            греть = self._включены or bool(self._контекст)
+        if греть:
             threading.Thread(target=self._прогреть, name="hint-warmup", daemon=True).start()
 
     def _прогреть(self) -> None:
@@ -168,27 +171,41 @@ class Подсказчик:
             будильник.cancel()
             self._будильник = None
 
-    def _слов(self, meeting_id: str) -> int:
-        try:
-            return sum(len((s.text or "").split()) for s in self._service.store.list_segments(meeting_id))
-        except Exception:
-            log.exception("Подсказки: не прочитать расшифровку")
-            return 0
+    def _реплики(self, meeting_id: str) -> list[tuple[str, str]]:
+        """Реплики, по которым есть смысл подсказывать: (кто, текст).
 
-    def _хвост(self, meeting_id: str) -> str:
-        """Последние реплики, как их видит человек: кто и что сказал."""
+        Мусор отсеиваем здесь, а не надеемся на модель: на пробе 20.10
+        распознавание на секунду решило, что человек говорит по-сербски,
+        отдало «*dje*», и модель всерьёз объясняла, что это за слово.
+        Реплики под сомнением (человек сказал, что это был чужой ролик),
+        обрывки короче трёх слов на чужом языке и строки без букв не идут.
+        """
         try:
             сегменты = self._service.store.list_segments(meeting_id)
         except Exception:
             log.exception("Подсказки: не прочитать расшифровку")
-            return ""
-        строки: list[str] = []
+            return []
+        основной = getattr(getattr(self._service.settings, "asr", None), "language", "") or ""
+        итог: list[tuple[str, str]] = []
         for s in сегменты:
-            текст = (s.text or "").strip()
-            if not текст:
+            if getattr(s, "doubtful", False):
+                continue
+            текст = (s.text or "").replace("*", "").strip()
+            слова = текст.split()
+            if sum(ch.isalpha() for ch in текст) < 3:
+                continue
+            if основной and s.lang and s.lang != основной and len(слова) < 3:
                 continue
             кто = s.voice_label or ("Я" if s.speaker == Speaker.ME else "Собеседник")
-            строки.append(f"{кто}: {текст}")
+            итог.append((кто, текст))
+        return итог
+
+    def _слов(self, meeting_id: str) -> int:
+        return sum(len(текст.split()) for _, текст in self._реплики(meeting_id))
+
+    def _хвост(self, meeting_id: str) -> str:
+        """Последние реплики, как их видит человек: кто и что сказал."""
+        строки = [f"{кто}: {текст}" for кто, текст in self._реплики(meeting_id)]
         текст = "\n".join(строки)
         if len(текст) > ХВОСТ_ЗНАКОВ:
             # Режем по началу строки, чтобы не начинать с полслова.

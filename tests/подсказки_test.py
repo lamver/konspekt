@@ -151,6 +151,15 @@ try:
     time.sleep(0.6)
     проверить(len(service.llm.клиент.запросы) == было, "на «угу» подсказки нет: слишком мало нового")
 
+    # --- 2б2. Мусор распознавания не считается и не уходит модели ----------
+    было = len(service.llm.клиент.запросы)
+    service._on_segment(TranscriptSegment(meeting_id=mid, speaker=Speaker.ME, text="*dje*", lang="sr", start=12, end=13))
+    service._on_segment(TranscriptSegment(meeting_id=mid, speaker=Speaker.ME, text="*dje se je značila*", lang="sr", start=13, end=14))
+    service._on_segment(TranscriptSegment(meeting_id=mid, speaker=Speaker.ME, text="...", lang="ru", start=14, end=15))
+    time.sleep(0.6)
+    проверить(len(service.llm.клиент.запросы) == было, "обрывки на чужом языке и строки без букв подсказку не зовут")
+    проверить("dje" not in service.подсказчик._хвост(mid), "мусор не попадает в реплики для модели")
+
     # --- 2в. Прошлая подсказка уходит в запрос, чтобы не повторяться --------
     реплика(service, mid, "А теперь расскажите про опыт с базами данных, какие использовали и почему выбрали именно их", начало=20)
     пришла = ждать_подсказку()
