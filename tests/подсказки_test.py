@@ -223,6 +223,32 @@ try:
     service.forget_chat(mid, история[0]["archived_at"])
     проверить(len(service.chat_history(mid)) == 1, "стереть можно одну группу, остальные целы")
 
+    # --- 5б. Сервер модели гасится в простое, но не во время подсказок ------
+    import app.core.service as service_mod
+    гашений = []
+    class Сервер(Модель):
+        server_running = True
+        def shutdown(self):
+            гашений.append(1)
+    service.llm = Сервер()
+    service_mod.LLM_IDLE = 0.5
+    service._llm_last_use = time.time() - 1
+    service.сохранить_подсказки(включены=True)
+    service.подсказчик.начать(mid)
+    class Захват:
+        is_recording = True
+    захват_был = service.capture
+    service.capture = Захват()
+    проверить(not service._llm_idle_check(), "во время записи с подсказками сервер не гасим")
+    service.подсказчик.остановить()
+    Захват.is_recording = False
+    service._llm_last_use = time.time() - 1
+    проверить(service._llm_idle_check() and гашений == [1], "без записи простой гасит сервер и отдаёт видеокарту")
+    service._llm_last_use = time.time()
+    проверить(not service._llm_idle_check(), "сразу после ответа сервер не трогаем")
+    service.capture = захват_был
+    service.сохранить_подсказки(включены=False)
+
     # --- 6. Сам запрос подсказки -------------------------------------------
     msgs = hint_messages("звонок клиенту", "Собеседник: сколько стоит доставка?", "")
     проверить(msgs[0]["role"] == "system" and "<о разговоре>" in msgs[1]["content"]

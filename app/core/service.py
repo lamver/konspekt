@@ -172,6 +172,11 @@ TRANSCRIPT_BUDGET = 24000
 # на себя?». С параметрами, которые советуют сами авторы Qwen3 для
 # режима без раздумий, она отвечает по существу. Только для своей
 # модели: чужой сервер незнакомые поля может и отвергнуть.
+# Сколько секунд модель может простоять без дела, прежде чем сервер
+# гасится и отдаёт память видеокарты. Десять минут: вопросы к встрече
+# идут сериями, а между сериями память нужна другим программам.
+LLM_IDLE = float(os.environ.get("KONSPEKT_LLM_IDLE", 600))
+
 CHAT_LOCAL_OPTIONS = {
     "temperature": 0.7,
     "top_p": 0.8,
@@ -285,6 +290,11 @@ class AppService:
         self._llm_lock = threading.RLock()
         self._llm_busy = False
         self._llm_cancel = False
+        # Когда модель в последний раз отвечала. По этому времени сторож
+        # ниже гасит сервер в простое: иначе 5 ГБ памяти видеокарты
+        # заняты, пока программа висит в трее (жалоба 20.10).
+        self._llm_last_use = time.time()
+        threading.Thread(target=self._llm_idle_watch, name="llm-idle", daemon=True).start()
         # Запись эталона голоса: живёт только пока человек читает фразы.
         self._enrollment: VoiceEnrollment | None = None
         self._enroll_capture: WasapiCapture | None = None
@@ -2647,7 +2657,7 @@ class AppService:
                                      "error": self._msg("python.summary.error")})
         finally:
             with self._llm_lock:
-                self._llm_busy = False
+                self._llm_free()
 
     # --- разборы по разрезам -------------------------------------------------
 
@@ -2802,7 +2812,7 @@ class AppService:
                                       "error": self._msg("python.summary.error")})
         finally:
             with self._llm_lock:
-                self._llm_busy = False
+                self._llm_free()
 
     def _summary_by_parts(self, meeting, transcript, client, meeting_id):
         """Разобрать длинную встречу по частям и вернуть запрос на сводку.
@@ -3015,7 +3025,7 @@ class AppService:
                                   "error": self._msg("python.chat.error")})
         finally:
             with self._llm_lock:
-                self._llm_busy = False
+                self._llm_free()
 
     # --- настройки -------------------------------------------------------
 
@@ -3090,6 +3100,36 @@ class AppService:
 
     def mask_personal(self, text: str) -> str:
         return personal.mask(text if isinstance(text, str) else "")
+
+    def _llm_free(self) -> None:
+        """Модель освободилась: снять занятость и запомнить время."""
+        self._llm_busy = False
+        self._llm_last_use = time.time()
+
+    def _llm_idle_check(self) -> bool:
+        """Погасить свой сервер, если модель давно не нужна.
+
+        Не трогаем, пока идёт запись с включёнными подсказками: там
+        модель нужна каждую минуту, а подъём заново стоит 15 секунд.
+        Возвращает True, если погасили.
+        """
+        if self.llm.backend != "local" or not self.llm.server_running:
+            return False
+        if self._llm_busy or time.time() - self._llm_last_use < LLM_IDLE:
+            return False
+        if self.capture.is_recording and self.подсказчик.включены:
+            return False
+        log.info("Модель простаивает %.0f мин, освобождаем память", LLM_IDLE / 60)
+        self.llm.shutdown()
+        return True
+
+    def _llm_idle_watch(self) -> None:
+        while True:
+            time.sleep(min(60.0, LLM_IDLE / 2))
+            try:
+                self._llm_idle_check()
+            except Exception:
+                log.debug("Сторож простоя модели споткнулся", exc_info=True)
 
     def опции_своей_модели(self) -> dict[str, Any]:
         """Параметры запроса для своей модели: чужой сервер их может не знать."""

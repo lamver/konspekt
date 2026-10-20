@@ -121,7 +121,7 @@ class Подсказчик:
                 )
             finally:
                 with service._llm_lock:
-                    service._llm_busy = False
+                    service._llm_free()
         except Exception:
             log.debug("Прогрев модели для подсказок не удался", exc_info=True)
 
@@ -272,10 +272,13 @@ class Подсказчик:
             service._ensure_llm_model()
             # Те же параметры, что у чата: без раздумий Qwen3 вслух, иначе
             # подсказка приходит через десять секунд тишины.
+            # Температура ниже, чем в чате: подсказка должна быть точной,
+            # а не разнообразной. С 0.7 модель на пробе 20.10 сочиняла.
+            опции = {**service.опции_своей_модели(), "temperature": 0.3}
             текст = service.llm.client().stream(
                 service._for_model(messages), on_chunk=on_chunk,
                 should_stop=lambda: service._llm_cancel,
-                max_tokens=220, **service.опции_своей_модели(),
+                max_tokens=220, **опции,
             ).strip()
             service.store.update_chat_message(message_id, текст)
             with self._lock:
@@ -295,7 +298,7 @@ class Подсказчик:
             self._убрать(meeting_id, message_id)
         finally:
             with service._llm_lock:
-                service._llm_busy = False
+                service._llm_free()
             with self._lock:
                 self._идёт = False
 

@@ -192,6 +192,12 @@ class LlmManager:
                 return
             self.downloader.run_blocking(on_progress)
 
+    @property
+    def server_running(self) -> bool:
+        """Поднят ли свой сервер: он держит модель в памяти видеокарты."""
+        with self._lock:
+            return self._server is not None
+
     def shutdown(self) -> None:
         with self._lock:
             if self._server is not None:
