@@ -67,6 +67,9 @@
     "import": "Выбрать файлы"
   },
   "meeting": {
+    "language_title": "Язык встречи",
+    "language_default": "{name} · по умолчанию",
+    "language_auto": "Определять по фразам",
     "title_placeholder": "Название встречи",
     "untitled": "Без названия",
     "recording_status": "Идёт запись",

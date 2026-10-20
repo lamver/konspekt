@@ -67,6 +67,9 @@
     "import": "Elegir archivos"
   },
   "meeting": {
+    "language_title": "Idioma de la reunión",
+    "language_default": "{name} · predeterminado",
+    "language_auto": "Detectar por frase",
     "title_placeholder": "Título de la reunión",
     "untitled": "Sin título",
     "recording_status": "Grabando",

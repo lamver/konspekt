@@ -2470,6 +2470,7 @@ async function selectMeeting(id, jumpTo = null) {
 
   ui.title.value = meeting.title || '';
   ui.notes.value = meeting.notes || '';
+  renderMeetingLanguage(meeting);
   renderMeta(meeting);
   renderTranscript(meeting.segments || []);
   renderSummary(meeting.summary || '');
@@ -3361,6 +3362,40 @@ async function createMeeting(folderId) {
  * платформах — запасной путь через мост, по смещению за раз.
  */
 const IS_MAC = /Mac/i.test(navigator.platform || navigator.userAgent);
+
+/* --- Язык встречи -------------------------------------------------------- */
+
+const MEETING_LANGUAGES = ['ru', 'en', 'es', 'sr'];
+
+/**
+ * Чип языка в панели записи. Пустое значение — «как в настройках», и в
+ * подписи сказано, что это значит сейчас: «Русский · по умолчанию».
+ */
+function renderMeetingLanguage(meeting) {
+  const sel = ui.meetingLanguage;
+  if (!sel) return;
+  const дефолт = meeting.language_default || 'ru';
+  const имя = (code) => code === 'auto' ? t('meeting.language_auto') : (tЕслиЕсть('lang.' + code) || code);
+  const options = [
+    ['', t('meeting.language_default', { name: имя(дефолт) })],
+    ['auto', t('meeting.language_auto')],
+    ...MEETING_LANGUAGES.map((code) => [code, имя(code)]),
+  ];
+  sel.innerHTML = '';
+  for (const [value, label] of options) {
+    const opt = document.createElement('option');
+    opt.value = value;
+    opt.textContent = label;
+    sel.appendChild(opt);
+  }
+  sel.value = meeting.language || '';
+}
+
+async function changeMeetingLanguage() {
+  if (!state.currentId) return;
+  const updated = await api.update_meeting(state.currentId, { language: ui.meetingLanguage.value });
+  if (updated) state.current = updated;
+}
 
 function setupDrag() {
   // На macOS окно тащит сам pywebview: элемент с этим классом он ведёт за
@@ -4681,6 +4716,7 @@ function bindUi() {
     chatMic: el('chat-mic'),
     chatSend: el('chat-send'),
     chatClear: el('chat-clear'),
+    meetingLanguage: el('meeting-language'),
     chatHistoryBtn: el('chat-history-btn'),
     chatHistory: el('chat-history'),
     chatHints: el('chat-hints'),
@@ -4880,6 +4916,7 @@ function bindUi() {
   ui.chatSend.addEventListener('click', sendQuestion);
   if (ui.chatMic) ui.chatMic.addEventListener('click', toggleFieldDictation);
   ui.chatClear.addEventListener('click', clearChat);
+  ui.meetingLanguage.addEventListener('change', changeMeetingLanguage);
   ui.chatHistoryBtn.addEventListener('click', toggleChatHistory);
   ui.hintsEnabled.addEventListener('change', saveHints);
   ui.hintsContext.addEventListener('change', saveHints);

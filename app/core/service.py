@@ -1503,13 +1503,51 @@ class AppService:
         # обманывала бы: нажал, а в ответ «записи нет».
         data["has_audio"] = bool(self.store.list_audio_chunks(meeting_id))
         data["folder_id"] = self.store.meeting_folders().get(meeting_id)
+        # Что значит «по умолчанию» в чипе языка: окно показывает это словами.
+        data["language_default"] = self.язык_по_умолчанию()
         return data
 
+    # --- язык встречи ------------------------------------------------------
+
+    def язык_по_умолчанию(self) -> str:
+        """Что значит «как в настройках»: код языка или auto."""
+        asr = self.settings.asr
+        return "auto" if asr.detect_language else (asr.language or "ru")
+
+    def язык_встречи(self, meeting) -> str:
+        """Язык, которым пишется эта встреча: код или auto."""
+        выбран = (getattr(meeting, "language", "") or "").strip()
+        return выбран or self.язык_по_умолчанию()
+
+    def _применить_язык_записи(self, meeting_id: str | None) -> None:
+        """Сказать распознаванию, фиксирован ли язык идущей записи."""
+        фикс = None
+        if meeting_id:
+            встреча = self.store.get_meeting(meeting_id)
+            язык = self.язык_встречи(встреча) if встреча else "auto"
+            if язык != "auto":
+                фикс = язык
+        if hasattr(self.transcriber, "фиксированный"):
+            self.transcriber.фиксированный = фикс
+            if фикс:
+                log.info("Язык записи зафиксирован: %s", фикс)
+        elif фикс and фикс != "ru":
+            # Без маршрутизатора (определение выключено, весов нет)
+            # есть только GigaAM: нерусский язык обещать нечем.
+            log.warning("Язык %s выбран, но распознаёт только русская модель", фикс)
+
     def update_meeting(self, meeting_id: str, **fields: Any) -> dict[str, Any] | None:
+        if "language" in fields:
+            код = str(fields["language"] or "").strip().lower()
+            fields["language"] = код if код in ("", "auto", "ru", "en", "es", "sr") else ""
         self.store.update_meeting(meeting_id, **fields)
         meeting = self.store.get_meeting(meeting_id)
         if meeting is None:
             return None
+        if "language" in fields and self.active_meeting_id == meeting_id:
+            # Язык меняют посреди записи: применяем сразу, следующая
+            # фраза пойдёт уже в нужный движок.
+            self._применить_язык_записи(meeting_id)
         bus.emit(MEETING_UPDATED, {"meeting": meeting.to_dict()})
         # Заголовок виден в списке, поэтому список тоже надо освежить.
         if "title" in fields:
@@ -1854,6 +1892,7 @@ class AppService:
             # вопрос «это ролик, а не собеседник?» ему только мешает.
             if hasattr(self.capture, "спрашивать_о_чужой_речи"):
                 self.capture.спрашивать_о_чужой_речи = not self.подсказчик.включены
+            self._применить_язык_записи(meeting_id)
             self.capture.start(meeting_id)
         except Exception as exc:
             # Устройства не открылись: откатываем статус, иначе встреча
@@ -1876,6 +1915,7 @@ class AppService:
 
     def stop_recording(self) -> dict[str, Any] | None:
         self.подсказчик.остановить()
+        self._применить_язык_записи(None)
         meeting_id = self.active_meeting_id
         if meeting_id is None:
             return None
@@ -2677,6 +2717,12 @@ class AppService:
         Язык интерфейса — запасной, для встречи без расшифровки
         (см. core/язык_итогов.py).
         """
+        встреча = self.store.get_meeting(meeting_id)
+        выбран = self.язык_встречи(встреча) if встреча else "auto"
+        if выбран != "auto":
+            # Человек сказал, на каком языке встреча: голосование по
+            # репликам не нужно, оно и ошибалось на обрывках.
+            return выбран
         return язык_итогов.язык_встречи(
             ((s.lang, s.text) for s in self.store.list_segments(meeting_id) if not s.doubtful),
             self.settings.language,

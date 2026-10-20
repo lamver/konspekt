@@ -101,6 +101,10 @@ class LanguageRouter:
         # а не зашит намертво, иначе не по-русски говорящий человек
         # ломает себе первую же фразу.
         self.fallback_lang = fallback_lang or "ru"
+        # Язык, выбранный человеком для идущей записи. Пока он задан,
+        # определитель молчит: ни одна короткая фраза не уведёт встречу
+        # в другой язык (models.Meeting.language).
+        self.фиксированный: str | None = None
         # Последний язык каждой дорожки: им подменяем неуверенные ответы.
         self._last: dict[str, str] = {}
         # Сколько раз подряд язык дорожки унаследован, а не подтверждён
@@ -142,7 +146,11 @@ class LanguageRouter:
         offset: float = 0.0,
         speaker: str = "them",
     ) -> Iterable[TranscriptSegment]:
-        lang, уверенно = self._decide_why(pcm, sample_rate, speaker)
+        if self.фиксированный:
+            lang, уверенно = self.фиксированный, True
+            self._last[speaker] = lang
+        else:
+            lang, уверенно = self._decide_why(pcm, sample_rate, speaker)
         russian = lang in CYRILLIC_LANGS
         engine = self.russian if russian else (self.foreign or self.russian)
         if lang == "sr" and not russian and engine is self.foreign:
@@ -184,7 +192,8 @@ class LanguageRouter:
         итоговый = "ru" if russian else lang
         for segment in segments:
             segment.lang = итоговый
-            self._recheck_by_text(segment, speaker)
+            if not self.фиксированный:
+                self._recheck_by_text(segment, speaker)
         return segments
 
     def _recheck_by_text(self, segment: TranscriptSegment, speaker: str) -> None:

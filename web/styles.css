@@ -2197,5 +2197,20 @@ mark.personal {
   cursor: pointer;
 }
 .chat__model:hover { color: var(--ink); border-color: var(--ink-3); }
+
+/* Чип-выпадашка языка встречи в панели записи: как подпись модели у чата. */
+.chip-select {
+  margin-left: auto;
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper);
+  color: var(--ink-3);
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.6;
+  cursor: pointer;
+}
+.chip-select:hover { color: var(--ink); border-color: var(--ink-3); }
 .chat__model[hidden] { display: none; }
 

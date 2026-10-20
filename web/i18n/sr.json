@@ -67,6 +67,9 @@
     "import": "Izaberi fajlove"
   },
   "meeting": {
+    "language_title": "Jezik sastanka",
+    "language_default": "{name} · podrazumevano",
+    "language_auto": "Prepoznaj po rečenici",
     "title_placeholder": "Naziv sastanka",
     "untitled": "Bez naziva",
     "recording_status": "Snimanje u toku",

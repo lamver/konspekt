@@ -367,6 +367,8 @@ class Store:
             # отмечаем временем, когда убрали. Открытая переписка — без
             # отметки. Старая версия колонку не замечает.
             self._add_columns("chat_messages", {"archived_at": "REAL"})
+            # Язык встречи, выбранный человеком (models.Meeting.language).
+            self._add_columns("meetings", {"language": "TEXT NOT NULL DEFAULT ''"})
             self._начать_пробный_период()
             if was < 2:
                 self._add_columns(
@@ -692,13 +694,13 @@ class Store:
             self._conn.execute(
                 """INSERT INTO meetings
                    (id, title, created_at, started_at, ended_at, status,
-                    template, notes, summary, audio_path)
-                   VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                    template, notes, summary, audio_path, language)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     meeting.id, meeting.title, meeting.created_at,
                     meeting.started_at, meeting.ended_at, meeting.status.value,
                     meeting.template, meeting.notes, meeting.summary,
-                    meeting.audio_path,
+                    meeting.audio_path, meeting.language or "",
                 ),
             )
             self._conn.commit()
@@ -707,7 +709,7 @@ class Store:
     def update_meeting(self, meeting_id: str, **fields: Any) -> None:
         allowed = {
             "title", "started_at", "ended_at", "status",
-            "template", "notes", "summary", "audio_path", "rescued",
+            "template", "notes", "summary", "audio_path", "rescued", "language",
         }
         updates = {k: v for k, v in fields.items() if k in allowed}
         if not updates:
@@ -1500,4 +1502,5 @@ def _row_to_meeting(row: sqlite3.Row) -> Meeting:
         notes=row["notes"],
         summary=row["summary"],
         audio_path=row["audio_path"],
+        language=(row["language"] if "language" in row.keys() else "") or "",
     )

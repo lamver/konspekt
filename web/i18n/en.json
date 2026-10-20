@@ -67,6 +67,9 @@
     "import": "Choose files"
   },
   "meeting": {
+    "language_title": "Meeting language",
+    "language_default": "{name} · default",
+    "language_auto": "Detect per phrase",
     "title_placeholder": "Meeting title",
     "untitled": "Untitled",
     "recording_status": "Recording",
