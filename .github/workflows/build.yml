@@ -16,6 +16,10 @@ concurrency:
   group: build-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # Та же сборка llama.cpp, что и у macOS (сборка-mac.yml).
+  LLAMA_TAG: b11617
+
 jobs:
   build:
     runs-on: windows-latest
@@ -47,6 +51,24 @@ jobs:
 
       - name: Запустить быстрые тесты
         run: uv run python run_tests.py
+
+      # Движок заметок едет в установщике (build.py копирует
+      # models/llm/engine), а папка эта в .gitignore: без этого шага
+      # установщики с GitHub уходили без llama-server, и заметки у людей
+      # не работали вовсе (найдено 20.10 по журналу сборки 0.16.0).
+      # Сборка с Vulkan: считает на любой видеокарте, NVIDIA, AMD, Intel,
+      # а без неё llama.cpp сам откатывается на процессор. Замер 20.10 на
+      # RTX 3080 Ti: умная модель читает 4 000 токенов в секунду вместо
+      # 76 на процессоре, отвечает 115 вместо 8.
+      - name: Скачать движок llama.cpp
+        shell: pwsh
+        run: |
+          $tag = "${{ env.LLAMA_TAG }}"
+          $name = "llama-$tag-bin-win-vulkan-x64.zip"
+          Invoke-WebRequest -Uri "https://github.com/ggml-org/llama.cpp/releases/download/$tag/$name" -OutFile engine.zip
+          New-Item -ItemType Directory -Force models/llm/engine | Out-Null
+          Expand-Archive engine.zip -DestinationPath models/llm/engine -Force
+          Get-ChildItem models/llm/engine | Select-Object -ExpandProperty Name
 
       - name: Собрать дистрибутив
         run: uv run python packaging/build.py

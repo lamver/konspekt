@@ -48,6 +48,9 @@ ENGINE_KEEP = {
     "ggml.dll",
     "ggml-base.dll",
     "ggml-rpc.dll",
+    # Видеокарта через Vulkan: любая, NVIDIA, AMD, Intel. Нет карты или
+    # драйвера — llama.cpp молча считает на процессоре.
+    "ggml-vulkan.dll",
     "libomp.dll",
 }
 
