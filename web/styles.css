@@ -1357,13 +1357,16 @@ body { display: flex; flex-direction: column; }
 .bubble--hint {
   max-width: 100%;
   align-self: stretch;
-  font-size: 15px;
-  line-height: 1.55;
+  font-size: 18px;
+  line-height: 1.5;
   padding: 10px 14px 10px 16px;
   background: var(--accent-soft);
   border-color: transparent;
   border-left: 3px solid var(--accent);
 }
+/* Первая строка подсказки — якорь: крупнее и жирнее, её ловят взглядом. */
+.bubble--hint p:first-of-type { font-size: 21px; font-weight: 600; margin-bottom: 6px; }
+.bubble--hint ul, .bubble--hint ol { font-size: 17px; }
 .bubble__tag {
   display: block;
   font-size: 10px;

@@ -66,6 +66,12 @@ class Подсказчик:
         self._слов_на_подсказке = 0
         self._последняя = ""
         self._идёт = False
+        # В записи есть дорожка собеседника. Тогда подсказки зовут только
+        # его реплики: на свои же ответы человеку подсказывать нечего, а
+        # на пробе 20.10 каждый его ответ рождал вторую подсказку на тот
+        # же вопрос. Без собеседника (один микрофон, человек говорит за
+        # обоих) считаем все реплики.
+        self._собеседник_есть = False
 
     # --- настройки и жизненный цикл --------------------------------------
 
@@ -90,6 +96,9 @@ class Подсказчик:
         """Запись пошла: с этой встречи подсказываем."""
         with self._lock:
             self._meeting_id = meeting_id
+            self._собеседник_есть = any(
+                кто_дорожка == Speaker.THEM for _, _, кто_дорожка in self._реплики(meeting_id)
+            )
             self._слов_на_подсказке = self._слов(meeting_id)
             self._последняя = ""
             # Греем и когда галочка снята, но разговор описан: человек
@@ -143,6 +152,11 @@ class Подсказчик:
                 return
             if not (segment.text or "").strip():
                 return
+            if segment.speaker == Speaker.THEM:
+                self._собеседник_есть = True
+            elif self._собеседник_есть:
+                # Свой ответ: подсказку не зовём и не переводим будильник.
+                return
             self._завести_будильник(ПАУЗА)
 
     def подсказать_сейчас(self, meeting_id: str) -> dict[str, Any]:
@@ -173,8 +187,8 @@ class Подсказчик:
             будильник.cancel()
             self._будильник = None
 
-    def _реплики(self, meeting_id: str) -> list[tuple[str, str]]:
-        """Реплики, по которым есть смысл подсказывать: (кто, текст).
+    def _реплики(self, meeting_id: str) -> list[tuple[str, str, Speaker]]:
+        """Реплики, по которым есть смысл подсказывать: (кто, текст, дорожка).
 
         Мусор отсеиваем здесь, а не надеемся на модель: на пробе 20.10
         распознавание на секунду решило, что человек говорит по-сербски,
@@ -188,7 +202,7 @@ class Подсказчик:
             log.exception("Подсказки: не прочитать расшифровку")
             return []
         основной = getattr(getattr(self._service.settings, "asr", None), "language", "") or ""
-        итог: list[tuple[str, str]] = []
+        итог: list[tuple[str, str, Speaker]] = []
         for s in сегменты:
             if getattr(s, "doubtful", False):
                 continue
@@ -199,15 +213,19 @@ class Подсказчик:
             if основной and s.lang and s.lang != основной and len(слова) < 5:
                 continue
             кто = s.voice_label or ("Я" if s.speaker == Speaker.ME else "Собеседник")
-            итог.append((кто, текст))
+            итог.append((кто, текст, s.speaker))
         return итог
 
     def _слов(self, meeting_id: str) -> int:
-        return sum(len(текст.split()) for _, текст in self._реплики(meeting_id))
+        """Сколько слов сказано теми, чьи реплики зовут подсказку."""
+        реплики = self._реплики(meeting_id)
+        if self._собеседник_есть:
+            реплики = [р for р in реплики if р[2] == Speaker.THEM]
+        return sum(len(текст.split()) for _, текст, _ in реплики)
 
     def _хвост(self, meeting_id: str) -> str:
         """Последние реплики, как их видит человек: кто и что сказал."""
-        строки = [f"{кто}: {текст}" for кто, текст in self._реплики(meeting_id)]
+        строки = [f"{кто}: {текст}" for кто, текст, _ in self._реплики(meeting_id)]
         текст = "\n".join(строки)
         if len(текст) > ХВОСТ_ЗНАКОВ:
             # Режем по началу строки, чтобы не начинать с полслова.
@@ -282,6 +300,12 @@ class Подсказчик:
                 should_stop=lambda: service._llm_cancel,
                 max_tokens=220, **опции,
             ).strip()
+            if not текст or текст.upper().startswith("ПРОПУСК"):
+                # Модель сказала, что нового вопроса нет: пустую карточку
+                # не показываем и не храним.
+                log.info("Подсказка пропущена: нового вопроса нет")
+                self._убрать(meeting_id, message_id)
+                return
             service.store.update_chat_message(message_id, текст)
             with self._lock:
                 self._последняя = текст
