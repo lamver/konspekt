@@ -146,7 +146,16 @@
     "dictate_failed": "No se pudo dictar",
     "model_local": "Modelo {name}",
     "model_remote": "Servidor: {name}",
-    "model_tooltip": "Qué modelo responde. Haga clic para cambiarlo"
+    "model_tooltip": "Qué modelo responde. Haga clic para cambiarlo",
+    "history": "Historial",
+    "forget": "Borrar"
+  },
+  "hints": {
+    "enabled": "Dar pistas durante la grabación",
+    "context_placeholder": "De qué va la conversación y cómo ayudar: «entrevista de trabajo de Python, sugiere respuestas a las preguntas»",
+    "now": "Pista ahora",
+    "tag": "Pista",
+    "failed": "No se pudo obtener una pista"
   },
   "transcript": {
     "empty_title": "La transcripción aparecerá aquí",

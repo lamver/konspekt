@@ -1202,20 +1202,122 @@ function renderChat(messages) {
   ui.chatClear.hidden = messages.length === 0;
 }
 
-function appendChatMessage(msg) {
+function bubbleClass(role) {
+  if (role === 'user') return 'bubble bubble--me';
+  // Подсказка по ходу разговора: крупно и во всю ширину, её читают
+  // одним глазом, не отрываясь от собеседника.
+  if (role === 'hint') return 'bubble bubble--hint';
+  return 'bubble bubble--bot';
+}
+
+function appendChatMessage(msg, list = ui.chatList) {
   // Пустая заготовка под ответ уже могла быть отрисована: обновляем её,
   // а не плодим вторую с тем же идентификатором.
-  let node = ui.chatList.querySelector(`[data-msg="${msg.id}"]`);
+  let node = list.querySelector(`[data-msg="${msg.id}"]`);
   if (!node) {
     node = document.createElement('div');
-    node.className = `bubble bubble--${msg.role === 'user' ? 'me' : 'bot'}`;
+    node.className = bubbleClass(msg.role);
     node.dataset.msg = msg.id;
-    ui.chatList.appendChild(node);
+    list.appendChild(node);
   }
   setBubbleText(node, msg.text || '');
+  if (msg.role === 'hint') {
+    const tag = document.createElement('span');
+    tag.className = 'bubble__tag';
+    tag.textContent = t('hints.tag');
+    node.prepend(tag);
+  }
+  if (list !== ui.chatList) return;
   ui.chatHint.hidden = true;
   ui.chatClear.hidden = false;
   scrollChat();
+}
+
+/* --- Подсказки по ходу записи ------------------------------------------ */
+
+/**
+ * Блок подсказок виден, пока пишется открытая встреча, либо если
+ * подсказки включены: тогда человек заранее описывает разговор. Кнопка
+ * «подсказать сейчас» только во время записи: без записи подсказывать
+ * не по чему.
+ */
+function syncHintsUi() {
+  if (!ui.chatHints) return;
+  const пишется = state.isRecording && state.recordingId === state.currentId;
+  const включены = ui.hintsEnabled.checked;
+  ui.chatHints.hidden = !(пишется || включены);
+  ui.hintsNow.hidden = !пишется;
+}
+
+async function loadHints() {
+  if (!ui.hintsEnabled) return;
+  const s = await api.hint_settings();
+  if (!s) return;
+  ui.hintsEnabled.checked = !!s['включены'];
+  if (document.activeElement !== ui.hintsContext) ui.hintsContext.value = s['контекст'] || '';
+  syncHintsUi();
+}
+
+async function saveHints() {
+  await api.save_hint_settings({
+    'включены': ui.hintsEnabled.checked,
+    'контекст': ui.hintsContext.value,
+  });
+  syncHintsUi();
+}
+
+async function hintNow() {
+  if (!state.currentId) return;
+  ui.hintsNow.disabled = true;
+  try {
+    const res = await api.hint_now(state.currentId);
+    if (!res || !res.ok) {
+      showToast((res && res.error) || t('hints.failed'));
+      if (res && res.trial) refreshLicense();
+    }
+  } finally {
+    ui.hintsNow.disabled = false;
+  }
+}
+
+/* --- История переписок -------------------------------------------------- */
+
+async function refreshChatHistoryButton() {
+  if (!ui.chatHistoryBtn || !state.currentId) return;
+  const groups = (await api.chat_history(state.currentId)) || [];
+  ui.chatHistoryBtn.hidden = groups.length === 0;
+  if (groups.length === 0) ui.chatHistory.hidden = true;
+}
+
+async function toggleChatHistory() {
+  if (!ui.chatHistory.hidden) {
+    ui.chatHistory.hidden = true;
+    return;
+  }
+  const groups = (await api.chat_history(state.currentId)) || [];
+  ui.chatHistory.innerHTML = '';
+  for (const group of groups) {
+    const box = document.createElement('div');
+    box.className = 'chat__history-group';
+    const head = document.createElement('div');
+    head.className = 'chat__history-head';
+    const when = document.createElement('span');
+    when.textContent = fmtDate(group.archived_at);
+    const forget = document.createElement('button');
+    forget.className = 'btn-link';
+    forget.type = 'button';
+    forget.textContent = t('chat.forget');
+    forget.addEventListener('click', async () => {
+      await api.forget_chat(state.currentId, group.archived_at);
+      box.remove();
+      refreshChatHistoryButton();
+    });
+    head.append(when, forget);
+    box.appendChild(head);
+    for (const msg of group.messages) appendChatMessage(msg, box);
+    ui.chatHistory.appendChild(box);
+  }
+  ui.chatHistory.hidden = false;
 }
 
 /**
@@ -1354,8 +1456,14 @@ function onChatChunk(payload) {
 function onChatMessage(payload) {
   if (payload.meeting_id !== state.currentId) return;
   const msg = payload.message || {};
-  if (payload.done) setBusy(false);
+  // Подсказки не занимают кнопки «считается»: модель они берут только
+  // свободной, а снимать чужую занятость им нельзя.
+  if (payload.done && msg.role !== 'hint') setBusy(false);
   const node = ui.chatList.querySelector(`[data-msg="${msg.id}"]`);
+  if (payload.removed) {
+    if (node) node.remove();
+    return;
+  }
   if (node) node.dataset.text = msg.text || '';
   appendChatMessage(msg);
 }
@@ -1411,6 +1519,7 @@ async function clearChat() {
   if (!state.currentId) return;
   await api.clear_chat(state.currentId);
   renderChat([]);
+  refreshChatHistoryButton();
 }
 
 /* --- Настройки модели --------------------------------------------------- */
@@ -2379,6 +2488,9 @@ async function selectMeeting(id, jumpTo = null) {
   // Переписка своя у каждой встречи, поэтому тянем её при каждом
   // переключении, а не держим всё в памяти.
   renderChat((await api.list_chat_messages(id)) || []);
+  ui.chatHistory.hidden = true;
+  refreshChatHistoryButton();
+  syncHintsUi();
   renderMeetingList();
   toggleEmptyState();
 
@@ -3108,6 +3220,7 @@ function renderRecordingState() {
   ui.levels.hidden = !active;
   ui.timer.hidden = !active;
   if (!active) resetWaves();
+  syncHintsUi();
 }
 
 /* Волна уровня: уровни приходят десять раз в секунду, каждый становится
@@ -3567,6 +3680,7 @@ async function openAudioSheet() {
   ui.micEnabled.checked = sel.capture_mic !== false;
   ui.systemEnabled.checked = sel.capture_system !== false;
   loadAttention();
+  loadHints();
   refreshEnrollment();
   refreshPeople();
   refreshLlmStatus();
@@ -4567,6 +4681,12 @@ function bindUi() {
     chatMic: el('chat-mic'),
     chatSend: el('chat-send'),
     chatClear: el('chat-clear'),
+    chatHistoryBtn: el('chat-history-btn'),
+    chatHistory: el('chat-history'),
+    chatHints: el('chat-hints'),
+    hintsEnabled: el('hints-enabled'),
+    hintsContext: el('hints-context'),
+    hintsNow: el('hints-now'),
     llmBackend: el('llm-backend'),
     llmRemote: el('llm-remote'),
     llmTiers: el('llm-tiers'),
@@ -4760,6 +4880,10 @@ function bindUi() {
   ui.chatSend.addEventListener('click', sendQuestion);
   if (ui.chatMic) ui.chatMic.addEventListener('click', toggleFieldDictation);
   ui.chatClear.addEventListener('click', clearChat);
+  ui.chatHistoryBtn.addEventListener('click', toggleChatHistory);
+  ui.hintsEnabled.addEventListener('change', saveHints);
+  ui.hintsContext.addEventListener('change', saveHints);
+  ui.hintsNow.addEventListener('click', hintNow);
   ui.chatText.addEventListener('input', resizeChatInput);
   ui.chatText.addEventListener('keydown', (e) => {
     // Enter отправляет, Shift+Enter переносит строку: вопросы
@@ -5147,6 +5271,8 @@ async function init() {
   // Подпись «какая модель отвечает» у переписки видна сразу, а не только
   // после захода в настройки.
   refreshLlmStatus();
+  // Блок подсказок над чатом: включены ли и что за разговор.
+  loadHints();
   // Разбор файлов мог продолжаться, пока окно было скрыто в трее.
   await refreshImports();
   // Обновление могло скачаться до того, как окно открыли: тогда события

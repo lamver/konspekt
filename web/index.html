@@ -265,8 +265,26 @@
                   <button class="chat__model" id="chat-model" type="button" hidden
                     data-i18n-title="chat.model_tooltip" title="Сменить модель"></button>
                 </span>
-                <button class="btn-link" id="chat-clear" data-i18n="chat.clear" hidden>Очистить</button>
+                <span class="chat__head-actions">
+                  <button class="btn-link" id="chat-history-btn" data-i18n="chat.history" hidden>История</button>
+                  <button class="btn-link" id="chat-clear" data-i18n="chat.clear" hidden>Очистить</button>
+                </span>
               </div>
+              <!-- Подсказки по ходу записи (этап 38). Блок виден, пока
+                   пишется открытая встреча, или если подсказки включены:
+                   тогда человек заранее пишет, что за разговор. -->
+              <div class="chat__hints" id="chat-hints" hidden>
+                <label class="check chat__hints-switch">
+                  <input type="checkbox" id="hints-enabled">
+                  <span data-i18n="hints.enabled">Подсказывать во время записи</span>
+                </label>
+                <textarea id="hints-context" rows="2" spellcheck="false"
+                  data-i18n-placeholder="hints.context_placeholder"
+                  placeholder="О чём разговор и чем помочь: «собеседование на Python, подсказывай ответы»"></textarea>
+                <button class="btn-secondary chat__hints-now" id="hints-now" type="button" data-i18n="hints.now" hidden>Подсказать сейчас</button>
+              </div>
+              <!-- Прошлые переписки: «Очистить» убирает чат сюда, а не стирает. -->
+              <div class="chat__history" id="chat-history" hidden></div>
               <div class="chat__list" id="chat-list"></div>
               <div class="chat__hint" id="chat-hint" data-i18n="chat.hint">
                 Спросите что угодно об этой встрече: кто что обещал,

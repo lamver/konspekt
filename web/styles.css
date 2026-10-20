@@ -1352,6 +1352,74 @@ body { display: flex; flex-direction: column; }
   background: var(--accent-soft);
   border-color: #F2D9D1;
 }
+/* Подсказка по ходу разговора: во всю ширину и крупнее, с полосой
+   цвета слева. Её читают, не отрываясь от собеседника. */
+.bubble--hint {
+  max-width: 100%;
+  align-self: stretch;
+  font-size: 15px;
+  line-height: 1.55;
+  padding: 10px 14px 10px 16px;
+  background: var(--accent-soft);
+  border-color: transparent;
+  border-left: 3px solid var(--accent);
+}
+.bubble__tag {
+  display: block;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 4px;
+}
+.chat__head-actions { display: flex; gap: 12px; }
+.chat__hints {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 14px 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper-2);
+}
+.chat__hints-switch { font-size: 12px; }
+.chat__hints textarea {
+  width: 100%;
+  resize: vertical;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+  color: var(--ink);
+}
+.chat__hints-now { align-self: flex-start; }
+.chat__history {
+  margin: 0 14px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 40%;
+  overflow-y: auto;
+}
+.chat__history-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+}
+.chat__history-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--ink-3);
+}
 .bubble p { margin: 0 0 6px; }
 .bubble p:last-child { margin-bottom: 0; }
 .bubble ul { margin: 0 0 6px; padding-left: 16px; }

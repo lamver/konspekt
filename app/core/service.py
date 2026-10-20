@@ -70,6 +70,7 @@ from ..audio import AudioCapture, NullCapture, WasapiCapture
 from ..audio import devices as audio_devices
 from ..audio.buffers import WavWriter, float_to_int16
 from ..audio.сторож import Сторож
+from .подсказки import Подсказчик
 from ..core import paths
 from ..core import settings as settings_mod
 from ..core.i18n import t as _t
@@ -272,6 +273,13 @@ class AppService:
         # Модель для саммари и чата. Сервер поднимается только когда
         # человек действительно что-то спросит.
         self.llm = LlmManager(lambda: self.settings.llm)
+        # Подсказки по ходу записи (этап 38): модель читает последние
+        # реплики и советует, что сказать. Живут в чате встречи.
+        self.подсказчик = Подсказчик(self)
+        self.подсказчик.настроить(
+            включены=self.settings.подсказки.включены,
+            контекст=self.settings.подсказки.контекст,
+        )
         # Модель считает один запрос за раз: параллельные запросы к
         # локальному серверу просто замедляют друг друга.
         self._llm_lock = threading.RLock()
@@ -784,6 +792,7 @@ class AppService:
         except Exception:
             log.exception("Не удалось сохранить сегмент транскрипта")
         bus.emit(TRANSCRIPT_SEGMENT, {"segment": segment.to_dict()})
+        self.подсказчик.реплика(segment)
 
     # --- голоса ----------------------------------------------------------
 
@@ -1848,9 +1857,11 @@ class AppService:
 
         bus.emit(RECORDING_STARTED, {"meeting_id": meeting_id, "started_at": started})
         bus.emit(MEETINGS_CHANGED)
+        self.подсказчик.начать(meeting_id)
         return self.get_meeting(meeting_id)
 
     def stop_recording(self) -> dict[str, Any] | None:
+        self.подсказчик.остановить()
         meeting_id = self.active_meeting_id
         if meeting_id is None:
             return None
@@ -2860,8 +2871,41 @@ class AppService:
         return [m.to_dict() for m in self.store.list_chat_messages(meeting_id)]
 
     def clear_chat(self, meeting_id: str) -> dict[str, Any]:
+        """Убрать переписку в историю: стереть её можно оттуда."""
         self.store.clear_chat(meeting_id)
         return {"ok": True}
+
+    def chat_history(self, meeting_id: str) -> list[dict[str, Any]]:
+        return self.store.list_chat_history(meeting_id)
+
+    def forget_chat(self, meeting_id: str, archived_at: float) -> dict[str, Any]:
+        self.store.delete_chat_history(meeting_id, float(archived_at))
+        return {"ok": True}
+
+    # --- подсказки по ходу разговора ---------------------------------------
+
+    def настройки_подсказок(self) -> dict[str, Any]:
+        п = self.settings.подсказки
+        return {"включены": п.включены, "контекст": п.контекст,
+                "идёт_запись": self.capture.is_recording}
+
+    def сохранить_подсказки(self, **поля: Any) -> dict[str, Any]:
+        """Сохранить и применить сразу: галочку снимают, чтобы замолчало."""
+        п = self.settings.подсказки
+        if "включены" in поля:
+            п.включены = bool(поля["включены"])
+        if "контекст" in поля:
+            п.контекст = str(поля["контекст"] or "").strip()[:2000]
+        try:
+            settings_mod.save(self.settings)
+        except Exception:
+            log.exception("Не удалось сохранить настройки подсказок")
+        self.подсказчик.настроить(включены=п.включены, контекст=п.контекст)
+        return self.настройки_подсказок()
+
+    def подсказать(self, meeting_id: str) -> dict[str, Any]:
+        """Подсказка по просьбе: не ждать паузы в разговоре."""
+        return self.подсказчик.подсказать_сейчас(meeting_id)
 
     def ask(self, meeting_id: str, question: str) -> dict[str, Any]:
         """Вопрос по встрече. Ответ приходит событиями по кускам."""
@@ -3046,6 +3090,10 @@ class AppService:
 
     def mask_personal(self, text: str) -> str:
         return personal.mask(text if isinstance(text, str) else "")
+
+    def опции_своей_модели(self) -> dict[str, Any]:
+        """Параметры запроса для своей модели: чужой сервер их может не знать."""
+        return dict(CHAT_LOCAL_OPTIONS) if self.llm.backend == "local" else {}
 
     def _for_model(self, messages: list[dict[str, str]]) -> list[dict[str, str]]:
         """Сообщения перед отправкой в модель.

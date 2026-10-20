@@ -311,6 +311,25 @@ class Api:
     def clear_chat(self, meeting_id: str) -> dict[str, Any]:
         return self._service.clear_chat(meeting_id)
 
+    def chat_history(self, meeting_id: str) -> list[dict[str, Any]]:
+        """Прошлые переписки по встрече, новые сверху."""
+        return self._service.chat_history(meeting_id)
+
+    def forget_chat(self, meeting_id: str, archived_at: float) -> dict[str, Any]:
+        """Стереть одну прошлую переписку насовсем."""
+        return self._service.forget_chat(meeting_id, archived_at)
+
+    def hint_settings(self) -> dict[str, Any]:
+        """Подсказки по ходу записи: включены ли и что за разговор."""
+        return self._service.настройки_подсказок()
+
+    def save_hint_settings(self, fields: dict[str, Any]) -> dict[str, Any]:
+        return self._service.сохранить_подсказки(**(fields or {}))
+
+    def hint_now(self, meeting_id: str) -> dict[str, Any]:
+        """Подсказать прямо сейчас, не дожидаясь паузы."""
+        return self._service.подсказать(meeting_id)
+
     # --- голоса -----------------------------------------------------------
 
     def meeting_voices(self, meeting_id: str) -> list[dict[str, Any]]:

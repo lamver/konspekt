@@ -253,6 +253,23 @@ class ВниманиеSettings:
 
 
 @dataclass
+class ПодсказкиSettings:
+    """Подсказки по ходу разговора (этап 38).
+
+    `включены` — пока идёт запись, модель читает последние реплики и
+    советует, что сказать. Выключено по умолчанию: это нагрузка на
+    модель во время записи, и нужна она не всем.
+
+    `контекст` — что за разговор и чем помогать, словами человека:
+    «собеседование на Python-разработчика, подсказывай ответы», «звонок
+    клиенту, напоминай про условия доставки». Уходит в каждый запрос.
+    """
+
+    включены: bool = False
+    контекст: str = ""
+
+
+@dataclass
 class Settings:
     window: WindowGeometry = field(default_factory=WindowGeometry)
     audio: AudioSettings = field(default_factory=AudioSettings)
@@ -260,6 +277,7 @@ class Settings:
     llm: LlmSettings = field(default_factory=LlmSettings)
     dictation: DictationSettings = field(default_factory=DictationSettings)
     внимание: ВниманиеSettings = field(default_factory=ВниманиеSettings)
+    подсказки: ПодсказкиSettings = field(default_factory=ПодсказкиSettings)
     telegram: TelegramSettings = field(default_factory=TelegramSettings)
     always_on_top: bool = True
     theme: str = "system"          # system | light | dark
@@ -399,11 +417,13 @@ def load() -> Settings:
         llm = _section(LlmSettings, raw.pop("llm", {}))
         dictation = _section(DictationSettings, raw.pop("dictation", {}))
         внимание = _section(ВниманиеSettings, raw.pop("внимание", {}))
+        подсказки = _section(ПодсказкиSettings, raw.pop("подсказки", {}))
         telegram = _section(TelegramSettings, raw.pop("telegram", {}))
         known = {k: v for k, v in raw.items() if k in Settings.__dataclass_fields__}
         return Settings(
             window=window, audio=audio, asr=asr, llm=llm,
-            dictation=dictation, внимание=внимание, telegram=telegram, **known,
+            dictation=dictation, внимание=внимание, подсказки=подсказки,
+            telegram=telegram, **known,
         )
     except Exception:
         # Битый конфиг не повод не запуститься.

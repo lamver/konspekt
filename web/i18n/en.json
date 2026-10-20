@@ -146,7 +146,16 @@
     "dictate_failed": "Dictation did not start",
     "model_local": "{name} model",
     "model_remote": "Server: {name}",
-    "model_tooltip": "Which model answers. Click to change"
+    "model_tooltip": "Which model answers. Click to change",
+    "history": "History",
+    "forget": "Delete"
+  },
+  "hints": {
+    "enabled": "Give hints while recording",
+    "context_placeholder": "What this conversation is and how to help: “Python job interview, suggest answers to the questions”",
+    "now": "Hint now",
+    "tag": "Hint",
+    "failed": "Could not get a hint"
   },
   "transcript": {
     "empty_title": "The transcript will appear here",

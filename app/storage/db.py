@@ -363,6 +363,10 @@ class Store:
                 "source_kind": "TEXT NOT NULL DEFAULT 'disk'",
                 "source_config": "TEXT NOT NULL DEFAULT ''",
             })
+            # «Очистить» чат не стирает переписку, а убирает её в историю:
+            # отмечаем временем, когда убрали. Открытая переписка — без
+            # отметки. Старая версия колонку не замечает.
+            self._add_columns("chat_messages", {"archived_at": "REAL"})
             self._начать_пробный_период()
             if was < 2:
                 self._add_columns(
@@ -1071,18 +1075,36 @@ class Store:
         return msg
 
     def list_chat_messages(self, meeting_id: str) -> list[ChatMessage]:
+        """Открытая переписка: без того, что убрали в историю."""
         with self._lock:
             rows = self._conn.execute(
-                "SELECT * FROM chat_messages WHERE meeting_id=? ORDER BY created_at",
+                "SELECT * FROM chat_messages WHERE meeting_id=? AND archived_at IS NULL "
+                "ORDER BY created_at",
                 (meeting_id,),
             ).fetchall()
-        return [
-            ChatMessage(
-                id=r["id"], meeting_id=r["meeting_id"], role=r["role"],
-                text=r["text"], created_at=r["created_at"],
-            )
-            for r in rows
-        ]
+        return [self._chat_row(r) for r in rows]
+
+    def list_chat_history(self, meeting_id: str) -> list[dict[str, Any]]:
+        """Прошлые переписки, новые сверху: [{archived_at, messages}]."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM chat_messages WHERE meeting_id=? AND archived_at IS NOT NULL "
+                "ORDER BY archived_at DESC, created_at",
+                (meeting_id,),
+            ).fetchall()
+        группы: list[dict[str, Any]] = []
+        for r in rows:
+            if not группы or группы[-1]["archived_at"] != r["archived_at"]:
+                группы.append({"archived_at": r["archived_at"], "messages": []})
+            группы[-1]["messages"].append(self._chat_row(r).to_dict())
+        return группы
+
+    @staticmethod
+    def _chat_row(r) -> ChatMessage:
+        return ChatMessage(
+            id=r["id"], meeting_id=r["meeting_id"], role=r["role"],
+            text=r["text"], created_at=r["created_at"],
+        )
 
     def update_chat_message(self, message_id: str, text: str) -> None:
         """Дописать ответ, который собирался по кускам во время потока."""
@@ -1093,10 +1115,32 @@ class Store:
             self._conn.commit()
 
     def clear_chat(self, meeting_id: str) -> None:
+        """Убрать открытую переписку в историю, не стирая."""
         with self._lock:
             self._conn.execute(
-                "DELETE FROM chat_messages WHERE meeting_id=?", (meeting_id,)
+                "UPDATE chat_messages SET archived_at=? WHERE meeting_id=? AND archived_at IS NULL "
+                "AND text != ''",
+                (now(), meeting_id),
             )
+            # Пустые заготовки под ответ истории не нужны.
+            self._conn.execute(
+                "DELETE FROM chat_messages WHERE meeting_id=? AND archived_at IS NULL",
+                (meeting_id,),
+            )
+            self._conn.commit()
+
+    def delete_chat_history(self, meeting_id: str, archived_at: float) -> None:
+        """Стереть одну прошлую переписку насовсем."""
+        with self._lock:
+            self._conn.execute(
+                "DELETE FROM chat_messages WHERE meeting_id=? AND archived_at=?",
+                (meeting_id, archived_at),
+            )
+            self._conn.commit()
+
+    def delete_chat_message(self, message_id: str) -> None:
+        with self._lock:
+            self._conn.execute("DELETE FROM chat_messages WHERE id=?", (message_id,))
             self._conn.commit()
 
     # --- транскрипт (этап 3) ---------------------------------------------

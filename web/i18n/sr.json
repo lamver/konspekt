@@ -146,7 +146,16 @@
     "dictate_failed": "Diktiranje nije pokrenuto",
     "model_local": "{name} model",
     "model_remote": "Server: {name}",
-    "model_tooltip": "Koji model odgovara. Kliknite da promenite"
+    "model_tooltip": "Koji model odgovara. Kliknite da promenite",
+    "history": "Istorija",
+    "forget": "Obriši"
+  },
+  "hints": {
+    "enabled": "Daj savete tokom snimanja",
+    "context_placeholder": "O čemu je razgovor i kako pomoći: „intervju za Python posao, predlaži odgovore na pitanja“",
+    "now": "Savet odmah",
+    "tag": "Savet",
+    "failed": "Savet nije uspeo"
   },
   "transcript": {
     "empty_title": "Transkript će se pojaviti ovde",

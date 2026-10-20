@@ -29,7 +29,7 @@ def find_window() -> int | None:
     def cb(hwnd, _):
         if not win32gui.IsWindowVisible(hwnd):
             return
-        if win32gui.GetWindowText(hwnd) != "Konspekt":
+        if win32gui.GetWindowText(hwnd) not in ("Konspekt", "Конспект"):
             return
         _, pid = win32process.GetWindowThreadProcessId(hwnd)
         try:
