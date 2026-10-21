@@ -172,6 +172,12 @@
     "lang_failed": "No recording of this line, nothing to redo",
     "lang_retry_failed": "Couldn't redo it",
     "audio_clip_not_found": "No recording of this line",
+    "save_tooltip": "Save this line as WAV",
+    "save_all": "Download recording",
+    "save_all_tooltip": "Whole meeting as one WAV: you on the left, the other side on the right",
+    "save_done": "Saved: {name}",
+    "save_failed": "Could not save",
+    "audio_none": "This meeting has no recording",
     "lang_placeholder": "lang",
     "copy_tooltip": "Copy the line with speaker and time"
   },
@@ -439,7 +445,8 @@
     },
     "file_dialog": {
       "audio_filter": "Audio and video (*.mp3;*.wav;*.m4a;*.ogg;*.opus;*.flac;*.aac;*.wma;*.mp4;*.mkv;*.mov;*.webm;*.avi)",
-      "all_files": "All files (*.*)"
+      "all_files": "All files (*.*)",
+      "wav_filter": "WAV audio (*.wav)"
     }
   },
   "foreign": {

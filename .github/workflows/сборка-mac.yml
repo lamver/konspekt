@@ -29,10 +29,6 @@ on:
       RELEASES_TOKEN:
         required: false
 
-concurrency:
-  group: mac-${{ github.ref }}
-  cancel-in-progress: true
-
 env:
   # Сборка llama.cpp с его страницы релизов. Движок едет внутри .app,
   # как и на Windows, чтобы заметки работали без докачки.
@@ -50,6 +46,11 @@ jobs:
             arch: x64
     name: macOS ${{ matrix.arch }}
     runs-on: ${{ matrix.os }}
+    # Очередь на каждую архитектуру своя: общая очередь на весь
+    # workflow снимала arm64, едва стартовал x64 (выпуск 0.17.0).
+    concurrency:
+      group: mac-${{ github.ref }}-${{ matrix.arch }}
+      cancel-in-progress: true
     steps:
       - uses: actions/checkout@v4
 

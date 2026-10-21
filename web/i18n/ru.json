@@ -172,6 +172,12 @@
     "lang_failed": "Нет записи этой фразы, пересчитать нечего",
     "lang_retry_failed": "Пересчитать не удалось",
     "audio_clip_not_found": "Записи этой фразы нет",
+    "save_tooltip": "Сохранить фразу файлом WAV",
+    "save_all": "Скачать запись",
+    "save_all_tooltip": "Вся встреча одним WAV: слева вы, справа собеседник",
+    "save_done": "Сохранено: {name}",
+    "save_failed": "Сохранить не удалось",
+    "audio_none": "Записи этой встречи нет",
     "lang_placeholder": "яз",
     "copy_tooltip": "Скопировать реплику с именем и временем"
   },
@@ -439,7 +445,8 @@
     },
     "file_dialog": {
       "audio_filter": "Аудио и видео (*.mp3;*.wav;*.m4a;*.ogg;*.opus;*.flac;*.aac;*.wma;*.mp4;*.mkv;*.mov;*.webm;*.avi)",
-      "all_files": "Все файлы (*.*)"
+      "all_files": "Все файлы (*.*)",
+      "wav_filter": "Звук WAV (*.wav)"
     }
   },
   "foreign": {

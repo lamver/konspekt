@@ -199,6 +199,7 @@ FAST = [
     "разборы_test.py",
     "разборы_edge_test.py",
     "clip_test.py",
+    "запись_файлом_test.py",
     "import_clip_test.py",
     "nomodel_test.py",
     "broken_model_test.py",

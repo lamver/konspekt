@@ -11,6 +11,8 @@ JS-обёртку. Ссылки на окно и сервис поэтому с�
 from __future__ import annotations
 
 import logging
+import re
+from pathlib import Path
 import threading
 from typing import Any
 
@@ -84,6 +86,64 @@ class Api:
                    track: str = "") -> dict[str, Any] | None:
         """Кусок записи под репликой, чтобы переслушать спорную фразу."""
         return self._service.audio_clip(meeting_id, start, end, track)
+
+    def save_audio_clip(self, meeting_id: str, start: float, end: float,
+                        track: str = "", name: str = "") -> dict[str, Any]:
+        """Сохранить фразу файлом WAV через системное «Сохранить как».
+
+        Пустой ответ значит, что человек передумал в диалоге: это не
+        ошибка, и плашки не нужно.
+        """
+        data = self._service.clip_wav(str(meeting_id), float(start), float(end), str(track or ""))
+        if data is None:
+            return {"error": "no_audio"}
+        path = self._спросить_путь(str(name or ""))
+        if not path:
+            return {}
+        try:
+            Path(path).write_bytes(data)
+        except Exception:
+            log.exception("Не удалось сохранить фразу в %s", path)
+            return {"error": "write"}
+        return {"saved": path}
+
+    def save_meeting_audio(self, meeting_id: str, name: str = "") -> dict[str, Any]:
+        """Вся запись встречи одним WAV: слева «я», справа «собеседник»."""
+        if not self._service.store.list_audio_chunks(str(meeting_id)):
+            return {"error": "no_audio"}
+        path = self._спросить_путь(str(name or ""))
+        if not path:
+            return {}
+        try:
+            длительность = self._service.write_meeting_audio(str(meeting_id), Path(path))
+        except Exception:
+            log.exception("Не удалось сохранить запись встречи в %s", path)
+            return {"error": "write"}
+        if длительность is None:
+            return {"error": "no_audio"}
+        return {"saved": path, "duration": длительность}
+
+    def _спросить_путь(self, имя: str) -> str:
+        """Диалог «Сохранить как» для WAV. Отказ или нет окна: пустая строка."""
+        if not self._window:
+            return ""
+        try:
+            import webview  # noqa: PLC0415
+
+            выбор = self._window.create_file_dialog(
+                webview.SAVE_DIALOG,
+                save_filename=_имя_файла(имя) + ".wav",
+                file_types=(self._service._msg("python.file_dialog.wav_filter"),),
+            )
+        except Exception:
+            log.exception("Не удалось открыть диалог сохранения")
+            return ""
+        if not выбор:
+            return ""
+        путь = str(выбор[0] if isinstance(выбор, (list, tuple)) else выбор)
+        if not путь.lower().endswith(".wav"):
+            путь += ".wav"
+        return путь
 
     def retranscribe_segment(self, segment_id: str, lang: str) -> dict[str, Any] | None:
         """Пересчитать реплику на языке, который назвал человек.
@@ -722,3 +782,10 @@ class Api:
         if not ready:
             return {"state": "idle"}
         return {"state": "ready", "version": ready.version}
+
+
+def _имя_файла(текст: str) -> str:
+    """Название встречи в имя файла: без символов, которые диск не примет."""
+    имя = re.sub(r'[\\/:*?"<>|\r\n\t]+', " ", текст).strip(" .")
+    имя = re.sub(r"\s+", " ", имя)[:120]
+    return имя or "запись"

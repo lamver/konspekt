@@ -172,6 +172,12 @@
     "lang_failed": "No hay grabación de esta línea, no hay nada que rehacer",
     "lang_retry_failed": "No se pudo rehacer",
     "audio_clip_not_found": "No hay grabación de esta línea",
+    "save_tooltip": "Guardar esta línea como WAV",
+    "save_all": "Descargar grabación",
+    "save_all_tooltip": "Toda la reunión en un WAV: usted a la izquierda, el interlocutor a la derecha",
+    "save_done": "Guardado: {name}",
+    "save_failed": "No se pudo guardar",
+    "audio_none": "Esta reunión no tiene grabación",
     "lang_placeholder": "idi",
     "copy_tooltip": "Copiar la frase con hablante y hora"
   },
@@ -439,7 +445,8 @@
     },
     "file_dialog": {
       "audio_filter": "Audio y vídeo (*.mp3;*.wav;*.m4a;*.ogg;*.opus;*.flac;*.aac;*.wma;*.mp4;*.mkv;*.mov;*.webm;*.avi)",
-      "all_files": "Todos los archivos (*.*)"
+      "all_files": "Todos los archivos (*.*)",
+      "wav_filter": "Audio WAV (*.wav)"
     }
   },
   "foreign": {

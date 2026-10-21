@@ -1001,7 +1001,7 @@ body { display: flex; flex-direction: column; }
 /* Кнопка «переслушать». Появляется по наведению на реплику: постоянно
    висящий значок у каждой фразы превратил бы транскрипт в частокол.
    Пока играет — остаётся видимой, иначе непонятно, что именно звучит. */
-.turn__play {
+.turn__play, .turn__save {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1015,12 +1015,12 @@ body { display: flex; flex-direction: column; }
   opacity: 0;
   transition: opacity .12s, color .12s, background .12s;
 }
-.turn:hover .turn__play { opacity: .7; }
-.turn__play:hover { opacity: 1; color: var(--accent); background: var(--paper-3); }
+.turn:hover .turn__play, .turn:hover .turn__save { opacity: .7; }
+.turn__play:hover, .turn__save:hover { opacity: 1; color: var(--accent); background: var(--paper-3); }
 .turn__play.is-playing { opacity: 1; color: var(--accent); }
 /* Пока читаем кусок с диска, кнопка мигает: на двухчасовой записи
    ответ приходит не мгновенно, и без отклика кажется, что не нажалось. */
-.turn__play.is-loading { opacity: 1; animation: turn-play-wait 1s infinite; }
+.turn__play.is-loading, .turn__save.is-loading { opacity: 1; animation: turn-play-wait 1s infinite; }
 @keyframes turn-play-wait { 50% { opacity: .3; } }
 
 /* Язык реплики. Обычно не мозолит глаза: показывается по наведению на

@@ -2467,6 +2467,7 @@ async function selectMeeting(id, jumpTo = null) {
   // появления этой возможности, звук не сохранялся: кнопка там только
   // обманывала бы.
   state.hasAudio = meeting.has_audio !== false;
+  if (ui.audioSave) ui.audioSave.hidden = !state.hasAudio;
 
   ui.title.value = meeting.title || '';
   ui.notes.value = meeting.notes || '';
@@ -2675,6 +2676,59 @@ async function togglePersonal() {
 const ICON_PLAY = '<svg viewBox="0 0 16 16" width="11" height="11"><path d="M5 3.5v9l7-4.5z" fill="currentColor"/></svg>';
 const ICON_STOP = '<svg viewBox="0 0 16 16" width="11" height="11"><rect x="4.5" y="4.5" width="7" height="7" rx="1" fill="currentColor"/></svg>';
 
+const ICON_SAVE = '<svg viewBox="0 0 16 16" width="11" height="11"><path d="M8 2.5v7M5 6.5l3 3 3-3M3 12.5h10" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+/** Имя файла для звука: название встречи, у фразы ещё время и говорящий. */
+function audioFileName(extra = '') {
+  const title = (ui.title && ui.title.value.trim()) || (state.current && state.current.title) || '';
+  return [title, extra].filter(Boolean).join(' ').trim();
+}
+
+/** Показать, чем кончилось сохранение. Пустой ответ: человек передумал. */
+function reportSave(res) {
+  if (!res) return;
+  if (res.saved) {
+    const name = String(res.saved).split(/[\\/]/).pop();
+    showToast(t('transcript.save_done', { name }), 4000);
+  } else if (res.error === 'no_audio') {
+    showToast(t('transcript.audio_none'), 3000);
+  } else if (res.error) {
+    showToast(t('transcript.save_failed'), 4000);
+  }
+}
+
+/** Сохранить фразу файлом WAV. Путь спрашивает системный диалог. */
+async function saveTurn(btn, turn, who, when) {
+  if (!state.currentId) return;
+  const start = Number(turn.dataset.start || 0);
+  const end = Number(turn.dataset.end || 0) || start + 3;
+  const track = turn.dataset.speaker || '';
+  btn.classList.add('is-loading');
+  let res = null;
+  try {
+    res = await api.save_audio_clip(state.currentId, start, end, track,
+      audioFileName(`${when.replace(/:/g, '-')} ${who}`));
+  } catch (e) {
+    res = { error: 'write' };
+  }
+  btn.classList.remove('is-loading');
+  reportSave(res);
+}
+
+/** Вся запись встречи одним WAV: слева «я», справа «собеседник». */
+async function saveMeetingAudio() {
+  if (!state.currentId || !ui.audioSave) return;
+  ui.audioSave.disabled = true;
+  let res = null;
+  try {
+    res = await api.save_meeting_audio(state.currentId, audioFileName());
+  } catch (e) {
+    res = { error: 'write' };
+  }
+  ui.audioSave.disabled = false;
+  reportSave(res);
+}
+
 /** Проигрыватель на всё окно: вторая фраза останавливает первую. */
 let currentAudio = null;
 let currentPlayBtn = null;
@@ -2838,6 +2892,17 @@ function appendSegment(seg, scroll = true) {
     // чем кнопка, которая всегда отвечает «записи нет».
     play.hidden = state.hasAudio === false;
 
+    // Забрать фразу файлом: тот же кусок записи, что у «переслушать»,
+    // но на диск. Нужно, когда спорное место хотят показать кому-то
+    // ещё или приложить к задаче.
+    const save = document.createElement('button');
+    save.className = 'turn__save';
+    save.type = 'button';
+    save.title = t('transcript.save_tooltip');
+    save.innerHTML = ICON_SAVE;
+    save.addEventListener('click', () => saveTurn(save, turn, who.textContent, time.textContent));
+    save.hidden = state.hasAudio === false;
+
     // Поправить язык фразы. Определитель языка ошибается редко, но
     // одна испорченная реплика в часовой встрече заметна, а сделать с
     // ней человеку было нечего.
@@ -2867,6 +2932,7 @@ function appendSegment(seg, scroll = true) {
     head.appendChild(lang);
     head.appendChild(copy);
     head.appendChild(play);
+    head.appendChild(save);
 
     const text = document.createElement('div');
     text.className = 'turn__text';
@@ -4703,6 +4769,7 @@ function bindUi() {
     summarySendTelegram: el('summary-send-telegram'),
     personalBar: el('personal-bar'),
     personalFind: el('personal-find'),
+    audioSave: el('audio-download'),
     personalResult: el('personal-result'),
     llmMask: el('llm-mask'),
     summaryCopyMore: el('summary-copy-more'),
@@ -4897,6 +4964,7 @@ function bindUi() {
     });
   }
   if (ui.personalFind) ui.personalFind.addEventListener('click', togglePersonal);
+  if (ui.audioSave) ui.audioSave.addEventListener('click', saveMeetingAudio);
   if (ui.chatModel) {
     ui.chatModel.addEventListener('click', async () => {
       await openAudioSheet();

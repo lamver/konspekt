@@ -22,6 +22,8 @@ from typing import Any
 
 import numpy as np
 
+from ..audio.buffers import SAMPLE_RATE
+
 from ..asr import (
     MODEL_DIR_NAME,
     СТАРАЯ_ПАПКА_МОДЕЛИ,
@@ -1593,6 +1595,63 @@ class AppService:
         доступа к диску, а поднимать ради этого HTTP-сервер значило бы
         открыть порт наружу в приложении, которое обещает приватность.
         """
+        кусок = self._clip_pcm(meeting_id, start, end, track)
+        if кусок is None:
+            return None
+        data, rate = кусок
+        return {
+            "wav": base64.b64encode(_wav_bytes(data, rate)).decode("ascii"),
+            "duration": len(data) / 2 / rate,
+        }
+
+    def clip_wav(self, meeting_id: str, start: float, end: float,
+                 track: str = "") -> bytes | None:
+        """Реплика готовым WAV-файлом: то же, что переслушать, но на диск."""
+        кусок = self._clip_pcm(meeting_id, start, end, track)
+        if кусок is None:
+            return None
+        return _wav_bytes(*кусок)
+
+    def write_meeting_audio(self, meeting_id: str, path: Path) -> float | None:
+        """Вся запись встречи одним WAV на диск. Возвращает длительность.
+
+        Запись лежит кусками: заход за заходом, дорожка за дорожкой, и
+        каждый кусок помнит своё место во времени встречи. Собираем их
+        на общую шкалу: паузы между заходами остаются тишиной, время в
+        файле совпадает со временем реплик в расшифровке. Дорожки идут
+        по каналам, слева «я», справа «собеседник»: так в редакторе
+        видно, кто говорил, а в проигрывателе слышно обоих. Если
+        дорожка одна, файл моно.
+
+        Пишем блоками по десять секунд, не собирая всё в памяти:
+        двухчасовая встреча в двух каналах весит под полгигабайта.
+        """
+        chunks = [c for c in self.store.list_audio_chunks(meeting_id)
+                  if Path(c["path"]).exists()]
+        if not chunks:
+            return None
+        дорожки = [[c for c in chunks if c["track"] == имя] for имя in ("me", "them")]
+        дорожки = [д for д in дорожки if д]
+        if not дорожки:
+            # Куски с незнакомым именем дорожки: всё в один канал.
+            дорожки = [chunks]
+        rate = SAMPLE_RATE
+        кадров = int(max(c["start_s"] + c["duration_s"] for c in chunks) * rate)
+        БЛОК = rate * 10
+        with wave.open(str(path), "wb") as out:
+            out.setnchannels(len(дорожки))
+            out.setsampwidth(2)
+            out.setframerate(rate)
+            for t0 in range(0, кадров, БЛОК):
+                n = min(БЛОК, кадров - t0)
+                каналы = [_track_block(д, t0, n, rate) for д in дорожки]
+                data = каналы[0] if len(каналы) == 1 else np.stack(каналы, axis=1).reshape(-1)
+                out.writeframes(data.tobytes())
+        return кадров / rate
+
+    def _clip_pcm(self, meeting_id: str, start: float, end: float,
+                  track: str = "") -> tuple[bytes, int] | None:
+        """Звук реплики: моно PCM16 и его частота дискретизации."""
         chunks = self.store.list_audio_chunks(meeting_id)
         if not chunks:
             return None
@@ -1623,21 +1682,10 @@ class AppService:
         offset = max(0.0, start - chunk["start_s"] - pad)
         length = max(0.3, (end - start) + pad * 2)
         try:
-            data, rate = _read_wav_part(path, offset, length)
+            return _read_wav_part(path, offset, length)
         except Exception:
             log.exception("Не удалось прочитать кусок записи %s", path)
             return None
-
-        buf = io.BytesIO()
-        with wave.open(buf, "wb") as out:
-            out.setnchannels(1)
-            out.setsampwidth(2)
-            out.setframerate(rate)
-            out.writeframes(data)
-        return {
-            "wav": base64.b64encode(buf.getvalue()).decode("ascii"),
-            "duration": len(data) / 2 / rate,
-        }
 
     def retranscribe_segment(self, segment_id: str, lang: str) -> dict | None:
         """Пересчитать одну реплику на указанном языке.
@@ -3829,6 +3877,46 @@ def _read_wav_part(path: Path, offset: float, length: float) -> tuple[bytes, int
         data = np.frombuffer(raw, dtype=np.int16).reshape(-1, channels)
         raw = data.mean(axis=1).astype(np.int16).tobytes()
     return raw, rate
+
+
+def _wav_bytes(data: bytes, rate: int) -> bytes:
+    """Моно PCM16 в готовый WAV в памяти."""
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as out:
+        out.setnchannels(1)
+        out.setsampwidth(2)
+        out.setframerate(rate)
+        out.writeframes(data)
+    return buf.getvalue()
+
+
+def _track_block(chunks: list[dict[str, Any]], t0: int, n: int, rate: int) -> np.ndarray:
+    """Кусок дорожки длиной n кадров с кадра t0 шкалы встречи.
+
+    Где записи нет (пауза между заходами, конец короткой дорожки), там
+    нули. Файл другой частоты подтягивается линейной интерполяцией:
+    у записей Конспекта частота одна, но чужой файл может быть любым.
+    """
+    буфер = np.zeros(n, dtype=np.int16)
+    t1 = t0 + n
+    for c in chunks:
+        c0 = int(c["start_s"] * rate)
+        c1 = c0 + int(c["duration_s"] * rate)
+        lo, hi = max(t0, c0), min(t1, c1)
+        if hi <= lo:
+            continue
+        try:
+            raw, r = _read_wav_part(Path(c["path"]), (lo - c0) / rate, (hi - lo) / rate)
+        except Exception:
+            log.exception("Не удалось прочитать кусок записи %s", c["path"])
+            continue
+        arr = np.frombuffer(raw, dtype=np.int16)
+        if r != rate and arr.size:
+            x = np.arange(arr.size) * (rate / r)
+            arr = np.interp(np.arange(int(arr.size * rate / r)), x, arr).astype(np.int16)
+        arr = arr[: hi - lo]
+        буфер[lo - t0: lo - t0 + arr.size] = arr
+    return буфер
 
 
 def _default_title() -> str:
