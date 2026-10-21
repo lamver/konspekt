@@ -69,6 +69,9 @@ SYSTEM_SPEECH_NOTICED = "system.speech_noticed"
 TRANSCRIPT_SEGMENT = "transcript.segment"
 # Черновик речи, которая ещё идёт: показать и заменить настоящей.
 TRANSCRIPT_DRAFT = "transcript.draft"
+# Два участника оказались одним человеком: реплики одного переходят
+# к другому, окно меняет подписи у уже показанных реплик.
+TRANSCRIPT_RELABEL = "transcript.relabel"
 MODEL_DOWNLOAD = "model.download"
 # Поиск по смыслу: качается ли модель, сколько встреч уже посчитано.
 MEANING_STATE = "meaning.state"

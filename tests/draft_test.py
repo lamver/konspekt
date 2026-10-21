@@ -192,7 +192,7 @@ def проверить_очередь() -> None:
             return np.zeros(8, dtype=np.float32)
 
     class Список:
-        def assign(self, speaker, vector):
+        def assign(self, speaker, vector, seconds=None):
             return None
 
     q = TranscriptionQueue(

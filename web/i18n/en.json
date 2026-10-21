@@ -178,6 +178,14 @@
     "save_done": "Saved: {name}",
     "save_failed": "Could not save",
     "audio_none": "This meeting has no recording",
+    "export_all": "Download transcript",
+    "export_all_tooltip": "Whole transcript as a file: txt, markdown, srt, vtt or json",
+    "pick_tooltip": "Select this line",
+    "picked": "Selected: {n}",
+    "pick_text": "Text",
+    "pick_audio": "Audio",
+    "pick_clear": "Clear selection",
+    "picked_suffix": "selected lines",
     "lang_placeholder": "lang",
     "copy_tooltip": "Copy the line with speaker and time"
   },
@@ -446,7 +454,12 @@
     "file_dialog": {
       "audio_filter": "Audio and video (*.mp3;*.wav;*.m4a;*.ogg;*.opus;*.flac;*.aac;*.wma;*.mp4;*.mkv;*.mov;*.webm;*.avi)",
       "all_files": "All files (*.*)",
-      "wav_filter": "WAV audio (*.wav)"
+      "wav_filter": "WAV audio (*.wav)",
+      "txt_filter": "Plain text (*.txt)",
+      "md_filter": "Markdown (*.md)",
+      "srt_filter": "SRT subtitles (*.srt)",
+      "vtt_filter": "WebVTT subtitles (*.vtt)",
+      "json_filter": "JSON (*.json)"
     }
   },
   "foreign": {

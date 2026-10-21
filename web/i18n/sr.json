@@ -178,6 +178,14 @@
     "save_done": "Sačuvano: {name}",
     "save_failed": "Čuvanje nije uspelo",
     "audio_none": "Ovaj sastanak nema snimak",
+    "export_all": "Preuzmi transkript",
+    "export_all_tooltip": "Ceo transkript kao fajl: txt, markdown, srt, vtt ili json",
+    "pick_tooltip": "Označi ovu liniju",
+    "picked": "Izabrano: {n}",
+    "pick_text": "Tekst",
+    "pick_audio": "Zvuk",
+    "pick_clear": "Poništi izbor",
+    "picked_suffix": "izabrane linije",
     "lang_placeholder": "jez",
     "copy_tooltip": "Kopiraj repliku sa imenom i vremenom"
   },
@@ -446,7 +454,12 @@
     "file_dialog": {
       "audio_filter": "Audio i video (*.mp3;*.wav;*.m4a;*.ogg;*.opus;*.flac;*.aac;*.wma;*.mp4;*.mkv;*.mov;*.webm;*.avi)",
       "all_files": "Svi fajlovi (*.*)",
-      "wav_filter": "WAV zvuk (*.wav)"
+      "wav_filter": "WAV zvuk (*.wav)",
+      "txt_filter": "Tekst (*.txt)",
+      "md_filter": "Markdown (*.md)",
+      "srt_filter": "SRT titlovi (*.srt)",
+      "vtt_filter": "WebVTT titlovi (*.vtt)",
+      "json_filter": "JSON (*.json)"
     }
   },
   "foreign": {

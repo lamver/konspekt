@@ -337,6 +337,7 @@ class _Track:
             device = self._opener()
             recorder = device.recorder(samplerate=SAMPLE_RATE, channels=1, blocksize=devices.RECORDER_BLOCK)
             recorder.__enter__()
+            devices.терпеливая_запись(recorder)
             # В режиме прослушивания файла не заводим вовсе: пустой WAV
             # выглядел бы как записанная встреча, которой не было.
             self._writer = None if self._только_слушать else WavWriter(self._wav_path)

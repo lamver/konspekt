@@ -52,6 +52,7 @@ from ..core.events import (
     SUMMARY_READY,
     SUMMARY_STATUS,
     TRANSCRIPT_DRAFT,
+    TRANSCRIPT_RELABEL,
     TRANSCRIPT_SEGMENT,
     WINDOW_HIDE,
     WINDOW_SHOW,
@@ -80,6 +81,7 @@ FORWARDED_EVENTS = (
     # появляется никогда: ровно та беда, что была с черновиками в 0.7.0.
     SYSTEM_SPEECH_NOTICED,
     TRANSCRIPT_DRAFT,
+    TRANSCRIPT_RELABEL,
     TRANSCRIPT_SEGMENT,
     MODEL_DOWNLOAD,
     # Поиск по смыслу: скачана ли модель и сколько встреч посчитано.

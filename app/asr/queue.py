@@ -454,7 +454,8 @@ class TranscriptionQueue:
             return
         try:
             vector = self.embedder.embed(job.pcm, self.sample_rate)
-            voice = self.roster.assign(job.speaker, vector)
+            seconds = len(job.pcm) / float(self.sample_rate or 1)
+            voice = self.roster.assign(job.speaker, vector, seconds)
             if voice is None:
                 return
             segment.voice_id = voice.id

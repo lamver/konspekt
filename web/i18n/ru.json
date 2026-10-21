@@ -178,6 +178,14 @@
     "save_done": "Сохранено: {name}",
     "save_failed": "Сохранить не удалось",
     "audio_none": "Записи этой встречи нет",
+    "export_all": "Скачать расшифровку",
+    "export_all_tooltip": "Вся расшифровка файлом: txt, markdown, srt, vtt или json",
+    "pick_tooltip": "Отметить фразу",
+    "picked": "Выбрано: {n}",
+    "pick_text": "Текст",
+    "pick_audio": "Звук",
+    "pick_clear": "Снять выбор",
+    "picked_suffix": "выбранные фразы",
     "lang_placeholder": "яз",
     "copy_tooltip": "Скопировать реплику с именем и временем"
   },
@@ -446,7 +454,12 @@
     "file_dialog": {
       "audio_filter": "Аудио и видео (*.mp3;*.wav;*.m4a;*.ogg;*.opus;*.flac;*.aac;*.wma;*.mp4;*.mkv;*.mov;*.webm;*.avi)",
       "all_files": "Все файлы (*.*)",
-      "wav_filter": "Звук WAV (*.wav)"
+      "wav_filter": "Звук WAV (*.wav)",
+      "txt_filter": "Текст (*.txt)",
+      "md_filter": "Markdown (*.md)",
+      "srt_filter": "Субтитры SRT (*.srt)",
+      "vtt_filter": "Субтитры WebVTT (*.vtt)",
+      "json_filter": "JSON (*.json)"
     }
   },
   "foreign": {

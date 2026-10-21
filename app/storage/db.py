@@ -1241,6 +1241,22 @@ class Store:
             self._conn.commit()
             return cur.rowcount
 
+    def remap_segments(self, meeting_id: str, old_voice: str, voice_id: str,
+                       label: str, person_id: str | None) -> int:
+        """Передать реплики одного участника другому: это один человек."""
+        with self._lock:
+            cur = self._conn.execute(
+                "UPDATE transcript_segments SET voice_id=?, voice_label=?, person_id=? "
+                "WHERE meeting_id=? AND voice_id=?",
+                (voice_id, label, person_id, meeting_id, old_voice),
+            )
+            self._conn.execute(
+                "DELETE FROM meeting_voices WHERE meeting_id=? AND voice_id=?",
+                (meeting_id, old_voice),
+            )
+            self._conn.commit()
+            return cur.rowcount
+
     def link_segments(self, meeting_id: str, voice_id: str, person_id: str) -> int:
         """Привязать реплики участника к человеку из базы голосов."""
         with self._lock:

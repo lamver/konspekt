@@ -49,6 +49,17 @@ FEW_SAMPLES = 3
 KNOWN_VOICE = 0.62
 # Сколько отпечатков держим на участника, чтобы усреднять эталон.
 MAX_SAMPLES = 20
+# Фраза короче этого нового участника не заводит: отпечаток «угу» или
+# обрывка слова почти случаен, и каждый такой обрывок становился
+# «Голосом 27». Короткая фраза либо примыкает к похожему участнику, либо
+# остаётся просто дорожкой. Созвон 21.10: у двух человек 35 голосов,
+# 26 из них с одной фразой короче двух секунд.
+SHORT_PHRASE = 2.0
+# Эталоны двух участников одной дорожки сошлись ближе этого: это один
+# человек, которого в начале встречи разнесло на двоих (первые фразы
+# через динамик и микрофон звучат по-разному). Сливаем. Порог высокий:
+# слить двух людей хуже, чем оставить одного дважды.
+MERGE_VOICE = 0.70
 
 
 @dataclass
@@ -83,6 +94,21 @@ class Voice:
             return
         self.samples += 1
 
+    def absorb(self, other: "Voice") -> None:
+        """Забрать отпечатки другого участника: это тот же человек."""
+        if other._sum is None:
+            return
+        if self._sum is None:
+            self._sum = np.array(other._sum, dtype=np.float32)
+            self.samples = other.samples
+            return
+        # Эталоны усреднены по своим фразам, складываем с весами.
+        self._sum = self._sum + other._sum
+        self.samples = min(MAX_SAMPLES, self.samples + other.samples)
+        if not self.person_id and other.person_id:
+            self.person_id = other.person_id
+            self.label = other.label
+
 
 class VoiceRoster:
     """Участники текущей встречи и распределение фраз по ним."""
@@ -98,6 +124,12 @@ class VoiceRoster:
         self.new_threshold = new_threshold
         self._voices: dict[str, Voice] = {}
         self._counter = 0
+        # Нумерация подписей своя у каждой дорожки: «Собеседник 1»,
+        # «Собеседник 2». По счётчику, а не по числу живых участников:
+        # после слияния двух голосов подпись не должна повториться.
+        self._подписи: dict[str, int] = {}
+        # Слияния, о которых ещё не узнал сервис: (старый id, участник).
+        self._слияния: list[tuple[str, Voice]] = []
         # Фразы приходят из потока распознавания, а UI может читать состав
         # участников в любой момент.
         self._lock = threading.Lock()
@@ -121,11 +153,14 @@ class VoiceRoster:
 
     # --- разбор ----------------------------------------------------------
 
-    def assign(self, track: str, vector: np.ndarray | None) -> Voice | None:
+    def assign(self, track: str, vector: np.ndarray | None,
+               seconds: float | None = None) -> Voice | None:
         """Определить, кому принадлежит фраза.
 
         None на входе (короткая фраза, модель не скачана) даёт None на
         выходе: реплика останется просто дорожкой, как было раньше.
+        `seconds` — длительность фразы: короткая нового участника не
+        заводит, см. SHORT_PHRASE.
         """
         if vector is None:
             return None
@@ -137,9 +172,55 @@ class VoiceRoster:
             best, score = self._closest_locked(track, vec)
             if best is not None and score >= self._threshold_for(best):
                 best.add(vec)
-                return best
+                return self._слить_locked(track, best)
+            if seconds is not None and seconds < SHORT_PHRASE:
+                if best is not None and score >= self.new_threshold:
+                    best.add(vec)
+                    return best
+                return None
             voice = self._create_locked(track, vec)
             return voice
+
+    def забрать_слияния(self) -> list[tuple[str, Voice]]:
+        """Слияния с прошлого раза: старый id и участник, в которого влили."""
+        with self._lock:
+            готово, self._слияния = self._слияния, []
+            return готово
+
+    def _слить_locked(self, track: str, voice: Voice) -> Voice:
+        """Слить участника с тем, чей эталон сошёлся с его эталоном.
+
+        Проверяем после каждой фразы, но только у участников с устойчивым
+        эталоном: пока фраз мало, близость случайна. Остаётся тот, у кого
+        фраз больше, имя из базы перевешивает: к нему переходят отпечатки
+        и реплики второго.
+        """
+        if voice.samples < FEW_SAMPLES:
+            return voice
+        мой = voice.centroid
+        if мой is None:
+            return voice
+        for другой in list(self._voices.values()):
+            if другой is voice or другой.track != track or другой.samples < FEW_SAMPLES:
+                continue
+            его = другой.centroid
+            if его is None or cosine(мой, его) < MERGE_VOICE:
+                continue
+            # Один человек не может быть двумя людьми из базы.
+            if voice.person_id and другой.person_id and voice.person_id != другой.person_id:
+                continue
+            остаётся, уходит = (другой, voice) if (
+                bool(другой.person_id) > bool(voice.person_id)
+                or (bool(другой.person_id) == bool(voice.person_id)
+                    and другой.samples >= voice.samples)
+            ) else (voice, другой)
+            остаётся.absorb(уходит)
+            del self._voices[уходит.id]
+            self._слияния.append((уходит.id, остаётся))
+            log.info("Голоса «%s» и «%s» сошлись: это один человек, остаётся «%s»",
+                     уходит.label, остаётся.label, остаётся.label)
+            return остаётся
+        return voice
 
     def _threshold_for(self, voice: Voice) -> float:
         """Насколько похожей должна быть фраза, чтобы считаться его.
@@ -201,7 +282,8 @@ class VoiceRoster:
 
     def _default_label(self, track: str) -> str:
         """Имя по умолчанию: нумеруем внутри дорожки, а не сквозным счётчиком."""
-        n = sum(1 for v in self._voices.values() if v.track == track) + 1
+        n = self._подписи.get(track, 0) + 1
+        self._подписи[track] = n
         if track == "me":
             return "Я" if n == 1 else f"Голос {n}"
         return f"Собеседник {n}"
@@ -228,3 +310,5 @@ class VoiceRoster:
         with self._lock:
             self._voices.clear()
             self._counter = 0
+            self._подписи.clear()
+            self._слияния.clear()

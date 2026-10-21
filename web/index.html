@@ -327,6 +327,16 @@
                    Фраза по отдельности сохраняется кнопкой у реплики. -->
               <button class="btn-small" id="audio-download" data-i18n="transcript.save_all"
                       data-i18n-title="transcript.save_all_tooltip" title="Вся запись встречи одним WAV">Скачать запись</button>
+              <button class="btn-small" id="transcript-download" data-i18n="transcript.export_all"
+                      data-i18n-title="transcript.export_all_tooltip" title="Вся расшифровка файлом">Скачать расшифровку</button>
+              <!-- Отмеченные фразы: галочка у реплики. Их можно забрать
+                   текстом в любом формате или одним звуковым файлом. -->
+              <span class="pick-bar" id="pick-bar" hidden>
+                <span class="pick-bar__count" id="pick-count"></span>
+                <button class="btn-small" id="pick-text" data-i18n="transcript.pick_text">Текст</button>
+                <button class="btn-small" id="pick-audio" data-i18n="transcript.pick_audio">Звук</button>
+                <button class="btn-link" id="pick-clear" data-i18n="transcript.pick_clear">Снять выбор</button>
+              </span>
               <span class="personal-bar__result" id="personal-result"></span>
             </div>
             <div class="transcript" id="transcript"></div>

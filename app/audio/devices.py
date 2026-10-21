@@ -25,6 +25,53 @@ TRACK_THEM = "them"   # системный выход — то, что гово�
 _com_local = threading.local()
 
 
+# Сколько ждать кадров от устройства, прежде чем счесть его молчащим и
+# писать тишину. У soundcard это четыре периода устройства, около 40 мс:
+# при любой задержке потока (распознавание и модель грузят процессор)
+# она дописывала нули за время ожидания, а следом отдавала и настоящие
+# кадры за то же время. Запись удлинялась на 7–28 % (созвон 21.10:
+# 63 минуты звука за 49 минут), внутри фраз появлялись провалы, время
+# реплик уезжало вперёд. Полсекунды без кадров у микрофона не бывает,
+# а у системного звука без открытого потока это и есть тишина.
+ПОРОГ_МОЛЧАНИЯ_УСТРОЙСТВА = 0.5
+
+
+def терпеливая_запись(recorder: Any, порог_с: float = ПОРОГ_МОЛЧАНИЯ_УСТРОЙСТВА) -> Any:
+    """Научить запись soundcard ждать кадры, а не подменять их нулями.
+
+    Правится сам объект записи, а не библиотека: на macOS у soundcard
+    другая реализация, и там трогать нечего.
+    """
+    import time
+    import types
+
+    import numpy as np
+
+    if not hasattr(recorder, "_capture_available_frames") or not hasattr(recorder, "_record_chunk"):
+        return recorder
+    исходный = type(recorder)._record_chunk
+    порог_нс = int(порог_с * 1_000_000_000)
+
+    def _record_chunk(self):  # noqa: ANN001
+        начало = None
+        while self._capture_available_frames() == 0:
+            сейчас = time.perf_counter_ns()
+            if начало is None:
+                начало = сейчас
+            if сейчас - начало > порог_нс:
+                # Устройство молчит всерьёз: тишина за всё время ожидания,
+                # чтобы шкала времени шла вровень с часами.
+                кадров = int(self.samplerate * (сейчас - начало) / 1_000_000_000)
+                self._idle_start_time = None
+                return np.zeros(кадров * len(set(self.channelmap)), dtype="float32")
+            time.sleep(0.005)
+        self._idle_start_time = None
+        return исходный(self)
+
+    recorder._record_chunk = types.MethodType(_record_chunk, recorder)
+    return recorder
+
+
 def hold_com() -> None:
     """Поднять COM в текущем потоке и не отпускать до его конца.
 

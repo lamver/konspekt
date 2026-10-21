@@ -127,7 +127,48 @@ class Api:
             return {"error": "no_audio"}
         return {"saved": path, "duration": длительность}
 
-    def _спросить_путь(self, имя: str) -> str | None:
+    def save_transcript(self, meeting_id: str, name: str = "",
+                        ids: list[str] | None = None) -> dict[str, Any]:
+        """Расшифровка в файл: txt, markdown, srt, vtt или json по расширению.
+
+        `ids` непустой: только отмеченные реплики. Пустой ответ: человек
+        передумал в диалоге.
+        """
+        фильтры = tuple(
+            self._service._msg(f"python.file_dialog.{f}_filter") for f in ("txt", "md", "srt", "vtt", "json")
+        )
+        path = self._спросить_путь(str(name or ""), фильтры, "txt")
+        if path is None:
+            return {"error": "write"}
+        if not path:
+            return {}
+        try:
+            count = self._service.write_transcript(str(meeting_id), Path(path), list(ids or []))
+        except Exception:
+            log.exception("Не удалось сохранить расшифровку в %s", path)
+            return {"error": "write"}
+        return {"saved": path, "count": count}
+
+    def save_audio_clips(self, meeting_id: str, ids: list[str],
+                         name: str = "") -> dict[str, Any]:
+        """Отмеченные реплики одним WAV, в порядке встречи, с паузами."""
+        data = self._service.clips_wav(str(meeting_id), list(ids or []))
+        if data is None:
+            return {"error": "no_audio"}
+        path = self._спросить_путь(str(name or ""))
+        if path is None:
+            return {"error": "write"}
+        if not path:
+            return {}
+        try:
+            Path(path).write_bytes(data)
+        except Exception:
+            log.exception("Не удалось сохранить фразы в %s", path)
+            return {"error": "write"}
+        return {"saved": path}
+
+    def _спросить_путь(self, имя: str, фильтры: tuple[str, ...] = (),
+                       расширение: str = "wav") -> str | None:
         """Диалог «Сохранить как» для WAV.
 
         Пустая строка: человек передумал или окна нет, молчим. None:
@@ -142,8 +183,8 @@ class Api:
 
             выбор = self._window.create_file_dialog(
                 webview.SAVE_DIALOG,
-                save_filename=_имя_файла(имя) + ".wav",
-                file_types=(self._service._msg("python.file_dialog.wav_filter"),),
+                save_filename=_имя_файла(имя) + "." + расширение,
+                file_types=фильтры or (self._service._msg("python.file_dialog.wav_filter"),),
             )
         except Exception:
             log.exception("Не удалось открыть диалог сохранения")
@@ -151,8 +192,13 @@ class Api:
         if not выбор:
             return ""
         путь = str(выбор[0] if isinstance(выбор, (list, tuple)) else выбор)
-        if not путь.lower().endswith(".wav"):
-            путь += ".wav"
+        # Расширение из фильтров: человек выбрал «Субтитры SRT», а имя
+        # оставил без хвоста. Чужое расширение не трогаем, оно его выбор.
+        допустимые = {"." + расширение} | {
+            "." + ф.rsplit("*.", 1)[-1].rstrip(")").lower() for ф in фильтры
+        }
+        if not any(путь.lower().endswith(х) for х in допустимые):
+            путь += "." + расширение
         return путь
 
     def retranscribe_segment(self, segment_id: str, lang: str) -> dict[str, Any] | None:

@@ -314,6 +314,36 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Audio WAV (*.wav)",
         "sr": "WAV zvuk (*.wav)",
     },
+    "python.file_dialog.txt_filter": {
+        "ru": "Текст (*.txt)",
+        "en": "Plain text (*.txt)",
+        "es": "Texto (*.txt)",
+        "sr": "Tekst (*.txt)",
+    },
+    "python.file_dialog.md_filter": {
+        "ru": "Markdown (*.md)",
+        "en": "Markdown (*.md)",
+        "es": "Markdown (*.md)",
+        "sr": "Markdown (*.md)",
+    },
+    "python.file_dialog.srt_filter": {
+        "ru": "Субтитры SRT (*.srt)",
+        "en": "SRT subtitles (*.srt)",
+        "es": "Subtítulos SRT (*.srt)",
+        "sr": "SRT titlovi (*.srt)",
+    },
+    "python.file_dialog.vtt_filter": {
+        "ru": "Субтитры WebVTT (*.vtt)",
+        "en": "WebVTT subtitles (*.vtt)",
+        "es": "Subtítulos WebVTT (*.vtt)",
+        "sr": "WebVTT titlovi (*.vtt)",
+    },
+    "python.file_dialog.json_filter": {
+        "ru": "JSON (*.json)",
+        "en": "JSON (*.json)",
+        "es": "JSON (*.json)",
+        "sr": "JSON (*.json)",
+    },
 }
 
 

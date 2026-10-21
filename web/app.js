@@ -388,6 +388,11 @@ window.__konspekt_event = function (payload) {
         appendSegment(payload.segment);
       }
       break;
+    case 'transcript.relabel':
+      // Два участника оказались одним человеком: реплики первого
+      // переходят ко второму вместе с подписью.
+      if (payload.meeting_id === state.currentId) relabelTurns(payload.from, payload.voice_id, payload.label);
+      break;
     case 'transcript.draft':
       // Человек ещё говорит: показываем сказанное, чтобы экран не стоял
       // пустым всю длинную фразу.
@@ -2600,8 +2605,9 @@ function renderTranscript(segments) {
   drafts.clear();
   ui.transcript.innerHTML = '';
   for (const seg of segments) appendSegment(seg, false);
-  // Подсветка принадлежала прошлой встрече.
+  // Подсветка и отметки принадлежали прошлой встрече.
   resetPersonal();
+  updatePickBar();
   updateTranscriptEmpty();
 }
 
@@ -2712,6 +2718,62 @@ async function saveTurn(btn, turn, who, when) {
     res = { error: 'write' };
   }
   btn.classList.remove('is-loading');
+  reportSave(res);
+}
+
+/** Вся расшифровка файлом: формат выбирается расширением в диалоге. */
+async function saveTranscript(ids = []) {
+  if (!state.currentId) return;
+  let res = null;
+  try {
+    res = await api.save_transcript(state.currentId,
+      audioFileName(ids.length ? t('transcript.picked_suffix') : ''), ids);
+  } catch (e) {
+    res = { error: 'write' };
+  }
+  reportSave(res);
+}
+
+/* --- Отмеченные фразы ----------------------------------------------------- */
+
+/** Номера реплик у отмеченных блоков. Склеенный блок помнит все свои. */
+function pickedIds() {
+  const ids = [];
+  for (const turn of ui.transcript.querySelectorAll('.turn.is-picked')) {
+    ids.push(...(turn.dataset.ids || '').split(' ').filter(Boolean));
+  }
+  return ids;
+}
+
+function updatePickBar() {
+  if (!ui.pickBar) return;
+  const n = ui.transcript.querySelectorAll('.turn.is-picked').length;
+  ui.pickBar.hidden = n === 0;
+  ui.pickCount.textContent = t('transcript.picked', { n });
+  ui.pickAudio.hidden = state.hasAudio === false;
+}
+
+function clearPicks() {
+  for (const turn of ui.transcript.querySelectorAll('.turn.is-picked')) {
+    turn.classList.remove('is-picked');
+    const box = turn.querySelector('.turn__pick');
+    if (box) box.checked = false;
+  }
+  updatePickBar();
+}
+
+/** Отмеченные фразы одним звуковым файлом, в порядке встречи. */
+async function savePickedAudio() {
+  const ids = pickedIds();
+  if (!state.currentId || !ids.length) return;
+  ui.pickAudio.disabled = true;
+  let res = null;
+  try {
+    res = await api.save_audio_clips(state.currentId, ids, audioFileName(t('transcript.picked_suffix')));
+  } catch (e) {
+    res = { error: 'write' };
+  }
+  ui.pickAudio.disabled = false;
   reportSave(res);
 }
 
@@ -2859,6 +2921,18 @@ function appendSegment(seg, scroll = true) {
 
     const head = document.createElement('div');
     head.className = 'turn__head';
+
+    // Отметить фразу: отмеченные забираются текстом или звуком одним
+    // файлом. Галочка видна при наведении, чтобы не засорять чтение.
+    const pick = document.createElement('input');
+    pick.type = 'checkbox';
+    pick.className = 'turn__pick';
+    pick.title = t('transcript.pick_tooltip');
+    pick.addEventListener('change', () => {
+      turn.classList.toggle('is-picked', pick.checked);
+      updatePickBar();
+    });
+    head.appendChild(pick);
 
     // Имя участника, а не просто дорожка: за компьютером и в звонке
     // может быть несколько человек. По клику имя можно поменять, и оно
@@ -3110,6 +3184,20 @@ function renameVoice(button, voiceId) {
     if (e.key === 'Escape') { e.preventDefault(); finish(false); }
   });
   input.addEventListener('blur', () => finish(true));
+}
+
+/** Передать реплики одного участника другому: подпись и голос у блоков. */
+function relabelTurns(fromVoice, toVoice, label) {
+  if (!fromVoice || !toVoice) return;
+  for (const turn of ui.transcript.querySelectorAll('.turn')) {
+    if (turn.dataset.voice !== fromVoice) continue;
+    turn.dataset.voice = toVoice;
+    const who = turn.querySelector('.turn__who');
+    if (who) {
+      who.dataset.voice = toVoice;
+      if (label) who.textContent = label;
+    }
+  }
 }
 
 function updateTranscriptEmpty() {
@@ -4772,6 +4860,12 @@ function bindUi() {
     personalBar: el('personal-bar'),
     personalFind: el('personal-find'),
     audioSave: el('audio-download'),
+    transcriptSave: el('transcript-download'),
+    pickBar: el('pick-bar'),
+    pickCount: el('pick-count'),
+    pickText: el('pick-text'),
+    pickAudio: el('pick-audio'),
+    pickClear: el('pick-clear'),
     personalResult: el('personal-result'),
     llmMask: el('llm-mask'),
     summaryCopyMore: el('summary-copy-more'),
@@ -4967,6 +5061,10 @@ function bindUi() {
   }
   if (ui.personalFind) ui.personalFind.addEventListener('click', togglePersonal);
   if (ui.audioSave) ui.audioSave.addEventListener('click', saveMeetingAudio);
+  if (ui.transcriptSave) ui.transcriptSave.addEventListener('click', () => saveTranscript());
+  if (ui.pickText) ui.pickText.addEventListener('click', () => saveTranscript(pickedIds()));
+  if (ui.pickAudio) ui.pickAudio.addEventListener('click', savePickedAudio);
+  if (ui.pickClear) ui.pickClear.addEventListener('click', clearPicks);
   if (ui.chatModel) {
     ui.chatModel.addEventListener('click', async () => {
       await openAudioSheet();

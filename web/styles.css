@@ -2172,6 +2172,13 @@ body.is-resizing * { user-select: none !important; }
   color: var(--ink-3);
 }
 .personal-bar[hidden] { display: none; }
+.pick-bar { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; }
+.pick-bar[hidden] { display: none; }
+.pick-bar__count { color: var(--ink-2); }
+/* Галочка у реплики: видна при наведении и когда отмечена. */
+.turn__pick { width: 12px; height: 12px; margin: 0 2px; opacity: 0; cursor: pointer; accent-color: var(--accent); }
+.turn:hover .turn__pick, .turn__pick:checked { opacity: .9; }
+.turn.is-picked .turn__text { box-shadow: 0 0 0 1.5px var(--accent); }
 .personal-bar__result.is-found { color: var(--rec); }
 /* Подсветка, а не замена: человек должен видеть, что именно нашлось, и
    решить сам. Пунктир снизу, чтобы текст оставался читаемым. */

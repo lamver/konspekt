@@ -169,6 +169,7 @@ class Сторож:
         with устройство.recorder(
             samplerate=SAMPLE_RATE, channels=1, blocksize=devices.RECORDER_BLOCK
         ) as запись:
+            devices.терпеливая_запись(запись)
             self._ошибка = None
             log.debug("Сторож слушает «%s»", getattr(устройство, "name", "?"))
             while not self._стоп.is_set():

@@ -23,6 +23,7 @@ from typing import Any
 import numpy as np
 
 from ..audio.buffers import SAMPLE_RATE
+from . import выгрузка
 
 from ..asr import (
     MODEL_DIR_NAME,
@@ -102,6 +103,7 @@ from ..core.events import (
     SUMMARY_READY,
     SUMMARY_STATUS,
     TRANSCRIPT_DRAFT,
+    TRANSCRIPT_RELABEL,
     TRANSCRIPT_SEGMENT,
     bus,
 )
@@ -804,7 +806,24 @@ class AppService:
         except Exception:
             log.exception("Не удалось сохранить сегмент транскрипта")
         bus.emit(TRANSCRIPT_SEGMENT, {"segment": segment.to_dict()})
+        self._применить_слияния(segment.meeting_id)
         self.подсказчик.реплика(segment)
+
+    def _применить_слияния(self, meeting_id: str) -> None:
+        """Два участника сошлись в одного: переписать реплики и сказать окну."""
+        for старый, участник in self.roster.забрать_слияния():
+            try:
+                сколько = self.store.remap_segments(
+                    meeting_id, старый, участник.id, участник.label, участник.person_id,
+                )
+            except Exception:
+                log.exception("Не удалось передать реплики участника %s", старый)
+                continue
+            log.info("Реплики участника %s (%d шт.) перешли к «%s»", старый, сколько, участник.label)
+            bus.emit(TRANSCRIPT_RELABEL, {
+                "meeting_id": meeting_id, "from": старый,
+                "voice_id": участник.id, "label": участник.label,
+            })
 
     # --- голоса ----------------------------------------------------------
 
@@ -1648,6 +1667,64 @@ class AppService:
                 data = каналы[0] if len(каналы) == 1 else np.stack(каналы, axis=1).reshape(-1)
                 out.writeframes(data.tobytes())
         return кадров / rate
+
+    def transcript_rows(self, meeting_id: str, ids: list[str] | None = None) -> list[dict[str, Any]]:
+        """Реплики для выгрузки: время, подпись говорящего, текст.
+
+        `ids` оставляет только выбранные реплики, порядок всё равно по
+        времени встречи: человек отмечал их вразнобой, а читать будет
+        подряд.
+        """
+        segs = self.store.list_segments(meeting_id)
+        if ids:
+            нужные = set(ids)
+            segs = [s for s in segs if s.id in нужные]
+        return [
+            {"start": s.start, "end": s.end, "who": self._кто_сказал(s),
+             "text": s.text, "speaker": s.speaker.value, "lang": s.lang}
+            for s in segs
+        ]
+
+    def write_transcript(self, meeting_id: str, path: Path,
+                         ids: list[str] | None = None) -> int:
+        """Расшифровка в файл, формат по расширению. Возвращает число реплик."""
+        meeting = self.store.get_meeting(meeting_id)
+        строки = self.transcript_rows(meeting_id, ids)
+        текст = выгрузка.собрать(
+            выгрузка.формат_по_имени(path.name), meeting.title if meeting else "", строки,
+        )
+        path.write_text(текст, encoding="utf-8")
+        return len(строки)
+
+    def clips_wav(self, meeting_id: str, ids: list[str]) -> bytes | None:
+        """Выбранные реплики одним WAV, в порядке встречи, с паузой между.
+
+        Каждая фраза берётся со своей дорожки, как при прослушивании:
+        собеседник из системного звука, свои слова из микрофона.
+        """
+        нужные = set(ids or [])
+        segs = [s for s in self.store.list_segments(meeting_id) if s.id in нужные]
+        rate = SAMPLE_RATE
+        куски: list[np.ndarray] = []
+        for s in segs:
+            кусок = self._clip_pcm(meeting_id, s.start, s.end, s.speaker.value)
+            if _кусок_пуст(кусок):
+                continue
+            data, r = кусок
+            arr = np.frombuffer(data, dtype=np.int16)
+            if r != rate and arr.size:
+                x = np.arange(arr.size) * (rate / r)
+                arr = np.interp(np.arange(int(arr.size * rate / r)), x, arr).astype(np.int16)
+            куски.append(arr)
+        if not куски:
+            return None
+        пауза = np.zeros(int(rate * 0.4), dtype=np.int16)
+        части: list[np.ndarray] = []
+        for i, к in enumerate(куски):
+            if i:
+                части.append(пауза)
+            части.append(к)
+        return _wav_bytes(np.concatenate(части).tobytes(), rate)
 
     def _clip_pcm(self, meeting_id: str, start: float, end: float,
                   track: str = "") -> tuple[bytes, int] | None:
@@ -3877,6 +3954,10 @@ def _read_wav_part(path: Path, offset: float, length: float) -> tuple[bytes, int
         data = np.frombuffer(raw, dtype=np.int16).reshape(-1, channels)
         raw = data.mean(axis=1).astype(np.int16).tobytes()
     return raw, rate
+
+
+def _кусок_пуст(кусок: tuple[bytes, int] | None) -> bool:
+    return кусок is None or not кусок[0]
 
 
 def _wav_bytes(data: bytes, rate: int) -> bytes:

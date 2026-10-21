@@ -178,6 +178,14 @@
     "save_done": "Guardado: {name}",
     "save_failed": "No se pudo guardar",
     "audio_none": "Esta reunión no tiene grabación",
+    "export_all": "Descargar transcripción",
+    "export_all_tooltip": "Toda la transcripción en un archivo: txt, markdown, srt, vtt o json",
+    "pick_tooltip": "Marcar esta línea",
+    "picked": "Seleccionadas: {n}",
+    "pick_text": "Texto",
+    "pick_audio": "Audio",
+    "pick_clear": "Quitar selección",
+    "picked_suffix": "líneas seleccionadas",
     "lang_placeholder": "idi",
     "copy_tooltip": "Copiar la frase con hablante y hora"
   },
@@ -446,7 +454,12 @@
     "file_dialog": {
       "audio_filter": "Audio y vídeo (*.mp3;*.wav;*.m4a;*.ogg;*.opus;*.flac;*.aac;*.wma;*.mp4;*.mkv;*.mov;*.webm;*.avi)",
       "all_files": "Todos los archivos (*.*)",
-      "wav_filter": "Audio WAV (*.wav)"
+      "wav_filter": "Audio WAV (*.wav)",
+      "txt_filter": "Texto (*.txt)",
+      "md_filter": "Markdown (*.md)",
+      "srt_filter": "Subtítulos SRT (*.srt)",
+      "vtt_filter": "Subtítulos WebVTT (*.vtt)",
+      "json_filter": "JSON (*.json)"
     }
   },
   "foreign": {

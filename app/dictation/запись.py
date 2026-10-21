@@ -115,6 +115,7 @@ class ЗахватГолоса:
         try:
             with микрофон.recorder(samplerate=SAMPLE_RATE, channels=1,
                                    blocksize=БЛОК_КАДРОВ) as запись:
+                devices.терпеливая_запись(запись)
                 self._начал.set()
                 предел = time.monotonic() + ПРЕДЕЛ_СЕКУНД
                 while not self._стоп.is_set():
