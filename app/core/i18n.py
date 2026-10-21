@@ -305,6 +305,15 @@ MESSAGES: dict[str, dict[str, str]] = {
         "es": "Todos los archivos (*.*)",
         "sr": "Svi fajlovi (*.*)",
     },
+    # Подпись фильтра в диалоге «Сохранить как». pywebview принимает
+    # только вид «Слова (*.ext)»: без скобок с маской он бросает
+    # ValueError, и диалог не открывается вовсе (0.17.1, 21.10).
+    "python.file_dialog.wav_filter": {
+        "ru": "Звук WAV (*.wav)",
+        "en": "WAV audio (*.wav)",
+        "es": "Audio WAV (*.wav)",
+        "sr": "WAV zvuk (*.wav)",
+    },
 }
 
 

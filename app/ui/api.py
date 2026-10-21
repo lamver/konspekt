@@ -98,6 +98,8 @@ class Api:
         if data is None:
             return {"error": "no_audio"}
         path = self._спросить_путь(str(name or ""))
+        if path is None:
+            return {"error": "write"}
         if not path:
             return {}
         try:
@@ -112,6 +114,8 @@ class Api:
         if not self._service.store.list_audio_chunks(str(meeting_id)):
             return {"error": "no_audio"}
         path = self._спросить_путь(str(name or ""))
+        if path is None:
+            return {"error": "write"}
         if not path:
             return {}
         try:
@@ -123,8 +127,14 @@ class Api:
             return {"error": "no_audio"}
         return {"saved": path, "duration": длительность}
 
-    def _спросить_путь(self, имя: str) -> str:
-        """Диалог «Сохранить как» для WAV. Отказ или нет окна: пустая строка."""
+    def _спросить_путь(self, имя: str) -> str | None:
+        """Диалог «Сохранить как» для WAV.
+
+        Пустая строка: человек передумал или окна нет, молчим. None:
+        диалог не открылся, это поломка, и о ней надо сказать: в 0.17.1
+        он молча не открывался из-за подписи фильтра, и кнопка выглядела
+        мёртвой.
+        """
         if not self._window:
             return ""
         try:
@@ -137,7 +147,7 @@ class Api:
             )
         except Exception:
             log.exception("Не удалось открыть диалог сохранения")
-            return ""
+            return None
         if not выбор:
             return ""
         путь = str(выбор[0] if isinstance(выбор, (list, tuple)) else выбор)

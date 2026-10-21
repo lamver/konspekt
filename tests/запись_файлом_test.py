@@ -133,6 +133,17 @@ def main() -> int:
         assert _имя_файла('Проверка: скачать / запись?') == "Проверка скачать запись"
         assert _имя_файла("") == "запись"
         print("[ok] название встречи превращается в допустимое имя файла")
+
+        # --- подпись фильтра диалога такая, какую принимает pywebview
+        import re
+
+        from app.core.i18n import t as перевод
+
+        правило = r"^([\w ]+)\((\*(?:\.(?:\w+|\*))*(?:;\*(?:\.(?:\w+|\*))*)*)\)$"
+        for язык in ("ru", "en", "es", "sr"):
+            подпись = перевод("python.file_dialog.wav_filter", язык)
+            assert re.search(правило, подпись), f"{язык}: pywebview отвергнет фильтр {подпись!r}"
+        print("[ok] фильтр «Сохранить как» на всех языках принимает pywebview")
         return 0
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
