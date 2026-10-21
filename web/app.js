@@ -4208,8 +4208,10 @@ async function checkUpdatesNow() {
 function showUpdateNote(payload) {
   if (!payload || !payload.latest || !ui.updateNote) return;
   ui.updateNoteText.textContent = t('update.new_version', { version: payload.latest });
-  // На macOS тихой установки нет: образ ставит человек, даём ссылку.
-  if (IS_MAC) {
+  // Там, где программа не может встать сама (Linux, запуск из
+  // исходников, Konspekt.app в чужой папке), образ ставит человек:
+  // даём ссылку на страницу выпуска.
+  if (state.selfUpdate === false) {
     ui.updateNoteNotes.textContent = t('update.mac_hint');
     ui.updateNoteNotes.hidden = false;
     ui.updateNoteOpen.hidden = false;
@@ -5382,7 +5384,9 @@ async function init() {
   await refreshImports();
   // Обновление могло скачаться до того, как окно открыли: тогда события
   // мы не слышали, и без этого запроса кнопка установки не появилась бы.
-  onUpdateState(await api.update_state());
+  const updateState = await api.update_state();
+  state.selfUpdate = !updateState || updateState.self_update !== false;
+  onUpdateState(updateState);
 
   // Восстанавливаем состояние записи, если окно открыли посреди встречи.
   const rec = await api.recording_state();

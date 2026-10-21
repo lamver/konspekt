@@ -706,11 +706,14 @@ class Api:
 
     def get_update_settings(self) -> dict[str, Any]:
         """Состояние проверки обновлений для раздела «О программе»."""
+        from ..core.updater import can_self_update
+
         settings = self._service.settings
         return {
             "check_updates": bool(settings.check_updates),
             "last_check": float(settings.last_version_check or 0),
             "auto_update": bool(settings.auto_update),
+            "self_update": can_self_update(),
         }
 
     def set_check_updates(self, enabled: bool) -> dict[str, Any]:
@@ -778,10 +781,15 @@ class Api:
         подписалось на события: без этого запроса готовое обновление
         было бы не видно до перезапуска.
         """
+        from ..core.updater import can_self_update
+
         ready = self._service.updater.ready
+        # Умеет ли программа встать сама: на Windows всегда, на macOS из
+        # своего Konspekt.app. Иначе плашка ведёт на страницу выпуска.
+        self_update = can_self_update()
         if not ready:
-            return {"state": "idle"}
-        return {"state": "ready", "version": ready.version}
+            return {"state": "idle", "self_update": self_update}
+        return {"state": "ready", "version": ready.version, "self_update": self_update}
 
 
 def _имя_файла(текст: str) -> str:

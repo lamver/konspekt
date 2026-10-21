@@ -323,6 +323,97 @@ def check_retries_after_break() -> None:
     print(f"[ok] после обрыва пробуем ещё раз, попыток {len(tries)}")
 
 
+def на_маке(машина: str = "arm64"):
+    """Подменить систему на macOS с собранным Konspekt.app. Возвращает откат."""
+    было = (up.ПЛАТФОРМА, up.МАШИНА, up.ЗАМОРОЖЕНА, up.ПУТЬ_ПРОГРАММЫ)
+
+    def откат() -> None:
+        up.ПЛАТФОРМА, up.МАШИНА, up.ЗАМОРОЖЕНА, up.ПУТЬ_ПРОГРАММЫ = было
+
+    up.ПЛАТФОРМА, up.МАШИНА, up.ЗАМОРОЖЕНА = "darwin", машина, True
+    return откат
+
+
+def check_mac_asset() -> None:
+    """На Mac качается образ своей архитектуры и сумма из своего файла.
+
+    На Windows и Mac суммы лежат в разных файлах: общий SHA256SUMS
+    затёрла бы сборка Mac. Перепутать файл значит не найти сумму и
+    молча не обновиться.
+    """
+    откат = на_маке("arm64")
+    try:
+        assert up.asset_for("9.9.9") == ("konspekt-9.9.9-mac-arm64.dmg", "SHA256SUMS-mac-arm64")
+        up.МАШИНА = "x86_64"
+        assert up.asset_for("9.9.9") == ("konspekt-9.9.9-mac-x64.dmg", "SHA256SUMS-mac-x64")
+        up.ПЛАТФОРМА = "linux"
+        assert up.asset_for("9.9.9") is None, "на Linux ставить нечем"
+        up.ПЛАТФОРМА = "win32"
+        assert up.asset_for("9.9.9") == ("konspekt-9.9.9-setup.exe", "SHA256SUMS")
+    finally:
+        откат()
+    print("[ok] на Mac качается образ своей архитектуры и сумма из своего файла")
+
+
+def check_mac_install() -> None:
+    """На Mac установка — скрипт, который ждёт нашего выхода, и сам выход.
+
+    Подменять работающее приложение нельзя, поэтому программа запускает
+    скрипт отдельным сеансом и закрывается сама; скрипт получает образ,
+    путь к Konspekt.app и просьбу перезапустить.
+    """
+    from app.core.events import APP_QUIT
+
+    with tempfile.TemporaryDirectory() as d:
+        app = Path(d) / "Applications" / "Konspekt.app"
+        (app / "Contents" / "MacOS").mkdir(parents=True)
+        image = Path(d) / "konspekt-9.9.9-mac-arm64.dmg"
+        image.write_bytes(PAYLOAD)
+        откат = на_маке()
+        up.ПУТЬ_ПРОГРАММЫ = app / "Contents" / "MacOS" / "Konspekt"
+        real_popen, real_dir = up.subprocess.Popen, up._updates_dir
+        up._updates_dir = lambda: Path(d)
+        started: list = []
+        up.subprocess.Popen = lambda *a, **kw: started.append((list(a[0]), kw))
+        quits: list = []
+        off = bus.on(APP_QUIT, quits.append)
+        try:
+            assert up._bundle() == app, "Konspekt.app не найден по пути программы"
+            assert up.can_self_update() is True
+            u = up.Updater(FakeService())
+            u.ready = up.Ready("9.9.9", image)
+            assert u.install_now(restart=True) is True
+        finally:
+            up.subprocess.Popen, up._updates_dir = real_popen, real_dir
+            off()
+            откат()
+        assert started, "скрипт подмены не запущен"
+        args, kw = started[0]
+        assert args[0] == "/bin/bash" and args[1].endswith("обновить.sh")
+        assert args[3] == str(image) and args[4] == str(app) and args[5] == "1", args
+        assert kw.get("start_new_session"), "скрипт умрёт вместе с программой"
+        script = Path(args[1]).read_text(encoding="utf-8")
+        for слово in ("hdiutil attach", "ditto", "xattr -cr", "kill -0", "open -n"):
+            assert слово in script, f"в скрипте нет «{слово}»"
+        assert quits, "программа не вышла, а скрипт ждёт именно этого"
+    print("[ok] на Mac подмену делает скрипт после нашего выхода, с перезапуском")
+
+
+def check_mac_from_sources_stays_manual() -> None:
+    """Из исходников или из чужой папки на Mac ставим руками, как раньше."""
+    откат = на_маке()
+    up.ЗАМОРОЖЕНА = False
+    try:
+        assert up._bundle() is None
+        assert up.can_self_update() is False
+        u = up.Updater(FakeService())
+        u.download_later("9.9.9")
+        assert u._thread is None, "из исходников нельзя качать образ: ставить его некуда"
+    finally:
+        откат()
+    print("[ok] запуск не из Konspekt.app оставляет обновление ручным")
+
+
 def main() -> int:
     check_happy_path()
     check_bad_sum()
@@ -334,6 +425,9 @@ def main() -> int:
     check_installs_after_idle()
     check_button_restarts()
     check_retries_after_break()
+    check_mac_asset()
+    check_mac_install()
+    check_mac_from_sources_stays_manual()
     print("\nВсе проверки пройдены.")
     return 0
 

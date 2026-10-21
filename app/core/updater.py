@@ -6,6 +6,13 @@
 пользователя и не просит прав администратора, поэтому обновление
 проходит без единого окна.
 
+На macOS установщика нет, есть образ .dmg. Обновление делает то же, что
+человек руками: монтирует образ, копирует Konspekt.app поверх старого,
+снимает карантин и перезапускает программу. Этим занимается короткий
+скрипт (`СКРИПТ_MAC`), который дожидается выхода программы: подменять
+работающее приложение нельзя. Подписи Apple у сборки пока нет, поэтому
+единственная проверка та же, что на Windows: сумма из нашего релиза.
+
 Чего здесь намеренно нет:
 
 - Тихой подмены без проверки. Файл скачан из сети, поэтому перед
@@ -39,7 +46,7 @@ import httpx
 from app import __version__
 
 from . import paths
-from .events import UPDATE_STATE, bus
+from .events import APP_QUIT, UPDATE_STATE, bus
 
 log = logging.getLogger(__name__)
 
@@ -68,6 +75,101 @@ IDLE_BEFORE_INSTALL = float(os.environ.get("KONSPEKT_UPDATE_IDLE", 1800))
 # Дальше не пробуем, дождёмся завтрашней проверки версии.
 RETRY_DELAYS = (60.0, 120.0, 240.0)
 
+# Система и процессор в переменных, а не в вызовах по месту: тест на
+# Windows подменяет их и проверяет путь macOS, не имея Mac под рукой.
+ПЛАТФОРМА = sys.platform
+МАШИНА = platform.machine()
+ЗАМОРОЖЕНА = bool(getattr(sys, "frozen", False))
+ПУТЬ_ПРОГРАММЫ = Path(sys.executable)
+
+# Подмена программы на macOS. Аргументы: pid программы, образ, путь к
+# Konspekt.app, перезапускать ли, файл журнала. Ждёт выхода программы,
+# монтирует образ, копирует новое приложение рядом со старым, меняет их
+# местами одним переименованием и снимает карантин: без него macOS
+# назвала бы скопированную программу повреждённой, как и при ручной
+# установке без подписи Apple.
+СКРИПТ_MAC = r"""#!/bin/bash
+pid="$1"; dmg="$2"; app="$3"; restart="$4"; log="$5"
+exec >>"$log" 2>&1
+echo "== $(date '+%Y-%m-%d %H:%M:%S') обновление: $dmg -> $app"
+for i in $(seq 1 120); do
+  kill -0 "$pid" 2>/dev/null || break
+  sleep 0.5
+done
+if kill -0 "$pid" 2>/dev/null; then
+  echo "программа не вышла за минуту, обновление отложено"
+  exit 1
+fi
+mnt="$(mktemp -d /tmp/konspekt-update.XXXXXX)"
+if ! hdiutil attach -nobrowse -readonly -noautoopen -mountpoint "$mnt" "$dmg"; then
+  echo "образ не смонтировался"
+  rmdir "$mnt"
+  exit 1
+fi
+dir="$(dirname "$app")"
+new="$dir/.Konspekt.new.app"
+old="$dir/.Konspekt.old.app"
+rm -rf "$new" "$old"
+ok=0
+if ditto "$mnt/Konspekt.app" "$new"; then
+  xattr -cr "$new" 2>/dev/null || true
+  if mv "$app" "$old" && mv "$new" "$app"; then
+    rm -rf "$old"
+    ok=1
+    echo "программа подменена"
+  else
+    echo "не удалось поменять местами, возвращаем старую"
+    [ -d "$old" ] && [ ! -d "$app" ] && mv "$old" "$app"
+    rm -rf "$new"
+  fi
+else
+  echo "копирование из образа не удалось"
+  rm -rf "$new"
+fi
+hdiutil detach "$mnt" -force >/dev/null 2>&1
+rmdir "$mnt" 2>/dev/null
+if [ "$ok" = "1" ] && [ "$restart" = "1" ]; then
+  open -n "$app"
+fi
+exit $((1 - ok))
+"""
+
+
+def asset_for(version: str) -> tuple[str, str] | None:
+    """Файл обновления и файл сумм для этой системы. None: тут не ставим."""
+    if ПЛАТФОРМА == "win32":
+        return f"konspekt-{version}-setup.exe", "SHA256SUMS"
+    if ПЛАТФОРМА == "darwin":
+        arch = "arm64" if МАШИНА == "arm64" else "x64"
+        return f"konspekt-{version}-mac-{arch}.dmg", f"SHA256SUMS-mac-{arch}"
+    return None
+
+
+def _bundle() -> Path | None:
+    """Konspekt.app, из которого запущена программа. Из исходников: None."""
+    if ПЛАТФОРМА != "darwin" or not ЗАМОРОЖЕНА:
+        return None
+    # .../Konspekt.app/Contents/MacOS/Konspekt
+    for родитель in ПУТЬ_ПРОГРАММЫ.parents:
+        if родитель.suffix == ".app":
+            return родитель
+    return None
+
+
+def can_self_update() -> bool:
+    """Умеет ли программа поставить обновление сама на этой машине.
+
+    На Windows всегда: установщик пишет в папку пользователя. На macOS
+    только из собранного Konspekt.app, который мы вправе переписать:
+    в чужой папке или без прав остаётся страница выпуска.
+    """
+    if ПЛАТФОРМА == "win32":
+        return True
+    if ПЛАТФОРМА == "darwin":
+        app = _bundle()
+        return app is not None and os.access(app, os.W_OK) and os.access(app.parent, os.W_OK)
+    return False
+
 
 @dataclass
 class Ready:
@@ -91,9 +193,9 @@ def _sha256(path: Path) -> str:
     return h.hexdigest()
 
 
-def _expected_sum(version: str, name: str) -> str | None:
+def _expected_sum(version: str, name: str, sums: str = "SHA256SUMS") -> str | None:
     """Забрать контрольную сумму установщика из файла релиза."""
-    url = f"{DOWNLOAD}/v{version}/SHA256SUMS"
+    url = f"{DOWNLOAD}/v{version}/{sums}"
     r = httpx.get(url, headers={"User-Agent": USER_AGENT}, follow_redirects=True, timeout=TIMEOUT)
     r.raise_for_status()
     for line in r.text.splitlines():
@@ -123,10 +225,9 @@ class Updater:
         if not VERSION_RE.match(version or ""):
             log.warning("Странный номер версии, обновление пропущено: %r", version)
             return
-        if sys.platform != "win32":
-            # Тихая установка пока только на Windows: там установщик
-            # умеет встать поверх. На macOS человек видит, что есть новая
-            # версия, и ставит её сам, образом с страницы релиза.
+        if asset_for(version) is None or not can_self_update():
+            # Linux, запуск из исходников, Konspekt.app в чужой папке:
+            # человек видит, что есть новая версия, и ставит её сам.
             log.info("Обновление %s: на этой системе ставим руками", version)
             return
         with self._lock:
@@ -140,10 +241,10 @@ class Updater:
             self._thread.start()
 
     def _download(self, version: str) -> None:
-        name = f"konspekt-{version}-setup.exe"
+        name, sums = asset_for(version) or (f"konspekt-{version}-setup.exe", "SHA256SUMS")
         target = _updates_dir() / name
         try:
-            expected = _expected_sum(version, name)
+            expected = _expected_sum(version, name, sums)
             if not expected:
                 log.warning("В релизе %s нет суммы для %s, обновление отменено", version, name)
                 bus.emit(UPDATE_STATE, {"state": "error"})
@@ -270,7 +371,7 @@ class Updater:
 
     # --- установка -------------------------------------------------------
 
-    def install_now(self, restart: bool = False) -> bool:
+    def install_now(self, restart: bool = False, quit: bool = True) -> bool:
         """Запустить установку. Программа при этом закрывается.
 
         `restart` просит установщик поднять программу обратно: при тихой
@@ -279,6 +380,10 @@ class Updater:
 
         Во время записи не трогаем: установщик закрывает Konspekt, и
         незаконченная встреча пропала бы вместе с ним.
+
+        `quit` — закрыть ли программу самим. На Windows это делает
+        установщик, на macOS скрипт ждёт нашего выхода, и выходим мы.
+        При установке на выходе программа и так закрывается.
         """
         ready = self.ready
         if not ready or not ready.path.exists():
@@ -289,6 +394,8 @@ class Updater:
         if callable(busy) and busy():
             log.info("Идёт запись, установка отложена")
             return False
+        if ПЛАТФОРМА == "darwin":
+            return self._install_mac(ready, restart, quit)
 
         try:
             args = [str(ready.path), "/VERYSILENT", "/SP-", "/NORESTART", "/NOCANCEL"]
@@ -313,6 +420,32 @@ class Updater:
             log.error("Не удалось запустить установку: %s", e)
             return False
 
+    def _install_mac(self, ready: Ready, restart: bool, quit: bool) -> bool:
+        """Подменить Konspekt.app скриптом, который переживёт наш выход."""
+        app = _bundle()
+        if app is None:
+            log.info("Программа запущена не из Konspekt.app, подменять нечего")
+            return False
+        try:
+            script = _updates_dir() / "обновить.sh"
+            script.write_text(СКРИПТ_MAC, encoding="utf-8")
+            script.chmod(0o755)
+            журнал = _updates_dir() / "обновление.log"
+            subprocess.Popen(
+                ["/bin/bash", str(script), str(os.getpid()), str(ready.path),
+                 str(app), "1" if restart else "0", str(журнал)],
+                start_new_session=True, close_fds=True,
+                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                cwd=str(Path.home()),
+            )
+            log.info("Запущена подмена %s, выходим", ready.version)
+        except Exception as e:
+            log.error("Не удалось запустить подмену программы: %s", e)
+            return False
+        if quit:
+            bus.emit(APP_QUIT, {})
+        return True
+
     def install_on_quit(self) -> None:
         """Поставить обновление при выходе из программы.
 
@@ -320,4 +453,4 @@ class Updater:
         потеряется, а при следующем запуске он уже на новой версии.
         """
         if self.ready:
-            self.install_now()
+            self.install_now(quit=False)
