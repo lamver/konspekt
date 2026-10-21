@@ -92,6 +92,7 @@ global.playTurn = () => {};
 global.pickLanguage = () => {};
 global.renameVoice = () => {};
 global.ICON_PLAY = '';
+global.ICON_SAVE = '';
 global.TURN_GAP = 0.6;
 // Вырезанный кусок app.js зовёт t() (i18n) для подписей «Я»/«Собеседник»
 // и подсказок кнопок: сама функция t() объявлена вне среза, подставляем
