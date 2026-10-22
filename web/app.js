@@ -314,9 +314,14 @@ window.__konspekt_event = function (payload) {
       // рисовать реплики сразу по ходу записи.
       if (payload.meeting_id === state.currentId) {
         state.hasAudio = true;
-        ui.transcript.querySelectorAll('.turn__play, .turn__lang').forEach((btn) => {
+        ui.transcript.querySelectorAll('.turn__play, .turn__save, .turn__lang').forEach((btn) => {
           btn.hidden = false;
         });
+        // «Скачать звук» и «звуком» в полоске отмеченных тоже прятались,
+        // пока записи не было: с 0.18.1 они появлялись только после
+        // переключения на другую встречу и обратно.
+        if (ui.audioSave) ui.audioSave.hidden = false;
+        updatePickBar();
       }
       renderRecordingState();
       stopTimer();
