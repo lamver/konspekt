@@ -37,6 +37,7 @@
 <body>
 <header>
   <button id="звонок">Позвонить</button>
+  <select id="язык" title="Язык разговора"></select>
   <select id="режим" title="Чем озвучивать">
     <option value="server" disabled>голос с сервера</option>
     <option value="browser">голос браузера</option>
@@ -65,6 +66,7 @@ const ui = {
   звонок: document.getElementById('звонок'),
   голос: document.getElementById('голос'),
   диктор: document.getElementById('диктор'),
+  язык: document.getElementById('язык'),
   режим: document.getElementById('режим'),
   глушить: document.getElementById('глушить'),
   статус: document.getElementById('статус'),
@@ -134,6 +136,9 @@ function сообщитьИграю(вкл) {
   if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'playing', on: вкл }));
 }
 
+ui.режим.addEventListener('change', () => {
+  try { localStorage.setItem('проба-голос.режим', ui.режим.value); } catch {}
+});
 ui.режим.onchange = () => {
   замолчать();
   if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'voice', server: ui.режим.value === 'server' }));
@@ -141,9 +146,46 @@ ui.режим.onchange = () => {
   ui.диктор.hidden = ui.режим.value !== 'server' || !ui.диктор.options.length;
 };
 
-const ИМЕНА_ДИКТОРОВ = { female_0: 'женский 1', female_1: 'женский 2', female_2: 'женский 3', male_0: 'мужской 1', male_1: 'мужской 2' };
+const ИМЕНА_ДИКТОРОВ = {
+  female_0: 'женский 1', female_1: 'женский 2', female_2: 'женский 3', male_0: 'мужской 1', male_1: 'мужской 2',
+  'en_US-ryan-medium': 'Ryan (US)', 'en_US-amy-medium': 'Amy (US)',
+  'es_ES-davefx-medium': 'Dave (ES)', 'es_MX-claude-high': 'Claude (MX)', 'es_ES-sharvard-medium': 'Sharvard (ES)',
+  'ru_RU-dmitri-medium': 'Дмитрий', 'ru_RU-irina-medium': 'Ирина',
+};
+
+// --- язык разговора: уши, голос и подсказка модели на сервере ------------
+let языки = {};   // то, что сервер отдал в /сведения: дикторы и подсказка по языкам
+function применитьЯзык(отправить) {
+  const я = языки[ui.язык.value];
+  if (!я) return;
+  try { localStorage.setItem('проба-голос.язык', ui.язык.value); } catch {}
+  if (отправить && ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'lang', lang: ui.язык.value }));
+  ui.режим.querySelector('[value=server]').disabled = !я.voice;
+  // Режим берём из выбора человека, иначе голос с сервера, когда он есть.
+  let режим = '';
+  try { режим = localStorage.getItem('проба-голос.режим') || ''; } catch {}
+  if (я.voice) ui.режим.value = (режим && режим !== 'server') ? режим : 'server';
+  else if (ui.режим.value === 'server') ui.режим.value = 'browser';
+  стандартныйПромпт = я.prompt || '';
+  ui.промпт.placeholder = стандартныйПромпт;
+  заполнитьДикторов(я.speakers || [], я.speaker);
+  ui.режим.onchange();
+}
+function заполнитьЯзыки(список, текущий) {
+  языки = список;
+  ui.язык.innerHTML = '';
+  for (const [код, я] of Object.entries(список)) {
+    const o = document.createElement('option');
+    o.value = код; o.textContent = я.name;
+    ui.язык.appendChild(o);
+  }
+  let выбран = текущий;
+  try { выбран = localStorage.getItem('проба-голос.язык') || текущий; } catch {}
+  ui.язык.value = список[выбран] ? выбран : Object.keys(список)[0];
+}
+ui.язык.onchange = () => { замолчать(); применитьЯзык(true); };
 ui.диктор.onchange = () => {
-  try { localStorage.setItem('проба-голос.диктор', ui.диктор.value); } catch {}
+  try { localStorage.setItem('проба-голос.диктор.' + ui.язык.value, ui.диктор.value); } catch {}
   if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'speaker', name: ui.диктор.value }));
 };
 function заполнитьДикторов(список, текущий) {
@@ -154,7 +196,7 @@ function заполнитьДикторов(список, текущий) {
     ui.диктор.appendChild(o);
   }
   let выбран = текущий;
-  try { выбран = localStorage.getItem('проба-голос.диктор') || текущий; } catch {}
+  try { выбран = localStorage.getItem('проба-голос.диктор.' + ui.язык.value) || текущий; } catch {}
   if (список.includes(выбран)) ui.диктор.value = выбран;
   ui.диктор.onchange();
 }
@@ -362,11 +404,8 @@ ui.звонок.onclick = () => (идёт ? положить() : позвони�
 
 // До звонка: какой голос и дикторы на сервере, чтобы выбрать заранее.
 fetch('/сведения').then(r => r.json()).then(с => {
-  ui.режим.querySelector('[value=server]').disabled = !с.voice;
-  if (с.voice) { ui.режим.value = 'server'; заполнитьДикторов(с.speakers || [], с.speaker); }
-  стандартныйПромпт = с.prompt || '';
-  ui.промпт.placeholder = стандартныйПромпт;
-  ui.режим.onchange();
+  заполнитьЯзыки(с.languages || {}, 'ru');
+  применитьЯзык(false);
 }).catch(() => {});
 
 // Проверка без микрофона: запись с сервера уходит в тот же канал, что и
@@ -374,7 +413,7 @@ fetch('/сведения').then(r => r.json()).then(с => {
 fetch('/пример', { method: 'HEAD' }).then(r => { if (r.ok) ui.пример.hidden = false; }).catch(() => {});
 ui.пример.onclick = async () => {
   if (!ws || ws.readyState !== 1) { ui.статус.textContent = 'сначала «Позвонить»'; return; }
-  const ответ = await fetch('/пример');
+  const ответ = await fetch('/пример?lang=' + encodeURIComponent(ui.язык.value || 'ru'));
   if (!ответ.ok) { ui.статус.textContent = 'примера нет'; return; }
   const байты = new Uint8Array(await ответ.arrayBuffer());
   const всё = new Uint8Array(байты.length + 16000 * 2);
@@ -386,14 +425,10 @@ ui.пример.onclick = async () => {
 function принять(с) {
   switch (с.type) {
     case 'ready': {
-      ui.статус.textContent = `на линии · ${с.model}${с.voice ? ' · ' + с.voice : ''}`;
-      const серверный = ui.режим.querySelector('[value=server]');
-      серверный.disabled = !с.voice;
-      if (с.voice) { частотаГолоса = с.rate; ui.режим.value = 'server'; заполнитьДикторов(с.speakers || [], с.speaker); }
-      else if (ui.режим.value === 'server') ui.режим.value = 'browser';
-      ui.режим.onchange();
-      стандартныйПромпт = с.prompt || '';
-      ui.промпт.placeholder = стандартныйПромпт;
+      ui.статус.textContent = `на линии · ${с.model}`;
+      частотаГолоса = с.rate || 22050;
+      заполнитьЯзыки(с.languages || {}, с.lang || 'ru');
+      применитьЯзык(true);   // язык, диктор и режим уходят на сервер
       отправитьПромпт();
       break;
     }

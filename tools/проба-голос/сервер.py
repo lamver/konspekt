@@ -77,6 +77,31 @@ log = logging.getLogger("проба-голос")
     "Не повторяй слова собеседника, отвечай своими словами. "
     "Если вопрос непонятен, переспроси одной фразой."
 )
+ПОДСКАЗКА_EN = (
+    "You are a conversation partner on a voice call. Answer in English, briefly, "
+    "one to three sentences, in a natural spoken style, like on the phone. "
+    "No lists, no markdown, no headings, no emoji. "
+    "Do not repeat the caller's words, answer in your own words. "
+    "If the question is unclear, ask back in one sentence."
+)
+ПОДСКАЗКА_ES = (
+    "Eres un interlocutor en una llamada de voz. Responde en español, brevemente, "
+    "en una a tres frases, con un tono natural y hablado, como por teléfono. "
+    "Sin listas, sin markdown, sin títulos, sin emojis. "
+    "No repitas las palabras de quien llama, responde con tus propias palabras. "
+    "Si la pregunta no está clara, repregunta en una sola frase."
+)
+# Языки разговора. Русский слушает GigaAM и озвучивает Vosk, остальные
+# слушает Parakeet TDT 0.6B v3 (25 языков, onnx-asr) и озвучивает
+# Piper: для английского и испанского его ударения не беда, там
+# espeak-ng справляется. Голоса Piper качаются так:
+#   .venv/Scripts/python.exe -m piper.download_voices --data-dir models/piper en_US-ryan-medium es_ES-davefx-medium
+ЯЗЫКИ = {
+    "ru": {"название": "Русский", "подсказка": ПОДСКАЗКА, "piper": ["ru_RU-dmitri-medium", "ru_RU-irina-medium"]},
+    "en": {"название": "English", "подсказка": ПОДСКАЗКА_EN, "piper": ["en_US-ryan-medium", "en_US-amy-medium"]},
+    "es": {"название": "Español", "подсказка": ПОДСКАЗКА_ES, "piper": ["es_ES-davefx-medium", "es_MX-claude-high", "es_ES-sharvard-medium"]},
+}
+PARAKEET = "nemo-parakeet-tdt-0.6b-v3"  # лежит в кэше Hugging Face после первого запуска
 ПАМЯТЬ_РЕПЛИК = 20  # сколько последних реплик помним
 ПЕРЕБИТЬ_ПОСЛЕ = 5  # кусков по 64 мс речи подряд, чтобы перебить голос модели
 БЕЗ_РАЗМЫШЛЕНИЙ = {"enable_thinking": False}
@@ -119,6 +144,11 @@ def _число_словами(м: re.Match) -> str:
         return " "
 
 
+def без_иероглифов(текст: str) -> str:
+    текст = re.sub(r"[぀-ヿ㐀-鿿가-힯＀-￯]+", "", текст)
+    return re.sub(r"\s+", " ", текст).strip()
+
+
 def для_голоса(текст: str) -> str:
     for было, стало in ЗАМЕНЫ:
         текст = текст.replace(было, стало)
@@ -156,12 +186,45 @@ class Голос:
         log.info("Голос %s загружен за %.1f с", self.имя, time.monotonic() - т)
 
     дикторы: dict[str, int] = {}  # у Piper один голос на модель
+    диктор = None
+    чистить = staticmethod(без_иероглифов)  # цифры и латиницу Piper читает сам
 
     def сказать(self, текст: str, диктор: str | None = None) -> bytes:
         with self._lock:
             return b"".join(
                 ч.audio_int16_bytes for ч in self.модель.synthesize(текст, self.настройки)
             )
+
+
+class ГолосаPiper:
+    """Несколько голосов Piper одного языка, грузятся при первом
+    обращении: пять голосов по полторы секунды на старте никому не нужны."""
+
+    def __init__(self, имена: list[str]) -> None:
+        папка = paths.models_dir() / "piper"
+        self.пути = {имя: папка / f"{имя}.onnx" for имя in имена if (папка / f"{имя}.onnx").exists()}
+        self.дикторы = {имя: i for i, имя in enumerate(self.пути)}
+        self.диктор = next(iter(self.пути), None)
+        self.имя = f"piper/{self.диктор}"
+        self.частота = 22050
+        self._голоса: dict[str, Голос] = {}
+        self._lock = threading.Lock()
+
+    def __bool__(self) -> bool:
+        return bool(self.пути)
+
+    чистить = staticmethod(без_иероглифов)
+
+    def _голос(self, имя: str | None) -> Голос:
+        имя = имя if имя in self.пути else self.диктор
+        with self._lock:
+            if имя not in self._голоса:
+                self._голоса[имя] = Голос(self.пути[имя])
+                self.частота = self._голоса[имя].частота
+            return self._голоса[имя]
+
+    def сказать(self, текст: str, диктор: str | None = None) -> bytes:
+        return self._голос(диктор).сказать(текст)
 
 
 class ГолосVosk:
@@ -196,6 +259,8 @@ class ГолосVosk:
         self._lock = threading.Lock()
         log.info("Голос %s загружен за %.1f с", self.имя, time.monotonic() - т)
 
+    чистить = staticmethod(для_голоса)
+
     def сказать(self, текст: str, диктор: str | None = None) -> bytes:
         sid = self.дикторы.get(диктор or "", self.sid)
         with self._lock:
@@ -225,7 +290,15 @@ class Движок:
 
     def __init__(self, уровень: str, голос) -> None:
         self.asr = GigaamTranscriber(paths.models_dir() / "gigaam-v3-e2e-rnnt")
+        self.asr_мульти = None  # Parakeet, грузится в фоне после старта
         self.голос = голос
+        # Озвучка по языкам: русский как выбрано флагами, остальные Piper.
+        self.голоса = {"ru": голос}
+        for код, о in ЯЗЫКИ.items():
+            if код != "ru":
+                набор = ГолосаPiper(о["piper"])
+                if набор:
+                    self.голоса[код] = набор
         модель = local.find_model(уровень)
         if модель is None:
             raise SystemExit(
@@ -254,10 +327,47 @@ class Движок:
         log.info("Модель готова за %.1f с: %s", time.monotonic() - т, адрес)
         if self.голос:
             self.голос.сказать("Алло.")  # первый вызов Piper дольше остальных
+        threading.Thread(target=self._загрузить_мульти, daemon=True).start()
 
-    def распознать(self, pcm: np.ndarray) -> str:
-        куски = self.asr.transcribe(pcm, ЧАСТОТА)
-        return " ".join(к.text for к in куски).strip()
+    def _загрузить_мульти(self) -> None:
+        """Parakeet для нерусских языков: 650 МБ, грузится секунды, поэтому
+        в фоне. Первый запуск докачивает его с Hugging Face."""
+        try:
+            import onnx_asr
+
+            т = time.monotonic()
+            модель = onnx_asr.load_model(PARAKEET, quantization="int8")
+            self.asr_мульти = модель
+            log.info("Parakeet загружен за %.1f с", time.monotonic() - т)
+        except Exception:
+            log.exception("Parakeet не загрузился, английский и испанский недоступны")
+
+    def распознать(self, pcm: np.ndarray, язык: str = "ru") -> str:
+        if язык == "ru":
+            куски = self.asr.transcribe(pcm, ЧАСТОТА)
+            return " ".join(к.text for к in куски).strip()
+        if self.asr_мульти is None:
+            return ""
+        волна = np.asarray(pcm, dtype=np.float32).reshape(-1)
+        нужно = ЧАСТОТА - волна.size  # совсем короткий вход добиваем до секунды
+        if нужно > 0:
+            волна = np.concatenate([волна, np.zeros(нужно, dtype=np.float32)])
+        return (self.asr_мульти.recognize(волна, sample_rate=ЧАСТОТА, language=язык) or "").strip()
+
+    def сведения(self) -> dict:
+        языки = {}
+        for код, о in ЯЗЫКИ.items():
+            г = self.голоса.get(код)
+            if код != "ru" and г is None:
+                continue
+            языки[код] = {
+                "name": о["название"],
+                "prompt": о["подсказка"],
+                "voice": г.имя if г else None,
+                "speakers": list(г.дикторы) if г else [],
+                "speaker": getattr(г, "диктор", None) if г else None,
+            }
+        return {"model": self.сервер.model_path.name, "languages": языки}
 
     def ответить(self, история, на_кусок, стоп, подсказка: str = ПОДСКАЗКА) -> str:
         assert self.клиент is not None
@@ -361,9 +471,18 @@ class Разговор:
         self.стоп = threading.Event()
         self.задача: asyncio.Task | None = None
         self.голос_включён = True  # страница может попросить озвучивать сама
-        self.подсказка = ПОДСКАЗКА  # страница может задать свою
+        self.своя_подсказка = ""  # страница может задать свою
         self.диктор: str | None = None  # и выбрать диктора
+        self.язык = "ru"
         self.цикл = asyncio.get_running_loop()
+
+    @property
+    def подсказка(self) -> str:
+        return self.своя_подсказка or ЯЗЫКИ[self.язык]["подсказка"]
+
+    @property
+    def голос(self):
+        return self.движок.голоса.get(self.язык)
 
     async def звук(self, данные: bytes) -> None:
         данные = данные[: len(данные) & ~1]  # int16: нечётный хвост отбрасываем
@@ -410,7 +529,7 @@ class Разговор:
 
     async def реплика(self, pcm: np.ndarray) -> None:
         т0 = time.monotonic()
-        текст = await asyncio.to_thread(self.движок.распознать, pcm)
+        текст = await asyncio.to_thread(self.движок.распознать, pcm, self.язык)
         asr_мс = int((time.monotonic() - т0) * 1000)
         if not текст:
             return
@@ -442,16 +561,19 @@ class Разговор:
         предложения: asyncio.Queue = asyncio.Queue()
         звук_мс: list[int] = []
 
+        голос = self.голос
+        диктор = self.диктор
+
         async def озвучивать() -> None:
             while True:
                 фраза = await предложения.get()
                 if фраза is None:
                     return
-                фраза = для_голоса(фраза)
+                фраза = голос.чистить(фраза)
                 if стоп.is_set() or not self.голос_включён or not фраза:
                     continue
                 try:
-                    pcm = await asyncio.to_thread(self.движок.голос.сказать, фраза, self.диктор)
+                    pcm = await asyncio.to_thread(голос.сказать, фраза, диктор)
                 except Exception:
                     # Одна непроизносимая фраза не должна глушить остальные.
                     log.exception("Не озвучилось: %r", фраза)
@@ -462,7 +584,7 @@ class Разговор:
                     звук_мс.append(int((time.monotonic() - т0) * 1000))
                 await self.связь.слать_звук(pcm)
 
-        озвучка = asyncio.create_task(озвучивать()) if self.движок.голос else None
+        озвучка = asyncio.create_task(озвучивать()) if голос else None
 
         первый = None
         собрано: list[str] = []
@@ -525,7 +647,8 @@ async def обслужить(движок: Движок, reader: asyncio.StreamR
         if not строка:
             return
         метод, путь, _ = строка.decode("latin-1").split(" ", 2)
-        путь = unquote(путь.split("?", 1)[0])
+        путь, _, запрос = unquote(путь).partition("?")
+        параметры = dict(п.split("=", 1) for п in запрос.split("&") if "=" in п)
         заголовки: dict[str, str] = {}
         while True:
             с = await reader.readline()
@@ -555,16 +678,10 @@ async def обслужить(движок: Движок, reader: asyncio.StreamR
         elif путь == "/сведения":
             # Страница узнаёт голос и дикторов до звонка, чтобы показать
             # список сразу, а не после «Позвонить».
-            тело = json.dumps({
-                "model": движок.сервер.model_path.name,
-                "voice": движок.голос.имя if движок.голос else None,
-                "speakers": list(движок.голос.дикторы) if движок.голос else [],
-                "speaker": getattr(движок.голос, "диктор", None),
-                "prompt": ПОДСКАЗКА,
-            }, ensure_ascii=False).encode()
+            тело = json.dumps(движок.сведения(), ensure_ascii=False).encode()
             тип = "application/json; charset=utf-8"
             статус = "200 OK"
-        elif путь == "/пример" and (пример := _пример_записи()) is not None:
+        elif путь == "/пример" and (пример := _пример_записи(движок, параметры.get("lang", "ru"))) is not None:
             # Проверка цепочки без микрофона: страница прогоняет запись
             # через тот же путь, что и живой звук.
             тело = пример
@@ -594,10 +711,28 @@ async def обслужить(движок: Движок, reader: asyncio.StreamR
             pass
 
 
-def _пример_записи() -> bytes | None:
-    """PCM 16 кГц из первой подходящей записи в audio_examples (папка
-    не в репозитории, без неё кнопки «Пример» просто нет)."""
+ПРИМЕРЫ_ФРАЗ = {
+    "en": "Hello, could we schedule a demo for next Tuesday at three?",
+    "es": "Hola, ¿podemos agendar una demostración para el martes a las tres?",
+}
+
+
+def _пример_записи(движок: Движок, язык: str = "ru") -> bytes | None:
+    """PCM 16 кГц для проверки без микрофона. По-русски — первая
+    подходящая запись из audio_examples (папки нет в репозитории, без
+    неё кнопки «Пример» просто нет), на других языках — фраза, которую
+    произносит Piper этого языка."""
     import wave
+
+    if язык != "ru":
+        голос = движок.голоса.get(язык)
+        фраза = ПРИМЕРЫ_ФРАЗ.get(язык)
+        if not голос or not фраза:
+            return None
+        pcm = np.frombuffer(голос.сказать(фраза), dtype=np.int16)
+        шаг = голос.частота / ЧАСТОТА
+        индексы = (np.arange(int(len(pcm) / шаг)) * шаг).astype(int)
+        return pcm[индексы].tobytes()
 
     for путь in sorted((КОРЕНЬ / "audio_examples").glob("*.wav")):
         try:
@@ -618,12 +753,9 @@ async def разговор(движок: Движок, reader: asyncio.StreamRea
     р = Разговор(движок, связь)
     await связь.слать(
         type="ready",
-        model=движок.сервер.model_path.name,
-        voice=движок.голос.имя if движок.голос else None,
-        rate=движок.голос.частота if движок.голос else None,
-        speakers=list(движок.голос.дикторы) if движок.голос else [],
-        speaker=getattr(движок.голос, "диктор", None),
-        prompt=ПОДСКАЗКА,
+        rate=движок.голос.частота if движок.голос else 22050,
+        lang=р.язык,
+        **движок.сведения(),
     )
     log.info("Звонок начался")
     try:
@@ -650,11 +782,18 @@ async def разговор(движок: Движок, reader: asyncio.StreamRea
                     р.голос_включён = bool(сообщение.get("server"))
                 elif сообщение.get("type") == "speaker":
                     р.диктор = сообщение.get("name") or None
+                elif сообщение.get("type") == "lang":
+                    язык = сообщение.get("lang")
+                    if язык in ЯЗЫКИ and язык != р.язык:
+                        await р.прервать()
+                        р.язык = язык
+                        р.диктор = None
+                        log.info("Язык разговора: %s", язык)
                 elif сообщение.get("type") == "playing":
                     р.играет = bool(сообщение.get("on"))
                     р.подряд = 0
                 elif сообщение.get("type") == "prompt":
-                    р.подсказка = (сообщение.get("text") or "").strip() or ПОДСКАЗКА
+                    р.своя_подсказка = (сообщение.get("text") or "").strip()
     finally:
         await р.прервать()
         log.info("Звонок закончился")
