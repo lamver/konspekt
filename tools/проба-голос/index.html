@@ -43,7 +43,7 @@
     <option value="none">без озвучки</option>
   </select>
   <select id="голос" title="Голос браузера"></select>
-  <label><input type="checkbox" id="перебивать"> перебивать (в наушниках)</label>
+  <label title="Если модель слышит себя в колонках и отвечает сама себе"><input type="checkbox" id="глушить"> глушить микрофон, пока говорит</label>
   <button id="пример" title="Прогнать запись из audio_examples вместо микрофона" hidden>Пример</button>
   <span id="статус">не подключено</span>
 </header>
@@ -64,7 +64,7 @@ const ui = {
   звонок: document.getElementById('звонок'),
   голос: document.getElementById('голос'),
   режим: document.getElementById('режим'),
-  перебивать: document.getElementById('перебивать'),
+  глушить: document.getElementById('глушить'),
   статус: document.getElementById('статус'),
   лента: document.getElementById('лента'),
   индикатор: document.getElementById('индикатор'),
@@ -101,6 +101,36 @@ let частотаГолоса = 22050;   // частота PCM с сервер�
 let плеер = null;            // AudioContext для звука с сервера
 let следующийСтарт = 0;      // когда начнётся следующий кусок звука
 let источники = [];          // играющие куски, чтобы оборвать при перебивании
+let выход = null;            // куда играем: через петлю WebRTC, чтобы эхоподавление
+                             // браузера вычитало голос модели из микрофона
+let петля = null;            // объекты петли, чтобы их не собрал сборщик мусора
+
+// Эхоподавление в Chrome и Edge вычитает из микрофона только то, что
+// играет как удалённый поток WebRTC. Обычный Web Audio оно не знает, и
+// модель слышала бы себя в колонках. Поэтому звук гоняем через петлю из
+// двух RTCPeerConnection на этой же странице и играем «удалённую» сторону.
+async function поднятьПетлю() {
+  if (!плеер) плеер = new AudioContext();
+  выход = плеер.createMediaStreamDestination();
+  const a = new RTCPeerConnection(), b = new RTCPeerConnection();
+  a.onicecandidate = (e) => e.candidate && b.addIceCandidate(e.candidate);
+  b.onicecandidate = (e) => e.candidate && a.addIceCandidate(e.candidate);
+  const звук = document.createElement('audio');
+  звук.autoplay = true;
+  b.ontrack = (e) => { звук.srcObject = e.streams[0]; звук.play().catch(() => {}); };
+  for (const t of выход.stream.getTracks()) a.addTrack(t, выход.stream);
+  const предложение = await a.createOffer();
+  await a.setLocalDescription(предложение);
+  await b.setRemoteDescription(предложение);
+  const ответ = await b.createAnswer();
+  await b.setLocalDescription(ответ);
+  await a.setRemoteDescription(ответ);
+  петля = { a, b, звук };
+}
+
+function сообщитьИграю(вкл) {
+  if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'playing', on: вкл }));
+}
 
 ui.режим.onchange = () => {
   замолчать();
@@ -118,15 +148,16 @@ function сыграть(буфер) {
   for (let i = 0; i < int16.length; i++) канал[i] = int16[i] / 32768;
   const src = плеер.createBufferSource();
   src.buffer = audio;
-  src.connect(плеер.destination);
+  src.connect(выход || плеер.destination);
   const старт = Math.max(плеер.currentTime + 0.02, следующийСтарт);
   src.start(старт);
   следующийСтарт = старт + audio.duration;
   источники.push(src);
+  if (!говорю) сообщитьИграю(true);
   говорю = true; состояние();
   src.onended = () => {
     источники = источники.filter(s => s !== src);
-    if (!источники.length) { говорю = false; тихоДо = performance.now() + 350; состояние(); }
+    if (!источники.length) { говорю = false; тихоДо = performance.now() + 350; сообщитьИграю(false); состояние(); }
   };
 }
 
@@ -194,6 +225,7 @@ function замолчать() {
   for (const s of источники) { try { s.stop(); } catch {} }
   источники = [];
   следующийСтарт = 0;
+  if (говорю) сообщитьИграю(false);
   говорю = false;
 }
 
@@ -257,6 +289,7 @@ async function позвонить() {
   };
   ws.onmessage = (e) => (e.data instanceof ArrayBuffer ? сыграть(e.data) : принять(JSON.parse(e.data)));
   if (!плеер) плеер = new AudioContext();  // создаём по клику: иначе браузер не даст играть
+  if (!выход) { try { await поднятьПетлю(); } catch (err) { console.warn('петля эха не поднялась', err); } }
   ws.onclose = () => положить('связь прервана');
   ws.onerror = () => положить('ошибка связи');
 
@@ -273,9 +306,10 @@ async function позвонить() {
     источник.connect(узел);
     узел.port.onmessage = (e) => {
       if (!ws || ws.readyState !== 1) return;
-      // Пока модель говорит и перебивать нельзя, микрофон молчит: иначе
-      // она услышит себя в колонках и ответит самой себе.
-      if (!ui.перебивать.checked && (говорю || performance.now() < тихоДо)) return;
+      // Запасной режим без перебивания: пока модель говорит, микрофон
+      // молчит. Нужен, если эхоподавление не справилось и модель
+      // отвечает сама себе.
+      if (ui.глушить.checked && (говорю || performance.now() < тихоДо)) return;
       ws.send(e.data);
     };
   } catch (err) {
