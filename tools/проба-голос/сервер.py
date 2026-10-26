@@ -83,6 +83,23 @@ log = logging.getLogger("проба-голос")
 # Законченное предложение: до знака конца и закрывающей кавычки, либо
 # до перевода строки. Остаток буфера ждёт следующих токенов.
 ПРЕДЛОЖЕНИЕ = re.compile(r'[^\n]+?[.!?…]+["»)]?(?=\s|$)\s*|[^\n]+\n')
+# Первый кусок озвучки не ждёт точки: после четырёх слов годится и
+# запятая. Так голос начинается на 200–400 мс раньше, а шов на запятой
+# в речи и так пауза.
+РАННИЙ_КУСОК = re.compile(r'^((?:\S+\s+){3,}\S+[,;:—–])\s+(?=\S)')
+# Qwen иногда вставляет китайские иероглифы посреди русской фразы.
+# Грамматика llama.cpp запрещает их на выходе модели, а то, что
+# всё же просочилось, вырезаем перед синтезом: Vosk на них падает.
+БЕЗ_ИЕРОГЛИФОВ = (
+    "root ::= [^\\u3040-\\u30ff\\u3400-\\u4dbf\\u4e00-\\u9fff\\uac00-\\ud7af\\uff00-\\uffef]*"
+)
+НЕ_ДЛЯ_ГОЛОСА = re.compile(r"[^\w\s.,!?;:…\-—–()«»\"'%+/]", re.UNICODE)
+
+
+def для_голоса(текст: str) -> str:
+    текст = НЕ_ДЛЯ_ГОЛОСА.sub("", текст)
+    текст = re.sub(r"[぀-ヿ㐀-鿿가-힯]+", "", текст)
+    return re.sub(r"\s+", " ", текст).strip()
 
 
 def вырезать_предложения(буфер: str) -> tuple[list[str], str]:
@@ -217,6 +234,7 @@ class Движок:
             should_stop=стоп,
             max_tokens=300,
             chat_template_kwargs=БЕЗ_РАЗМЫШЛЕНИЙ,
+            grammar=БЕЗ_ИЕРОГЛИФОВ,
         )
 
     def стоп(self) -> None:
@@ -301,7 +319,7 @@ class Разговор:
     def __init__(self, движок: Движок, связь: Соединение) -> None:
         self.движок = движок
         self.связь = связь
-        self.vad = SpeechSegmenter(silence_tail=0.45, min_speech=0.3, max_segment=12.0)
+        self.vad = SpeechSegmenter(silence_tail=0.35, min_speech=0.3, max_segment=12.0)
         self.история: list[dict] = []
         self.смещение = 0.0
         self.говорил = False
@@ -378,9 +396,15 @@ class Разговор:
                 фраза = await предложения.get()
                 if фраза is None:
                     return
-                if стоп.is_set() or not self.голос_включён:
+                фраза = для_голоса(фраза)
+                if стоп.is_set() or not self.голос_включён or not фраза:
                     continue
-                pcm = await asyncio.to_thread(self.движок.голос.сказать, фраза)
+                try:
+                    pcm = await asyncio.to_thread(self.движок.голос.сказать, фраза)
+                except Exception:
+                    # Одна непроизносимая фраза не должна глушить остальные.
+                    log.exception("Не озвучилось: %r", фраза)
+                    continue
                 if стоп.is_set():
                     continue
                 if not звук_мс:
@@ -403,6 +427,11 @@ class Разговор:
             if озвучка:
                 хвост += кусок
                 готовые, хвост = вырезать_предложения(хвост)
+                if not готовые and предложения.qsize() == 0 and not звук_мс:
+                    ранний = РАННИЙ_КУСОК.match(хвост)
+                    if ранний:
+                        готовые = [ранний.group(1)]
+                        хвост = хвост[ранний.end():]
                 for п in готовые:
                     предложения.put_nowait(п)
         try:
@@ -419,7 +448,10 @@ class Разговор:
             if хвост.strip():
                 предложения.put_nowait(хвост.strip())
             предложения.put_nowait(None)
-            await озвучка
+            try:
+                await озвучка
+            except Exception:
+                log.exception("Озвучка оборвалась")
         await self.связь.слать(
             type="done",
             text=ответ,
