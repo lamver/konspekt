@@ -552,6 +552,18 @@ async def обслужить(движок: Движок, reader: asyncio.StreamR
             тело = (ЗДЕСЬ / "index.html").read_bytes()
             тип = "text/html; charset=utf-8"
             статус = "200 OK"
+        elif путь == "/сведения":
+            # Страница узнаёт голос и дикторов до звонка, чтобы показать
+            # список сразу, а не после «Позвонить».
+            тело = json.dumps({
+                "model": движок.сервер.model_path.name,
+                "voice": движок.голос.имя if движок.голос else None,
+                "speakers": list(движок.голос.дикторы) if движок.голос else [],
+                "speaker": getattr(движок.голос, "диктор", None),
+                "prompt": ПОДСКАЗКА,
+            }, ensure_ascii=False).encode()
+            тип = "application/json; charset=utf-8"
+            статус = "200 OK"
         elif путь == "/пример" and (пример := _пример_записи()) is not None:
             # Проверка цепочки без микрофона: страница прогоняет запись
             # через тот же путь, что и живой звук.
