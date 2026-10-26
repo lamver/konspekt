@@ -2,7 +2,7 @@
 
 Запуск из корня репозитория:
 
-    .venv/Scripts/python.exe tools/проба-голос/сервер.py [--быстрая] [--движок vosk|piper] [--голос male_1] [--порт 8765]
+    .venv/Scripts/python.exe tools/проба-голос/сервер.py [--модель fast|smart|strong] [--движок vosk|piper] [--голос male_1] [--порт 8765]
 
 Потом открыть в браузере http://127.0.0.1:8765 и нажать «Позвонить».
 Лучше в Edge: там есть живые голоса «Microsoft ... Online (Natural)».
@@ -93,12 +93,40 @@ log = logging.getLogger("проба-голос")
 БЕЗ_ИЕРОГЛИФОВ = (
     "root ::= [^\\u3040-\\u30ff\\u3400-\\u4dbf\\u4e00-\\u9fff\\uac00-\\ud7af\\uff00-\\uffef]*"
 )
-НЕ_ДЛЯ_ГОЛОСА = re.compile(r"[^\w\s.,!?;:…\-—–()«»\"'%+/]", re.UNICODE)
+# Vosk знает только кириллицу и знаки . , ! ? ; : ' ( ) - : на цифре,
+# латинской букве или кавычке-ёлочке он падает. Числа читаем словами
+# (num2words, LGPL), латиницу перекладываем побуквенно, остальное убираем.
+ЛАТИНИЦА = str.maketrans({
+    "a": "а", "b": "б", "c": "к", "d": "д", "e": "е", "f": "ф", "g": "г", "h": "х",
+    "i": "и", "j": "дж", "k": "к", "l": "л", "m": "м", "n": "н", "o": "о", "p": "п",
+    "q": "к", "r": "р", "s": "с", "t": "т", "u": "у", "v": "в", "w": "в", "x": "кс",
+    "y": "й", "z": "з",
+})
+ЗАМЕНЫ = (("—", " - "), ("–", " - "), ("…", "."), ("%", " процентов"), ("+", " плюс "),
+          ("/", " или "), ("&", " и "), ("@", " собака "), ("№", " номер "))
+ЧИСЛО = re.compile(r"-?\d+(?:[.,]\d+)?")
+НЕ_ДЛЯ_ГОЛОСА = re.compile(r"[^а-яё\s.,!?;:'()\-]", re.IGNORECASE)
+
+
+def _число_словами(м: re.Match) -> str:
+    from num2words import num2words
+
+    т = м.group(0).replace(",", ".")
+    try:
+        return " " + num2words(float(т) if "." in т else int(т), lang="ru") + " "
+    except Exception:
+        return " "
 
 
 def для_голоса(текст: str) -> str:
+    for было, стало in ЗАМЕНЫ:
+        текст = текст.replace(было, стало)
+    # Дата и время: не «тридцать одна целая двенадцать сотых», а по числам.
+    текст = re.sub(r"\b(\d{1,2})\.(\d{1,2})\.(\d{2,4})\b", r"\1 \2 \3", текст)
+    текст = re.sub(r"\b(\d{1,2}):(\d{2})\b", r"\1 \2", текст)
+    текст = ЧИСЛО.sub(_число_словами, текст)
+    текст = текст.lower().translate(ЛАТИНИЦА)
     текст = НЕ_ДЛЯ_ГОЛОСА.sub("", текст)
-    текст = re.sub(r"[぀-ヿ㐀-鿿가-힯]+", "", текст)
     return re.sub(r"\s+", " ", текст).strip()
 
 
@@ -226,10 +254,10 @@ class Движок:
         куски = self.asr.transcribe(pcm, ЧАСТОТА)
         return " ".join(к.text for к in куски).strip()
 
-    def ответить(self, история, на_кусок, стоп) -> str:
+    def ответить(self, история, на_кусок, стоп, подсказка: str = ПОДСКАЗКА) -> str:
         assert self.клиент is not None
         return self.клиент.stream(
-            [{"role": "system", "content": ПОДСКАЗКА}, *история],
+            [{"role": "system", "content": подсказка}, *история],
             on_chunk=на_кусок,
             should_stop=стоп,
             max_tokens=300,
@@ -326,6 +354,7 @@ class Разговор:
         self.стоп = threading.Event()
         self.задача: asyncio.Task | None = None
         self.голос_включён = True  # страница может попросить озвучивать сама
+        self.подсказка = ПОДСКАЗКА  # страница может задать свою
         self.цикл = asyncio.get_running_loop()
 
     async def звук(self, данные: bytes) -> None:
@@ -379,7 +408,7 @@ class Разговор:
 
         def работа() -> str:
             try:
-                return self.движок.ответить(list(self.история), на_кусок, стоп.is_set)
+                return self.движок.ответить(list(self.история), на_кусок, стоп.is_set, self.подсказка)
             finally:
                 self.цикл.call_soon_threadsafe(очередь.put_nowait, None)
 
@@ -558,6 +587,7 @@ async def разговор(движок: Движок, reader: asyncio.StreamRea
         model=движок.сервер.model_path.name,
         voice=движок.голос.имя if движок.голос else None,
         rate=движок.голос.частота if движок.голос else None,
+        prompt=ПОДСКАЗКА,
     )
     log.info("Звонок начался")
     try:
@@ -582,6 +612,8 @@ async def разговор(движок: Движок, reader: asyncio.StreamRea
                     р.история.clear()
                 elif сообщение.get("type") == "voice":
                     р.голос_включён = bool(сообщение.get("server"))
+                elif сообщение.get("type") == "prompt":
+                    р.подсказка = (сообщение.get("text") or "").strip() or ПОДСКАЗКА
     finally:
         await р.прервать()
         log.info("Звонок закончился")
@@ -598,7 +630,7 @@ async def главное(аргументы) -> None:
     # 4B по умолчанию: 1.7B в разговоре быстро скатывается в эхо
     # собеседника, стоит ей один раз повторить фразу, как она цепляется
     # за этот шаблон до конца беседы. Проверено 26.10 на живом звонке.
-    движок = Движок("fast" if аргументы.быстрая else "smart", голос)
+    движок = Движок(аргументы.модель, голос)
     движок.прогреть()
     сервер = await asyncio.start_server(
         lambda r, w: обслужить(движок, r, w), "127.0.0.1", аргументы.порт
@@ -616,7 +648,10 @@ if __name__ == "__main__":
     logging.getLogger("httpx").setLevel(logging.WARNING)
     п = argparse.ArgumentParser(description="Голосовой разговор с локальной моделью")
     п.add_argument("--порт", type=int, default=8765)
-    п.add_argument("--быстрая", action="store_true", help="Qwen3 1.7B вместо 4B")
+    п.add_argument(
+        "--модель", choices=("fast", "smart", "strong"), default="smart",
+        help="уровень модели Конспекта: fast = Qwen3 1.7B, smart = 4B (по умолчанию), strong = 8B",
+    )
     п.add_argument("--движок", choices=("vosk", "piper"), help="озвучка: vosk (по умолчанию, если скачан) или piper")
     п.add_argument("--голос", help="диктор Vosk (male_0, male_1, female_0..2) или голос Piper (dmitri, irina)")
     п.add_argument("--без-голоса", dest="без_голоса", action="store_true", help="озвучивает браузер")

@@ -20,6 +20,12 @@
   .я { background:var(--я); align-self:flex-end; }
   .она { background:var(--она); align-self:flex-start; }
   .время { display:block; font-size:12px; color:var(--серый); margin-top:4px; }
+  #роль { padding:6px 16px 10px; border-bottom:1px solid #222; font-size:14px; }
+  #роль summary { cursor:pointer; color:var(--серый); }
+  #промпт { width:100%; margin-top:8px; background:#1a1a1a; color:var(--текст); border:1px solid #333; border-radius:8px; padding:8px; font:14px/1.4 system-ui, sans-serif; resize:vertical; }
+  .роль__низ { display:flex; gap:12px; align-items:center; margin-top:6px; }
+  button.тихая { background:#333; padding:6px 12px; font-size:13px; }
+  #промпт-статус { color:var(--серый); font-size:13px; }
   #индикатор { height:6px; background:#222; }
   #индикатор.слушаю { background:var(--зел); }
   #индикатор.говорю { background:var(--жёлт); }
@@ -41,6 +47,14 @@
   <button id="пример" title="Прогнать запись из audio_examples вместо микрофона" hidden>Пример</button>
   <span id="статус">не подключено</span>
 </header>
+<details id="роль">
+  <summary>Системный промпт</summary>
+  <textarea id="промпт" rows="4" placeholder="Кем быть модели и как отвечать. Пусто — промпт сервера."></textarea>
+  <div class="роль__низ">
+    <button id="промпт-сброс" class="тихая">Вернуть стандартный</button>
+    <span id="промпт-статус"></span>
+  </div>
+</details>
 <div id="индикатор"></div>
 <div id="лента"></div>
 <footer id="подвал">Нажмите «Позвонить» и говорите. Фраза уходит в модель после паузы в полсекунды.</footer>
@@ -56,7 +70,24 @@ const ui = {
   индикатор: document.getElementById('индикатор'),
   подвал: document.getElementById('подвал'),
   пример: document.getElementById('пример'),
+  промпт: document.getElementById('промпт'),
+  промптСброс: document.getElementById('промпт-сброс'),
+  промптСтатус: document.getElementById('промпт-статус'),
 };
+
+// --- системный промпт: правится без перезапуска, живёт в браузере ----------
+let стандартныйПромпт = '';
+try { ui.промпт.value = localStorage.getItem('проба-голос.промпт') || ''; } catch {}
+
+function отправитьПромпт() {
+  const текст = ui.промпт.value.trim();
+  try { localStorage.setItem('проба-голос.промпт', текст); } catch {}
+  if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'prompt', text: текст }));
+  ui.промптСтатус.textContent = текст ? 'свой промпт, действует со следующей реплики' : 'стандартный промпт сервера';
+}
+let таймерПромпта = null;
+ui.промпт.oninput = () => { clearTimeout(таймерПромпта); таймерПромпта = setTimeout(отправитьПромпт, 400); };
+ui.промптСброс.onclick = () => { ui.промпт.value = стандартныйПромпт; отправитьПромпт(); };
 const ПОДВАЛ = 'Нажмите «Позвонить» и говорите. Фраза уходит в модель после паузы в полсекунды.';
 
 let ws = null, ctx = null, узел = null, поток = null;
@@ -297,6 +328,9 @@ function принять(с) {
       if (с.voice) { частотаГолоса = с.rate; ui.режим.value = 'server'; }
       else if (ui.режим.value === 'server') ui.режим.value = 'browser';
       ui.режим.onchange();
+      стандартныйПромпт = с.prompt || '';
+      ui.промпт.placeholder = стандартныйПромпт;
+      отправитьПромпт();
       break;
     }
     case 'vad':
