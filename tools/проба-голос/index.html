@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Звонок модели</title>
+<style>
+  :root { --фон:#111; --текст:#eee; --серый:#888; --я:#2a4a7a; --она:#2e2e2e; --зел:#2e8b57; --красн:#b33; --жёлт:#c9a227; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--фон); color:var(--текст); font:16px/1.4 system-ui, sans-serif; display:flex; flex-direction:column; height:100vh; }
+  header { padding:12px 16px; display:flex; gap:12px; align-items:center; flex-wrap:wrap; border-bottom:1px solid #222; }
+  button { font:inherit; padding:10px 18px; border:0; border-radius:999px; cursor:pointer; color:#fff; background:var(--зел); }
+  button.stop { background:var(--красн); }
+  button:disabled { opacity:.5; cursor:default; }
+  select, label { font-size:14px; color:var(--текст); }
+  select { background:#222; color:var(--текст); border:1px solid #333; border-radius:6px; padding:6px; max-width:280px; }
+  #статус { color:var(--серый); font-size:14px; margin-left:auto; }
+  #лента { flex:1; overflow:auto; padding:16px; display:flex; flex-direction:column; gap:10px; }
+  .реплика { max-width:75%; padding:10px 14px; border-radius:14px; white-space:pre-wrap; }
+  .я { background:var(--я); align-self:flex-end; }
+  .она { background:var(--она); align-self:flex-start; }
+  .время { display:block; font-size:12px; color:var(--серый); margin-top:4px; }
+  #индикатор { height:6px; background:#222; }
+  #индикатор.слушаю { background:var(--зел); }
+  #индикатор.говорю { background:var(--жёлт); }
+  #индикатор.думаю { background:#48c; animation: пульс .8s infinite alternate; }
+  @keyframes пульс { from{opacity:.4} to{opacity:1} }
+  footer { padding:8px 16px; font-size:13px; color:var(--серый); border-top:1px solid #222; }
+</style>
+</head>
+<body>
+<header>
+  <button id="звонок">Позвонить</button>
+  <select id="голос" title="Голос озвучки"></select>
+  <label><input type="checkbox" id="перебивать"> перебивать (в наушниках)</label>
+  <label><input type="checkbox" id="озвучка" checked> озвучивать</label>
+  <button id="пример" title="Прогнать запись из audio_examples вместо микрофона" hidden>Пример</button>
+  <span id="статус">не подключено</span>
+</header>
+<div id="индикатор"></div>
+<div id="лента"></div>
+<footer id="подвал">Нажмите «Позвонить» и говорите. Фраза уходит в модель после паузы в полсекунды.</footer>
+
+<script>
+const ui = {
+  звонок: document.getElementById('звонок'),
+  голос: document.getElementById('голос'),
+  перебивать: document.getElementById('перебивать'),
+  озвучка: document.getElementById('озвучка'),
+  статус: document.getElementById('статус'),
+  лента: document.getElementById('лента'),
+  индикатор: document.getElementById('индикатор'),
+  подвал: document.getElementById('подвал'),
+  пример: document.getElementById('пример'),
+};
+const ПОДВАЛ = 'Нажмите «Позвонить» и говорите. Фраза уходит в модель после паузы в полсекунды.';
+
+let ws = null, ctx = null, узел = null, поток = null;
+let идёт = false;            // звонок активен
+let говорю = false;          // озвучка играет
+let тихоДо = 0;              // после озвучки ещё чуть не слушаем (хвост эха)
+let текущий = null;          // пузырь ответа, который сейчас дописывается
+let очередьРечи = '';        // непроизнесённый хвост ответа
+let текстОтвета = '';
+let последнееДоне = 0;
+
+// --- голоса -----------------------------------------------------------
+function заполнитьГолоса() {
+  const все = speechSynthesis.getVoices();
+  const ру = все.filter(v => v.lang.toLowerCase().startsWith('ru'));
+  const список = ру.length ? ру : все;
+  const было = ui.голос.value;
+  ui.голос.innerHTML = '';
+  for (const v of список) {
+    const o = document.createElement('option');
+    o.value = v.name; o.textContent = `${v.name}${v.localService ? '' : ' (сеть)'}`;
+    ui.голос.appendChild(o);
+  }
+  // Предпочитаем живые голоса Edge, потом любой локальный русский.
+  const лучший = список.find(v => /natural/i.test(v.name)) || список.find(v => v.localService) || список[0];
+  ui.голос.value = было && список.some(v => v.name === было) ? было : (лучший ? лучший.name : '');
+  if (!все.length) return;
+  if (!ру.length) {
+    // Английский голос по-русски не прочтёт: озвучку выключаем и говорим, где взять русский.
+    ui.озвучка.checked = false;
+    ui.подвал.textContent = 'Русского голоса в этом браузере нет, ответы только текстом. '
+      + 'Откройте страницу в Edge (там есть «Microsoft Dmitry/Svetlana Online (Natural)») '
+      + 'или поставьте русский голос в Windows: Параметры → Время и язык → Речь → Добавить голоса.';
+  } else ui.подвал.textContent = ПОДВАЛ;
+}
+speechSynthesis.onvoiceschanged = заполнитьГолоса;
+заполнитьГолоса();
+
+function голос() {
+  return speechSynthesis.getVoices().find(v => v.name === ui.голос.value) || null;
+}
+
+// --- озвучка по предложениям ------------------------------------------
+function произнести(текст) {
+  if (!ui.озвучка.checked || !текст.trim()) return;
+  const u = new SpeechSynthesisUtterance(текст.trim());
+  const v = голос();
+  if (v) { u.voice = v; u.lang = v.lang; } else u.lang = 'ru-RU';
+  u.rate = 1.1;
+  u.onstart = () => { говорю = true; состояние(); };
+  u.onend = u.onerror = () => {
+    if (!speechSynthesis.speaking && !speechSynthesis.pending) {
+      говорю = false; тихоДо = performance.now() + 350; состояние();
+    }
+  };
+  speechSynthesis.speak(u);
+}
+
+// Режем накопленный текст на законченные предложения и озвучиваем их.
+// Первое предложение уходит в голос, пока модель ещё пишет второе.
+function проговоритьГотовое(финал) {
+  const текст = очередьРечи;
+  const re = /[^.!?…]+[.!?…]+["»)]?\s*/g;
+  let m, конец = 0;
+  while ((m = re.exec(текст)) !== null) { произнести(m[0]); конец = re.lastIndex; }
+  очередьРечи = текст.slice(конец);
+  if (финал && очередьРечи.trim()) { произнести(очередьРечи); очередьРечи = ''; }
+}
+
+function замолчать() {
+  speechSynthesis.cancel();
+  очередьРечи = '';
+  говорю = false;
+}
+
+// --- лента --------------------------------------------------------------
+function пузырь(кто, текст) {
+  const d = document.createElement('div');
+  d.className = `реплика ${кто}`;
+  d.textContent = текст;
+  ui.лента.appendChild(d);
+  ui.лента.scrollTop = ui.лента.scrollHeight;
+  return d;
+}
+
+function состояние() {
+  let к = '';
+  if (говорю) к = 'говорю';
+  else if (текущий) к = 'думаю';
+  else if (идёт) к = 'слушаю';
+  ui.индикатор.className = к;
+}
+
+// --- микрофон → PCM 16 кГц ------------------------------------------------
+// AudioWorklet передискретизирует в 16 кГц и шлёт int16 кусками по 1024
+// отсчёта (64 мс): мельче — лишние кадры, крупнее — лишняя задержка.
+const кодВорклета = `
+class Передатчик extends AudioWorkletProcessor {
+  constructor() { super(); this.шаг = sampleRate / 16000; this.фаза = 0; this.буф = []; }
+  process(входы) {
+    const вх = входы[0][0];
+    if (!вх) return true;
+    for (let i = 0; i < вх.length; i++) {
+      this.фаза -= 1;
+      if (this.фаза <= 0) {
+        this.фаза += this.шаг;
+        const s = Math.max(-1, Math.min(1, вх[i]));
+        this.буф.push(s < 0 ? s * 32768 : s * 32767);
+      }
+    }
+    if (this.буф.length >= 1024) {
+      const кусок = Int16Array.from(this.буф.splice(0, 1024));
+      this.port.postMessage(кусок.buffer, [кусок.buffer]);
+    }
+    return true;
+  }
+}
+registerProcessor('передатчик', Передатчик);
+`;
+
+async function позвонить() {
+  ui.звонок.disabled = true;
+  ui.статус.textContent = 'подключаюсь…';
+  ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.binaryType = 'arraybuffer';
+  ws.onopen = () => {
+    идёт = true;
+    ui.звонок.textContent = 'Положить трубку';
+    ui.звонок.className = 'stop';
+    ui.звонок.disabled = false;
+    ui.статус.textContent = 'на линии';
+    состояние();
+  };
+  ws.onmessage = (e) => принять(JSON.parse(e.data));
+  ws.onclose = () => положить('связь прервана');
+  ws.onerror = () => положить('ошибка связи');
+
+  let безМикрофона = '';
+  try {
+    поток = await navigator.mediaDevices.getUserMedia({
+      audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+    });
+    ctx = new AudioContext({ latencyHint: 'interactive' });
+    const url = URL.createObjectURL(new Blob([кодВорклета], { type: 'text/javascript' }));
+    await ctx.audioWorklet.addModule(url);
+    const источник = ctx.createMediaStreamSource(поток);
+    узел = new AudioWorkletNode(ctx, 'передатчик');
+    источник.connect(узел);
+    узел.port.onmessage = (e) => {
+      if (!ws || ws.readyState !== 1) return;
+      // Пока модель говорит и перебивать нельзя, микрофон молчит: иначе
+      // она услышит себя в колонках и ответит самой себе.
+      if (!ui.перебивать.checked && (говорю || performance.now() < тихоДо)) return;
+      ws.send(e.data);
+    };
+  } catch (err) {
+    // Без микрофона звонок всё равно живой: можно прогнать «Пример».
+    безМикрофона = 'нет микрофона: ' + err.message;
+  }
+  if (безМикрофона) {
+    ui.подвал.textContent = безМикрофона;
+    ui.звонок.disabled = false;
+  }
+}
+
+function положить(причина) {
+  if (!идёт && !ws) return;
+  идёт = false;
+  замолчать();
+  if (ws) { try { ws.close(); } catch {} ws = null; }
+  if (поток) { поток.getTracks().forEach(t => t.stop()); поток = null; }
+  if (ctx) { ctx.close(); ctx = null; }
+  текущий = null;
+  ui.звонок.textContent = 'Позвонить';
+  ui.звонок.className = '';
+  ui.звонок.disabled = false;
+  ui.статус.textContent = причина || 'трубка положена';
+  состояние();
+}
+
+ui.звонок.onclick = () => (идёт ? положить() : позвонить());
+
+// Проверка без микрофона: запись с сервера уходит в тот же канал, что и
+// микрофон, с секундой тишины в конце, чтобы поиск речи закрыл фразу.
+fetch('/пример', { method: 'HEAD' }).then(r => { if (r.ok) ui.пример.hidden = false; }).catch(() => {});
+ui.пример.onclick = async () => {
+  if (!ws || ws.readyState !== 1) { ui.статус.textContent = 'сначала «Позвонить»'; return; }
+  const ответ = await fetch('/пример');
+  if (!ответ.ok) { ui.статус.textContent = 'примера нет'; return; }
+  const байты = new Uint8Array(await ответ.arrayBuffer());
+  const всё = new Uint8Array(байты.length + 16000 * 2);
+  всё.set(байты);
+  for (let i = 0; i < всё.length; i += 2048) ws.send(всё.slice(i, i + 2048));
+};
+
+// --- сообщения сервера ------------------------------------------------------
+function принять(с) {
+  switch (с.type) {
+    case 'ready':
+      ui.статус.textContent = `на линии · ${с.model}`;
+      break;
+    case 'vad':
+      if (с.speaking) {
+        // Человек заговорил: модель замолкает и бросает недосказанное.
+        if (говорю || текущий) { замолчать(); if (ws) ws.send(JSON.stringify({ type: 'stop' })); }
+        ui.статус.textContent = 'слушаю…';
+      } else ui.статус.textContent = 'на линии';
+      break;
+    case 'you':
+      пузырь('я', с.text).insertAdjacentHTML('beforeend', `<span class="время">распознано за ${с.ms} мс</span>`);
+      текущий = пузырь('она', '');
+      текстОтвета = ''; очередьРечи = '';
+      состояние();
+      break;
+    case 'token':
+      if (!текущий) { текущий = пузырь('она', ''); }
+      текстОтвета += с.text; очередьРечи += с.text;
+      текущий.textContent = текстОтвета;
+      ui.лента.scrollTop = ui.лента.scrollHeight;
+      проговоритьГотовое(false);
+      break;
+    case 'done': {
+      проговоритьГотовое(true);
+      if (текущий) {
+        const t = с.ms || {};
+        const метка = с.interrupted ? 'перебили' : `первое слово через ${t.first ?? '—'} мс, весь ответ за ${t.total} мс`;
+        текущий.insertAdjacentHTML('beforeend', `<span class="время">${метка}</span>`);
+      }
+      текущий = null;
+      состояние();
+      break;
+    }
+    case 'error':
+      пузырь('она', 'Ошибка: ' + с.text);
+      текущий = null;
+      состояние();
+      break;
+  }
+}
+</script>
+</body>
+</html>
