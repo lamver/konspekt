@@ -155,7 +155,9 @@ class Голос:
         self._lock = threading.Lock()
         log.info("Голос %s загружен за %.1f с", self.имя, time.monotonic() - т)
 
-    def сказать(self, текст: str) -> bytes:
+    дикторы: dict[str, int] = {}  # у Piper один голос на модель
+
+    def сказать(self, текст: str, диктор: str | None = None) -> bytes:
         with self._lock:
             return b"".join(
                 ч.audio_int16_bytes for ч in self.модель.synthesize(текст, self.настройки)
@@ -186,6 +188,7 @@ class ГолосVosk:
         дикторы = self.модель.config.get("speaker_id_map") or {
             "female_0": 0, "female_1": 1, "female_2": 2, "male_0": 3, "male_1": 4,
         }
+        self.дикторы = {имя: int(sid) for имя, sid in дикторы.items()}
         self.диктор = диктор if диктор in дикторы else "male_0" if "male_0" in дикторы else next(iter(дикторы))
         self.sid = int(дикторы[self.диктор])
         self.имя = f"{папка.name}/{self.диктор}"
@@ -193,9 +196,10 @@ class ГолосVosk:
         self._lock = threading.Lock()
         log.info("Голос %s загружен за %.1f с", self.имя, time.monotonic() - т)
 
-    def сказать(self, текст: str) -> bytes:
+    def сказать(self, текст: str, диктор: str | None = None) -> bytes:
+        sid = self.дикторы.get(диктор or "", self.sid)
         with self._lock:
-            return self.синтез.synth_audio(текст, speaker_id=self.sid, speech_rate=1.05).tobytes()
+            return self.синтез.synth_audio(текст, speaker_id=sid, speech_rate=1.05).tobytes()
 
 
 def найти_голос(движок: str | None, имя: str | None):
@@ -358,6 +362,7 @@ class Разговор:
         self.задача: asyncio.Task | None = None
         self.голос_включён = True  # страница может попросить озвучивать сама
         self.подсказка = ПОДСКАЗКА  # страница может задать свою
+        self.диктор: str | None = None  # и выбрать диктора
         self.цикл = asyncio.get_running_loop()
 
     async def звук(self, данные: bytes) -> None:
@@ -446,7 +451,7 @@ class Разговор:
                 if стоп.is_set() or not self.голос_включён or not фраза:
                     continue
                 try:
-                    pcm = await asyncio.to_thread(self.движок.голос.сказать, фраза)
+                    pcm = await asyncio.to_thread(self.движок.голос.сказать, фраза, self.диктор)
                 except Exception:
                     # Одна непроизносимая фраза не должна глушить остальные.
                     log.exception("Не озвучилось: %r", фраза)
@@ -604,6 +609,8 @@ async def разговор(движок: Движок, reader: asyncio.StreamRea
         model=движок.сервер.model_path.name,
         voice=движок.голос.имя if движок.голос else None,
         rate=движок.голос.частота if движок.голос else None,
+        speakers=list(движок.голос.дикторы) if движок.голос else [],
+        speaker=getattr(движок.голос, "диктор", None),
         prompt=ПОДСКАЗКА,
     )
     log.info("Звонок начался")
@@ -629,6 +636,8 @@ async def разговор(движок: Движок, reader: asyncio.StreamRea
                     р.история.clear()
                 elif сообщение.get("type") == "voice":
                     р.голос_включён = bool(сообщение.get("server"))
+                elif сообщение.get("type") == "speaker":
+                    р.диктор = сообщение.get("name") or None
                 elif сообщение.get("type") == "playing":
                     р.играет = bool(сообщение.get("on"))
                     р.подряд = 0

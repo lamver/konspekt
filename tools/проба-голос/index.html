@@ -42,6 +42,7 @@
     <option value="browser">голос браузера</option>
     <option value="none">без озвучки</option>
   </select>
+  <select id="диктор" title="Диктор Vosk" hidden></select>
   <select id="голос" title="Голос браузера"></select>
   <label title="Если модель слышит себя в колонках и отвечает сама себе"><input type="checkbox" id="глушить"> глушить микрофон, пока говорит</label>
   <button id="пример" title="Прогнать запись из audio_examples вместо микрофона" hidden>Пример</button>
@@ -63,6 +64,7 @@
 const ui = {
   звонок: document.getElementById('звонок'),
   голос: document.getElementById('голос'),
+  диктор: document.getElementById('диктор'),
   режим: document.getElementById('режим'),
   глушить: document.getElementById('глушить'),
   статус: document.getElementById('статус'),
@@ -136,7 +138,26 @@ ui.режим.onchange = () => {
   замолчать();
   if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'voice', server: ui.режим.value === 'server' }));
   ui.голос.hidden = ui.режим.value !== 'browser';
+  ui.диктор.hidden = ui.режим.value !== 'server' || !ui.диктор.options.length;
 };
+
+const ИМЕНА_ДИКТОРОВ = { female_0: 'женский 1', female_1: 'женский 2', female_2: 'женский 3', male_0: 'мужской 1', male_1: 'мужской 2' };
+ui.диктор.onchange = () => {
+  try { localStorage.setItem('проба-голос.диктор', ui.диктор.value); } catch {}
+  if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'speaker', name: ui.диктор.value }));
+};
+function заполнитьДикторов(список, текущий) {
+  ui.диктор.innerHTML = '';
+  for (const имя of список) {
+    const o = document.createElement('option');
+    o.value = имя; o.textContent = ИМЕНА_ДИКТОРОВ[имя] || имя;
+    ui.диктор.appendChild(o);
+  }
+  let выбран = текущий;
+  try { выбран = localStorage.getItem('проба-голос.диктор') || текущий; } catch {}
+  if (список.includes(выбран)) ui.диктор.value = выбран;
+  ui.диктор.onchange();
+}
 
 // --- звук с сервера: сырой int16, играем встык через Web Audio ----------
 function сыграть(буфер) {
@@ -359,7 +380,7 @@ function принять(с) {
       ui.статус.textContent = `на линии · ${с.model}${с.voice ? ' · ' + с.voice : ''}`;
       const серверный = ui.режим.querySelector('[value=server]');
       серверный.disabled = !с.voice;
-      if (с.voice) { частотаГолоса = с.rate; ui.режим.value = 'server'; }
+      if (с.voice) { частотаГолоса = с.rate; ui.режим.value = 'server'; заполнитьДикторов(с.speakers || [], с.speaker); }
       else if (ui.режим.value === 'server') ui.режим.value = 'browser';
       ui.режим.onchange();
       стандартныйПромпт = с.prompt || '';
