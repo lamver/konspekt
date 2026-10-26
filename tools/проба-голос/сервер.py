@@ -2,7 +2,7 @@
 
 Запуск из корня репозитория:
 
-    .venv/Scripts/python.exe tools/проба-голос/сервер.py [--умная] [--порт 8765]
+    .venv/Scripts/python.exe tools/проба-голос/сервер.py [--быстрая] [--движок vosk|piper] [--голос male_1] [--порт 8765]
 
 Потом открыть в браузере http://127.0.0.1:8765 и нажать «Позвонить».
 Лучше в Edge: там есть живые голоса «Microsoft ... Online (Natural)».
@@ -20,10 +20,11 @@
   секунд думания) и коротким окном контекста: 4 тысячи токенов хватает
   на разговор, а память видеокарты общая с продом.
 - Ответ летит в браузер по токенам. Сервер режет его на предложения и
-  озвучивает каждое Piper'ом (ONNX на процессоре, русские голоса по
-  60 МБ, предложение за 50–200 мс), звук уходит в браузер сырым PCM по
-  тому же WebSocket, пока модель дописывает следующее предложение.
-  Запасной путь — голоса самого браузера через Web Speech API.
+  озвучивает каждое на процессоре (Vosk TTS 0.7, предложение за
+  80–270 мс, или Piper за 50–200 мс, но у Piper ударения через
+  espeak-ng и часто мимо), звук уходит в браузер сырым PCM по тому же
+  WebSocket, пока модель дописывает следующее предложение. Запасной
+  путь — голоса самого браузера через Web Speech API.
 - Пока модель говорит, микрофон не слушаем: иначе она слышит себя в
   колонках. Галочка «перебивать» снимает это ограничение (в наушниках).
 
@@ -73,6 +74,7 @@ log = logging.getLogger("проба-голос")
     "Ты собеседник в голосовом разговоре. Отвечай по-русски, коротко, "
     "одним-тремя предложениями, живым разговорным языком, как по телефону. "
     "Без списков, без markdown, без заголовков, без смайликов. "
+    "Не повторяй слова собеседника, отвечай своими словами. "
     "Если вопрос непонятен, переспроси одной фразой."
 )
 ПАМЯТЬ_РЕПЛИК = 20  # сколько последних реплик помним
@@ -114,16 +116,55 @@ class Голос:
             )
 
 
-def найти_голос(имя: str | None) -> Path | None:
+class ГолосVosk:
+    """Синтез речи Vosk TTS: ONNX, свой словарь ударений, пять дикторов
+    в одной модели. Piper ставит ударения через espeak-ng и часто мимо,
+    у Vosk словарь с частотами, и ударения в целом на месте.
+
+    Модель 0.7-multi (130 МБ): предложение за 80–270 мс на процессоре.
+    0.9-multi звучит лучше, но тянет BERT и считает секунды: на
+    процессоре в разговор не годится.
+    """
+
+    def __init__(self, папка: Path, диктор: str | None) -> None:
+        import vosk_tts
+
+        # vosk_tts пишет фонемы каждой фразы в корневой логгер.
+        logging.getLogger().setLevel(logging.WARNING)
+        logging.getLogger("проба-голос").setLevel(logging.INFO)
+        logging.getLogger("app").setLevel(logging.INFO)
+        т = time.monotonic()
+        self.модель = vosk_tts.Model(model_path=str(папка))
+        self.синтез = vosk_tts.Synth(self.модель)
+        # В 0.7-multi карта дикторов пустая; порядок тот же, что в 0.9.
+        дикторы = self.модель.config.get("speaker_id_map") or {
+            "female_0": 0, "female_1": 1, "female_2": 2, "male_0": 3, "male_1": 4,
+        }
+        self.диктор = диктор if диктор in дикторы else "male_0" if "male_0" in дикторы else next(iter(дикторы))
+        self.sid = int(дикторы[self.диктор])
+        self.имя = f"{папка.name}/{self.диктор}"
+        self.частота = int(self.модель.config["audio"]["sample_rate"])
+        self._lock = threading.Lock()
+        log.info("Голос %s загружен за %.1f с", self.имя, time.monotonic() - т)
+
+    def сказать(self, текст: str) -> bytes:
+        with self._lock:
+            return self.синтез.synth_audio(текст, speaker_id=self.sid, speech_rate=1.05).tobytes()
+
+
+def найти_голос(движок: str | None, имя: str | None):
+    """Выбрать озвучку: Vosk, если его модель скачана, иначе Piper.
+    Возвращает готовый объект голоса или None."""
+    vosk_папки = sorted((paths.models_dir() / "vosk-tts").glob("vosk-model-tts-ru-0.7-*"))
+    if движок in (None, "vosk") and vosk_папки:
+        return ГолосVosk(vosk_папки[0], имя)
     папка = paths.models_dir() / "piper"
     if имя:
         п = Path(имя)
-        if п.suffix == ".onnx" and п.exists():
-            return п
-        кандидаты = sorted(папка.glob(f"*{имя}*.onnx"))
+        кандидаты = [п] if п.suffix == ".onnx" and п.exists() else sorted(папка.glob(f"*{имя}*.onnx"))
     else:
         кандидаты = sorted(папка.glob("ru_RU-dmitri*.onnx")) or sorted(папка.glob("ru_RU-*.onnx"))
-    return кандидаты[0] if кандидаты else None
+    return Голос(кандидаты[0]) if кандидаты else None
 
 
 # --- модель --------------------------------------------------------------
@@ -132,9 +173,9 @@ def найти_голос(имя: str | None) -> Path | None:
 class Движок:
     """Распознавание и ответ. Один на процесс, общий для всех вкладок."""
 
-    def __init__(self, уровень: str, голос: Path | None) -> None:
+    def __init__(self, уровень: str, голос) -> None:
         self.asr = GigaamTranscriber(paths.models_dir() / "gigaam-v3-e2e-rnnt")
-        self.голос = Голос(голос) if голос else None
+        self.голос = голос
         модель = local.find_model(уровень)
         if модель is None:
             raise SystemExit(
@@ -515,14 +556,17 @@ async def разговор(движок: Движок, reader: asyncio.StreamRea
 
 
 async def главное(аргументы) -> None:
-    голос = None if аргументы.без_голоса else найти_голос(аргументы.голос)
+    голос = None if аргументы.без_голоса else найти_голос(аргументы.движок, аргументы.голос)
     if голос is None and not аргументы.без_голоса:
         log.warning(
-            "Голос Piper не найден в %s, озвучивать будет браузер. Скачать: "
-            ".venv/Scripts/python.exe -m piper.download_voices --data-dir models/piper ru_RU-dmitri-medium",
-            paths.models_dir() / "piper",
+            "Голос не найден (models/vosk-tts или models/piper), озвучивать будет браузер. "
+            "Vosk: распаковать vosk-model-tts-ru-0.7-multi.zip с alphacephei.com/vosk/models в models/vosk-tts; "
+            "Piper: .venv/Scripts/python.exe -m piper.download_voices --data-dir models/piper ru_RU-dmitri-medium"
         )
-    движок = Движок("smart" if аргументы.умная else "fast", голос)
+    # 4B по умолчанию: 1.7B в разговоре быстро скатывается в эхо
+    # собеседника, стоит ей один раз повторить фразу, как она цепляется
+    # за этот шаблон до конца беседы. Проверено 26.10 на живом звонке.
+    движок = Движок("fast" if аргументы.быстрая else "smart", голос)
     движок.прогреть()
     сервер = await asyncio.start_server(
         lambda r, w: обслужить(движок, r, w), "127.0.0.1", аргументы.порт
@@ -540,8 +584,9 @@ if __name__ == "__main__":
     logging.getLogger("httpx").setLevel(logging.WARNING)
     п = argparse.ArgumentParser(description="Голосовой разговор с локальной моделью")
     п.add_argument("--порт", type=int, default=8765)
-    п.add_argument("--умная", action="store_true", help="Qwen3 4B вместо 1.7B")
-    п.add_argument("--голос", help="имя голоса Piper (dmitri, irina) или путь к .onnx")
+    п.add_argument("--быстрая", action="store_true", help="Qwen3 1.7B вместо 4B")
+    п.add_argument("--движок", choices=("vosk", "piper"), help="озвучка: vosk (по умолчанию, если скачан) или piper")
+    п.add_argument("--голос", help="диктор Vosk (male_0, male_1, female_0..2) или голос Piper (dmitri, irina)")
     п.add_argument("--без-голоса", dest="без_голоса", action="store_true", help="озвучивает браузер")
     try:
         asyncio.run(главное(п.parse_args()))
