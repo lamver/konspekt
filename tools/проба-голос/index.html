@@ -31,9 +31,13 @@
 <body>
 <header>
   <button id="звонок">Позвонить</button>
-  <select id="голос" title="Голос озвучки"></select>
+  <select id="режим" title="Чем озвучивать">
+    <option value="server" disabled>Piper на сервере</option>
+    <option value="browser">голос браузера</option>
+    <option value="none">без озвучки</option>
+  </select>
+  <select id="голос" title="Голос браузера"></select>
   <label><input type="checkbox" id="перебивать"> перебивать (в наушниках)</label>
-  <label><input type="checkbox" id="озвучка" checked> озвучивать</label>
   <button id="пример" title="Прогнать запись из audio_examples вместо микрофона" hidden>Пример</button>
   <span id="статус">не подключено</span>
 </header>
@@ -45,8 +49,8 @@
 const ui = {
   звонок: document.getElementById('звонок'),
   голос: document.getElementById('голос'),
+  режим: document.getElementById('режим'),
   перебивать: document.getElementById('перебивать'),
-  озвучка: document.getElementById('озвучка'),
   статус: document.getElementById('статус'),
   лента: document.getElementById('лента'),
   индикатор: document.getElementById('индикатор'),
@@ -62,7 +66,38 @@ let тихоДо = 0;              // после озвучки ещё чуть 
 let текущий = null;          // пузырь ответа, который сейчас дописывается
 let очередьРечи = '';        // непроизнесённый хвост ответа
 let текстОтвета = '';
-let последнееДоне = 0;
+let частотаГолоса = 22050;   // частота PCM с сервера, приходит в ready
+let плеер = null;            // AudioContext для звука с сервера
+let следующийСтарт = 0;      // когда начнётся следующий кусок звука
+let источники = [];          // играющие куски, чтобы оборвать при перебивании
+
+ui.режим.onchange = () => {
+  замолчать();
+  if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'voice', server: ui.режим.value === 'server' }));
+  ui.голос.hidden = ui.режим.value !== 'browser';
+};
+
+// --- звук с сервера: сырой int16, играем встык через Web Audio ----------
+function сыграть(буфер) {
+  if (ui.режим.value !== 'server') return;
+  if (!плеер) плеер = new AudioContext();
+  const int16 = new Int16Array(буфер);
+  const audio = плеер.createBuffer(1, int16.length, частотаГолоса);
+  const канал = audio.getChannelData(0);
+  for (let i = 0; i < int16.length; i++) канал[i] = int16[i] / 32768;
+  const src = плеер.createBufferSource();
+  src.buffer = audio;
+  src.connect(плеер.destination);
+  const старт = Math.max(плеер.currentTime + 0.02, следующийСтарт);
+  src.start(старт);
+  следующийСтарт = старт + audio.duration;
+  источники.push(src);
+  говорю = true; состояние();
+  src.onended = () => {
+    источники = источники.filter(s => s !== src);
+    if (!источники.length) { говорю = false; тихоДо = performance.now() + 350; состояние(); }
+  };
+}
 
 // --- голоса -----------------------------------------------------------
 function заполнитьГолоса() {
@@ -81,9 +116,9 @@ function заполнитьГолоса() {
   ui.голос.value = было && список.some(v => v.name === было) ? было : (лучший ? лучший.name : '');
   if (!все.length) return;
   if (!ру.length) {
-    // Английский голос по-русски не прочтёт: озвучку выключаем и говорим, где взять русский.
-    ui.озвучка.checked = false;
-    ui.подвал.textContent = 'Русского голоса в этом браузере нет, ответы только текстом. '
+    // Английский голос по-русски не прочтёт: без Piper остаётся только текст.
+    if (ui.режим.value === 'browser') ui.режим.value = 'none';
+    ui.подвал.textContent = 'Русского голоса в этом браузере нет, без Piper ответы только текстом. '
       + 'Откройте страницу в Edge (там есть «Microsoft Dmitry/Svetlana Online (Natural)») '
       + 'или поставьте русский голос в Windows: Параметры → Время и язык → Речь → Добавить голоса.';
   } else ui.подвал.textContent = ПОДВАЛ;
@@ -97,7 +132,7 @@ function голос() {
 
 // --- озвучка по предложениям ------------------------------------------
 function произнести(текст) {
-  if (!ui.озвучка.checked || !текст.trim()) return;
+  if (ui.режим.value !== 'browser' || !текст.trim()) return;
   const u = new SpeechSynthesisUtterance(текст.trim());
   const v = голос();
   if (v) { u.voice = v; u.lang = v.lang; } else u.lang = 'ru-RU';
@@ -125,6 +160,9 @@ function проговоритьГотовое(финал) {
 function замолчать() {
   speechSynthesis.cancel();
   очередьРечи = '';
+  for (const s of источники) { try { s.stop(); } catch {} }
+  источники = [];
+  следующийСтарт = 0;
   говорю = false;
 }
 
@@ -186,7 +224,8 @@ async function позвонить() {
     ui.статус.textContent = 'на линии';
     состояние();
   };
-  ws.onmessage = (e) => принять(JSON.parse(e.data));
+  ws.onmessage = (e) => (e.data instanceof ArrayBuffer ? сыграть(e.data) : принять(JSON.parse(e.data)));
+  if (!плеер) плеер = new AudioContext();  // создаём по клику: иначе браузер не даст играть
   ws.onclose = () => положить('связь прервана');
   ws.onerror = () => положить('ошибка связи');
 
@@ -251,9 +290,15 @@ ui.пример.onclick = async () => {
 // --- сообщения сервера ------------------------------------------------------
 function принять(с) {
   switch (с.type) {
-    case 'ready':
-      ui.статус.textContent = `на линии · ${с.model}`;
+    case 'ready': {
+      ui.статус.textContent = `на линии · ${с.model}${с.voice ? ' · ' + с.voice : ''}`;
+      const серверный = ui.режим.querySelector('[value=server]');
+      серверный.disabled = !с.voice;
+      if (с.voice) { частотаГолоса = с.rate; ui.режим.value = 'server'; }
+      else if (ui.режим.value === 'server') ui.режим.value = 'browser';
+      ui.режим.onchange();
       break;
+    }
     case 'vad':
       if (с.speaking) {
         // Человек заговорил: модель замолкает и бросает недосказанное.
@@ -278,7 +323,8 @@ function принять(с) {
       проговоритьГотовое(true);
       if (текущий) {
         const t = с.ms || {};
-        const метка = с.interrupted ? 'перебили' : `первое слово через ${t.first ?? '—'} мс, весь ответ за ${t.total} мс`;
+        const метка = с.interrupted ? 'перебили'
+          : `первое слово через ${t.first ?? '—'} мс${t.voice ? `, голос через ${t.voice} мс` : ''}, весь ответ за ${t.total} мс`;
         текущий.insertAdjacentHTML('beforeend', `<span class="время">${метка}</span>`);
       }
       текущий = null;

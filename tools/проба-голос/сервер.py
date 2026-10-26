@@ -19,15 +19,22 @@
   выключенным «размышлением» (иначе ответ начинается через десять
   секунд думания) и коротким окном контекста: 4 тысячи токенов хватает
   на разговор, а память видеокарты общая с продом.
-- Ответ летит в браузер по токенам, браузер режет его на предложения и
-  озвучивает первое, не дожидаясь остальных. Синтез речи — голоса самой
-  системы через Web Speech API: ноль задержки на запуск и ничего
-  качать. Ценой качества голоса, это проба.
+- Ответ летит в браузер по токенам. Сервер режет его на предложения и
+  озвучивает каждое Piper'ом (ONNX на процессоре, русские голоса по
+  60 МБ, предложение за 50–200 мс), звук уходит в браузер сырым PCM по
+  тому же WebSocket, пока модель дописывает следующее предложение.
+  Запасной путь — голоса самого браузера через Web Speech API.
 - Пока модель говорит, микрофон не слушаем: иначе она слышит себя в
   колонках. Галочка «перебивать» снимает это ограничение (в наушниках).
 
-Никаких новых зависимостей: WebSocket и HTTP на asyncio из стандартной
-библиотеки, остальное из самого Конспекта.
+Зависимости: piper-tts (ставится в .venv отдельно, в pyproject не
+входит, это проба) и голос:
+
+    uv pip install --python .venv/Scripts/python.exe piper-tts
+    .venv/Scripts/python.exe -m piper.download_voices --data-dir models/piper ru_RU-dmitri-medium
+
+WebSocket и HTTP на asyncio из стандартной библиотеки, остальное из
+самого Конспекта.
 """
 
 from __future__ import annotations
@@ -38,6 +45,7 @@ import base64
 import hashlib
 import json
 import logging
+import re
 import struct
 import sys
 import threading
@@ -70,6 +78,53 @@ log = logging.getLogger("проба-голос")
 ПАМЯТЬ_РЕПЛИК = 20  # сколько последних реплик помним
 БЕЗ_РАЗМЫШЛЕНИЙ = {"enable_thinking": False}
 
+# Законченное предложение: до знака конца и закрывающей кавычки, либо
+# до перевода строки. Остаток буфера ждёт следующих токенов.
+ПРЕДЛОЖЕНИЕ = re.compile(r'[^\n]+?[.!?…]+["»)]?(?=\s|$)\s*|[^\n]+\n')
+
+
+def вырезать_предложения(буфер: str) -> tuple[list[str], str]:
+    готовые = [м.group(0).strip() for м in ПРЕДЛОЖЕНИЕ.finditer(буфер)]
+    конец = 0
+    for м in ПРЕДЛОЖЕНИЕ.finditer(буфер):
+        конец = м.end()
+    return [п for п in готовые if п], буфер[конец:]
+
+
+class Голос:
+    """Синтез речи Piper. Один на процесс, вызовы по очереди."""
+
+    def __init__(self, путь: Path) -> None:
+        from piper import PiperVoice
+        from piper.config import SynthesisConfig
+
+        т = time.monotonic()
+        self.модель = PiperVoice.load(путь)
+        self.имя = путь.stem
+        self.частота = int(self.модель.config.sample_rate)
+        # Чуть быстрее обычного темпа: разговорная речь, а не диктор.
+        self.настройки = SynthesisConfig(length_scale=0.95)
+        self._lock = threading.Lock()
+        log.info("Голос %s загружен за %.1f с", self.имя, time.monotonic() - т)
+
+    def сказать(self, текст: str) -> bytes:
+        with self._lock:
+            return b"".join(
+                ч.audio_int16_bytes for ч in self.модель.synthesize(текст, self.настройки)
+            )
+
+
+def найти_голос(имя: str | None) -> Path | None:
+    папка = paths.models_dir() / "piper"
+    if имя:
+        п = Path(имя)
+        if п.suffix == ".onnx" and п.exists():
+            return п
+        кандидаты = sorted(папка.glob(f"*{имя}*.onnx"))
+    else:
+        кандидаты = sorted(папка.glob("ru_RU-dmitri*.onnx")) or sorted(папка.glob("ru_RU-*.onnx"))
+    return кандидаты[0] if кандидаты else None
+
 
 # --- модель --------------------------------------------------------------
 
@@ -77,8 +132,9 @@ log = logging.getLogger("проба-голос")
 class Движок:
     """Распознавание и ответ. Один на процесс, общий для всех вкладок."""
 
-    def __init__(self, уровень: str) -> None:
+    def __init__(self, уровень: str, голос: Path | None) -> None:
         self.asr = GigaamTranscriber(paths.models_dir() / "gigaam-v3-e2e-rnnt")
+        self.голос = Голос(голос) if голос else None
         модель = local.find_model(уровень)
         if модель is None:
             raise SystemExit(
@@ -105,6 +161,8 @@ class Движок:
             chat_template_kwargs=БЕЗ_РАЗМЫШЛЕНИЙ,
         )
         log.info("Модель готова за %.1f с: %s", time.monotonic() - т, адрес)
+        if self.голос:
+            self.голос.сказать("Алло.")  # первый вызов Piper дольше остальных
 
     def распознать(self, pcm: np.ndarray) -> str:
         куски = self.asr.transcribe(pcm, ЧАСТОТА)
@@ -186,6 +244,12 @@ class Соединение:
             self.writer.write(кадр(0x1, json.dumps(сообщение, ensure_ascii=False).encode()))
             await self.writer.drain()
 
+    async def слать_звук(self, pcm: bytes) -> None:
+        """Двоичный кадр: int16 PCM на частоте голоса (сообщена в ready)."""
+        async with self.lock:
+            self.writer.write(кадр(0x2, pcm))
+            await self.writer.drain()
+
 
 # --- разговор --------------------------------------------------------------
 
@@ -202,6 +266,7 @@ class Разговор:
         self.говорил = False
         self.стоп = threading.Event()
         self.задача: asyncio.Task | None = None
+        self.голос_включён = True  # страница может попросить озвучивать сама
         self.цикл = asyncio.get_running_loop()
 
     async def звук(self, данные: bytes) -> None:
@@ -260,8 +325,32 @@ class Разговор:
                 self.цикл.call_soon_threadsafe(очередь.put_nowait, None)
 
         задача = asyncio.ensure_future(asyncio.to_thread(работа))
+
+        # Озвучка идёт параллельно с ответом: предложение уходит в Piper,
+        # как только у него появился знак конца, а модель тем временем
+        # пишет следующее. Прерывание выбрасывает всё, что не успело.
+        предложения: asyncio.Queue = asyncio.Queue()
+        звук_мс: list[int] = []
+
+        async def озвучивать() -> None:
+            while True:
+                фраза = await предложения.get()
+                if фраза is None:
+                    return
+                if стоп.is_set() or not self.голос_включён:
+                    continue
+                pcm = await asyncio.to_thread(self.движок.голос.сказать, фраза)
+                if стоп.is_set():
+                    continue
+                if not звук_мс:
+                    звук_мс.append(int((time.monotonic() - т0) * 1000))
+                await self.связь.слать_звук(pcm)
+
+        озвучка = asyncio.create_task(озвучивать()) if self.движок.голос else None
+
         первый = None
         собрано: list[str] = []
+        хвост = ""
         while True:
             кусок = await очередь.get()
             if кусок is None:
@@ -270,19 +359,36 @@ class Разговор:
                 первый = int((time.monotonic() - т0) * 1000)
             собрано.append(кусок)
             await self.связь.слать(type="token", text=кусок)
+            if озвучка:
+                хвост += кусок
+                готовые, хвост = вырезать_предложения(хвост)
+                for п in готовые:
+                    предложения.put_nowait(п)
         try:
             ответ = await задача
         except LlmError as exc:
             await self.связь.слать(type="error", text=str(exc))
+            if озвучка:
+                озвучка.cancel()
             return
         ответ = (ответ or "".join(собрано)).strip()
         if ответ:
             self.история.append({"role": "assistant", "content": ответ})
+        if озвучка:
+            if хвост.strip():
+                предложения.put_nowait(хвост.strip())
+            предложения.put_nowait(None)
+            await озвучка
         await self.связь.слать(
             type="done",
             text=ответ,
             interrupted=стоп.is_set(),
-            ms={"asr": asr_мс, "first": первый, "total": int((time.monotonic() - т0) * 1000)},
+            ms={
+                "asr": asr_мс,
+                "first": первый,
+                "voice": звук_мс[0] if звук_мс else None,
+                "total": int((time.monotonic() - т0) * 1000),
+            },
         )
 
 
@@ -374,7 +480,12 @@ def _пример_записи() -> bytes | None:
 async def разговор(движок: Движок, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
     связь = Соединение(writer)
     р = Разговор(движок, связь)
-    await связь.слать(type="ready", model=движок.сервер.model_path.name)
+    await связь.слать(
+        type="ready",
+        model=движок.сервер.model_path.name,
+        voice=движок.голос.имя if движок.голос else None,
+        rate=движок.голос.частота if движок.голос else None,
+    )
     log.info("Звонок начался")
     try:
         while True:
@@ -396,13 +507,22 @@ async def разговор(движок: Движок, reader: asyncio.StreamRea
                 elif сообщение.get("type") == "clear":
                     await р.прервать()
                     р.история.clear()
+                elif сообщение.get("type") == "voice":
+                    р.голос_включён = bool(сообщение.get("server"))
     finally:
         await р.прервать()
         log.info("Звонок закончился")
 
 
 async def главное(аргументы) -> None:
-    движок = Движок("smart" if аргументы.умная else "fast")
+    голос = None if аргументы.без_голоса else найти_голос(аргументы.голос)
+    if голос is None and not аргументы.без_голоса:
+        log.warning(
+            "Голос Piper не найден в %s, озвучивать будет браузер. Скачать: "
+            ".venv/Scripts/python.exe -m piper.download_voices --data-dir models/piper ru_RU-dmitri-medium",
+            paths.models_dir() / "piper",
+        )
+    движок = Движок("smart" if аргументы.умная else "fast", голос)
     движок.прогреть()
     сервер = await asyncio.start_server(
         lambda r, w: обслужить(движок, r, w), "127.0.0.1", аргументы.порт
@@ -421,6 +541,8 @@ if __name__ == "__main__":
     п = argparse.ArgumentParser(description="Голосовой разговор с локальной моделью")
     п.add_argument("--порт", type=int, default=8765)
     п.add_argument("--умная", action="store_true", help="Qwen3 4B вместо 1.7B")
+    п.add_argument("--голос", help="имя голоса Piper (dmitri, irina) или путь к .onnx")
+    п.add_argument("--без-голоса", dest="без_голоса", action="store_true", help="озвучивает браузер")
     try:
         asyncio.run(главное(п.parse_args()))
     except KeyboardInterrupt:
