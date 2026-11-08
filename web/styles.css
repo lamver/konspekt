@@ -1988,26 +1988,6 @@ body.is-resizing * { user-select: none !important; }
   cursor: pointer;
 }
 .btn-danger:hover { filter: brightness(1.08); }
-/* Сообщить о проблеме: два переключателя в ряд, поле текста как у чата. */
-.feedback__kinds { display: flex; gap: 16px; flex-wrap: wrap; }
-.feedback__text {
-  width: 100%;
-  box-sizing: border-box;
-  resize: vertical;
-  font-family: inherit;
-  font-size: 12.5px;
-  line-height: 1.5;
-  color: var(--ink);
-  background: var(--paper);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 7px 10px;
-  outline: none;
-}
-.feedback__text:focus { border-color: var(--accent); }
-.feedback__text::placeholder { color: var(--ink-3); }
-#feedback-result a { color: var(--accent); }
-
 .about__notice {
   margin: 6px 0 0;
   max-height: 320px;

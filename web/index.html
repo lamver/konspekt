@@ -809,39 +809,14 @@
           </div>
 
           <div class="card" id="feedback-card">
-            <p class="card__title" data-i18n="about.feedback">Сообщить о проблеме или предложить идею</p>
-            <div class="feedback__kinds">
-              <label class="check">
-                <input type="radio" name="feedback-kind" value="bug" id="feedback-kind-bug" checked>
-                <span data-i18n="about.feedback_bug">Что-то не работает</span>
-              </label>
-              <label class="check">
-                <input type="radio" name="feedback-kind" value="idea" id="feedback-kind-idea">
-                <span data-i18n="about.feedback_idea">Есть идея</span>
-              </label>
-            </div>
-            <textarea class="feedback__text" id="feedback-text" rows="4" spellcheck="true"
-              data-i18n-placeholder="about.feedback_placeholder"
-              placeholder="Что делали, чего ждали и что получилось"></textarea>
-            <label class="field">
-              <input type="text" id="feedback-contact" autocomplete="off"
-                data-i18n-placeholder="about.feedback_contact"
-                placeholder="Как с вами связаться, если понадобится (не обязательно)">
-            </label>
-            <label class="check">
-              <input type="checkbox" id="feedback-details" checked>
-              <span data-i18n="about.feedback_details">Приложить сведения о системе и последние строки журнала</span>
-            </label>
-            <p class="hint" data-i18n="about.feedback_hint">Ничего не уходит само: отчёт откроется новой задачей на
-            GitHub и целиком скопируется в буфер обмена, чтобы вставить его в задачу. Копия остаётся файлом на этом компьютере.
-            Из журнала убираем имя пользователя, почты, телефоны и ключи, но лучше посмотреть самим.</p>
+            <p class="card__title" data-i18n="about.feedback">Написать разработчику</p>
+            <p class="hint" data-i18n="about.feedback_hint">Что-то не работает или есть идея: напишите на сайте
+            программы, без регистрации. Версию и систему страница подставит сама.
+            Если в ответ попросят подробности, кнопка рядом скопирует сведения о системе и последние строки
+            журнала без имени пользователя, почт и ключей.</p>
             <div class="voice-enroll__row">
-              <button class="btn-ghost" type="button" id="feedback-preview" data-i18n="about.feedback_preview">Посмотреть, что уйдёт</button>
-            </div>
-            <pre class="about__notice" id="feedback-report" hidden></pre>
-            <div class="voice-enroll__row">
-              <button class="btn-secondary" type="button" id="feedback-github" data-i18n="about.feedback_github">Открыть на GitHub</button>
-              <button class="btn-secondary" type="button" id="feedback-copy" data-i18n="about.feedback_copy">Скопировать отчёт</button>
+              <button class="btn-secondary" type="button" id="feedback-open" data-i18n="about.feedback_open">Написать разработчику</button>
+              <button class="btn-ghost" type="button" id="feedback-copy" data-i18n="about.feedback_copy_details">Скопировать сведения для поддержки</button>
               <span class="hint" id="feedback-result"></span>
             </div>
           </div>
