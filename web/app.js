@@ -4299,24 +4299,28 @@ async function checkUpdatesNow() {
  * адресе версию и систему. Сведения для поддержки копируются отдельной
  * кнопкой, когда их попросят: журнал без спроса никуда не идёт.
  */
+function feedbackSay(text) {
+  ui.feedbackResult.textContent = text;
+  ui.feedbackResult.hidden = !text;
+}
+
 async function openFeedback() {
   const res = await api.feedback_open();
-  ui.feedbackResult.textContent = res && res.ok
-    ? '' : t('about.feedback_no_browser', { url: (res && res.url) || '' });
+  feedbackSay(res && res.ok ? '' : t('about.feedback_no_browser', { url: (res && res.url) || '' }));
 }
 
 async function copyFeedbackDetails() {
   const res = await api.feedback_details();
   if (!res || !res.report) {
-    ui.feedbackResult.textContent = t('about.feedback_failed');
+    feedbackSay(t('about.feedback_failed'));
     return;
   }
   // Буфер заполняем из обработчика клика: иначе WebKit его не отдаёт.
   try {
     await navigator.clipboard.writeText(res.report);
-    ui.feedbackResult.textContent = t('about.feedback_copied');
+    feedbackSay(t('about.feedback_copied'));
   } catch (e) {
-    ui.feedbackResult.textContent = t('about.feedback_failed');
+    feedbackSay(t('about.feedback_failed'));
   }
 }
 

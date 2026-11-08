@@ -1988,6 +1988,11 @@ body.is-resizing * { user-select: none !important; }
   cursor: pointer;
 }
 .btn-danger:hover { filter: brightness(1.08); }
+/* Написать разработчику: кнопки не ломаются на две строки, ответ под
+   ними отдельной строкой. */
+.feedback__row { flex-wrap: wrap; }
+.feedback__row button { white-space: nowrap; }
+
 .about__notice {
   margin: 6px 0 0;
   max-height: 320px;
