@@ -418,6 +418,9 @@ global.hideForeignSpeechAsk = () => {};
 global.showForeignSpeechAsk = () => {};
 global.hideNoticedTalkAsk = () => {};
 global.showNoticedTalkAsk = () => {};
+// Полоска отмеченных реплик: с 0.18.2 остановка записи показывает в ней
+// кнопку «звуком», а сама полоска живёт вне вырезанного куска.
+global.updatePickBar = () => {};
 
 const src = fs.readFileSync(path.join(process.argv[2], 'web', 'app.js'), 'utf8');
 const от = src.indexOf('window.__konspekt_event = function (payload) {');
