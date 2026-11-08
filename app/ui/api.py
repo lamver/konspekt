@@ -737,6 +737,63 @@ class Api:
 
         return webbrowser.open(f"https://github.com/{REPO}/releases/latest")
 
+    # --- сообщить о проблеме ---------------------------------------------
+
+    def feedback_preview(self, kind: str, text: str, contact: str, details: bool) -> dict[str, Any]:
+        """Отчёт в том виде, в каком он уйдёт. Ничего не отправляет."""
+        from ..core import обратная_связь
+
+        отчёт = обратная_связь.собрать_отчёт(
+            str(kind or "bug"), str(text or ""), str(contact or ""), bool(details),
+            self._service.settings, self._service.license_state(),
+        )
+        return {"report": отчёт}
+
+    def feedback_send(self, channel: str, kind: str, text: str, contact: str, details: bool) -> dict[str, Any]:
+        """Собрать отчёт, сохранить файлом и открыть выбранный путь.
+
+        `github` открывает новую задачу в браузере с заголовком и началом
+        текста; сам отчёт окно кладёт в буфер обмена из своего обработчика
+        клика (иначе WebKit на Mac буфер не отдаёт). `copy` только
+        сохраняет и возвращает отчёт для буфера.
+        """
+        import webbrowser
+
+        from ..core import обратная_связь
+
+        текст = str(text or "").strip()
+        if len(текст) < 10:
+            return {"ok": False, "error": "empty"}
+        settings = self._service.settings
+        отчёт = обратная_связь.собрать_отчёт(
+            str(kind or "bug"), текст, str(contact or ""), bool(details),
+            settings, self._service.license_state(),
+        )
+        try:
+            файл = str(обратная_связь.сохранить_отчёт(отчёт))
+        except OSError:
+            log.warning("Отчёт не сохранился в файл", exc_info=True)
+            файл = ""
+        ответ: dict[str, Any] = {"ok": True, "report": отчёт, "file": файл, "url": ""}
+        if str(channel) == "github":
+            адрес = обратная_связь.ссылка_github(str(kind or "bug"), текст, settings.language)
+            ответ["url"] = адрес
+            try:
+                открылся = webbrowser.open(адрес)
+            except OSError:
+                открылся = False
+            if not открылся:
+                ответ["error"] = "no_browser"
+        return ответ
+
+    def feedback_reveal_file(self, path: str) -> bool:
+        """Показать сохранённый отчёт в проводнике."""
+        from ..core import обратная_связь
+
+        if not path:
+            return False
+        return обратная_связь.показать_файл(Path(path))
+
     def app_version(self) -> str:
         """Версия сборки.
 

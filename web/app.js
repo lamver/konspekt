@@ -4292,6 +4292,78 @@ async function checkUpdatesNow() {
 }
 
 /**
+ * Сообщить о проблеме или предложить идею.
+ *
+ * Ничего не уходит само. Отчёт собирает питон, человек может посмотреть
+ * его до отправки, а «отправка» — это новая задача на GitHub в браузере
+ * плюс полный отчёт в буфере обмена: в адрес страницы длинный текст не
+ * влезает. Копия всегда остаётся файлом на этом компьютере.
+ */
+function feedbackForm() {
+  return {
+    kind: ui.feedbackKindIdea.checked ? 'idea' : 'bug',
+    text: ui.feedbackText.value,
+    contact: ui.feedbackContact.value,
+    details: ui.feedbackDetails.checked,
+  };
+}
+
+async function refreshFeedbackPreview() {
+  if (ui.feedbackReport.hidden) return;
+  const f = feedbackForm();
+  const res = await api.feedback_preview(f.kind, f.text, f.contact, f.details);
+  ui.feedbackReport.textContent = (res && res.report) || '';
+}
+
+async function toggleFeedbackPreview() {
+  ui.feedbackReport.hidden = !ui.feedbackReport.hidden;
+  ui.feedbackPreview.textContent = ui.feedbackReport.hidden
+    ? t('about.feedback_preview') : t('about.feedback_preview_hide');
+  await refreshFeedbackPreview();
+}
+
+function showFeedbackFile(path) {
+  if (!path) return;
+  const link = document.createElement('a');
+  link.href = '#';
+  link.textContent = t('about.feedback_show_file');
+  link.addEventListener('click', (e) => { e.preventDefault(); api.feedback_reveal_file(path); });
+  ui.feedbackResult.append(' ', link);
+}
+
+async function sendFeedback(channel) {
+  const f = feedbackForm();
+  if (f.text.trim().length < 10) {
+    ui.feedbackResult.textContent = t('about.feedback_empty');
+    ui.feedbackText.focus();
+    return;
+  }
+  ui.feedbackGithub.disabled = true;
+  ui.feedbackCopy.disabled = true;
+  try {
+    const res = await api.feedback_send(channel, f.kind, f.text, f.contact, f.details);
+    if (!res || !res.ok) {
+      ui.feedbackResult.textContent = t('about.feedback_failed');
+      return;
+    }
+    // Буфер заполняем из обработчика клика: иначе WebKit его не отдаёт.
+    let copied = true;
+    try { await navigator.clipboard.writeText(res.report); } catch (e) { copied = false; }
+    if (channel === 'github') {
+      ui.feedbackResult.textContent = res.error === 'no_browser'
+        ? t('about.feedback_no_browser')
+        : (copied ? t('about.feedback_opened') : t('about.feedback_opened_nocopy'));
+    } else {
+      ui.feedbackResult.textContent = copied ? t('about.feedback_copied') : t('about.feedback_saved');
+    }
+    showFeedbackFile(res.file);
+  } finally {
+    ui.feedbackGithub.disabled = false;
+    ui.feedbackCopy.disabled = false;
+  }
+}
+
+/**
  * Плашка «вышла новая версия» в боковой панели.
  *
  * Раньше находка превращалась во всплывающее сообщение, которое исчезало
@@ -4799,6 +4871,16 @@ function bindUi() {
     updateNoteOpen: el('update-note-open'),
     updateCheck: el('update-check'),
     updateResult: el('update-result'),
+    feedbackKindBug: el('feedback-kind-bug'),
+    feedbackKindIdea: el('feedback-kind-idea'),
+    feedbackText: el('feedback-text'),
+    feedbackContact: el('feedback-contact'),
+    feedbackDetails: el('feedback-details'),
+    feedbackPreview: el('feedback-preview'),
+    feedbackReport: el('feedback-report'),
+    feedbackGithub: el('feedback-github'),
+    feedbackCopy: el('feedback-copy'),
+    feedbackResult: el('feedback-result'),
     updateNote: el('update-note'),
     updateNoteText: el('update-note-text'),
     updateNoteNotes: el('update-note-notes'),
@@ -4963,6 +5045,16 @@ function bindUi() {
   el('audio-close').addEventListener('click', () => { ui.audioSheet.hidden = true; });
   ui.appVersion.addEventListener('click', () => showPrefsTab('about'));
   ui.updateCheck.addEventListener('click', checkUpdatesNow);
+  ui.feedbackPreview.addEventListener('click', toggleFeedbackPreview);
+  ui.feedbackGithub.addEventListener('click', () => sendFeedback('github'));
+  ui.feedbackCopy.addEventListener('click', () => sendFeedback('copy'));
+  // Пока предпросмотр открыт, он следует за полями: человек видит ровно
+  // то, что уйдёт, а не то, что было минуту назад.
+  [ui.feedbackText, ui.feedbackContact, ui.feedbackDetails, ui.feedbackKindBug, ui.feedbackKindIdea]
+    .forEach((node) => {
+      node.addEventListener('input', refreshFeedbackPreview);
+      node.addEventListener('change', refreshFeedbackPreview);
+    });
   ui.updateNoteInstall.addEventListener('click', async () => {
     ui.updateNoteInstall.disabled = true;
     const ok = await api.install_update();
