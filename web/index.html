@@ -406,6 +406,7 @@
         <button type="button" class="prefs__tab" data-tab="dictation" data-i18n="prefs.tab.dictation">Диктовка</button>
         <button type="button" class="prefs__tab" data-tab="notes" data-i18n="prefs.tab.notes">Заметки</button>
         <button type="button" class="prefs__tab" data-tab="telegram" data-i18n="prefs.tab.telegram">Telegram</button>
+        <button type="button" class="prefs__tab" data-tab="devices" data-i18n="prefs.tab.devices">Другой компьютер</button>
         <button type="button" class="prefs__tab" data-tab="look" data-i18n="prefs.tab.look">Оформление</button>
         <button type="button" class="prefs__tab" data-tab="data" data-i18n="prefs.tab.data">Данные</button>
         <button type="button" class="prefs__tab" data-tab="license" data-i18n="prefs.tab.license">Лицензия</button>
@@ -725,6 +726,55 @@
 
           <div class="card">
             <p class="hint" data-i18n="telegram.privacy">Расшифровка и итоги делаются на этом компьютере. Текст бот отправляет вам в Telegram через серверы Telegram, как любое сообщение; нашего сервера в этой цепочке нет. Бот работает, пока Конспект запущен, а сообщения, присланные без него, Telegram отдаст при следующем запуске. Файлы больше 20 МБ Telegram ботам не отдаёт.</p>
+          </div>
+        </section>
+
+        <!-- Другой компьютер: Конспекты обмениваются встречами напрямую, без нашего сервера. -->
+        <section class="prefs__page" data-page="devices" hidden>
+          <div class="card">
+            <p class="card__title" data-i18n="devices.title">Другой компьютер</p>
+            <p class="hint" data-i18n="devices.intro">На втором компьютере тоже должен быть установлен и запущен Konspekt. Компьютеры могут быть в одной сети или в разных: через интернет соединение тоже установится. Всё передаётся зашифрованным, напрямую между вашими устройствами, нашего сервера в цепочке нет.</p>
+          </div>
+
+          <div class="card" id="dev-unavailable" hidden>
+            <p class="hint" id="dev-unavailable-text" data-i18n="devices.unavailable">На этом компьютере обмен недоступен: библиотека связи не поддерживает эту систему.</p>
+          </div>
+
+          <div class="card" id="dev-invite">
+            <p class="card__title" data-i18n="devices.invite_title">Открыть этот компьютер другому</p>
+            <p class="hint" data-i18n="devices.invite_hint">Создайте код и введите его на другом компьютере. Тот компьютер увидит ваши готовые встречи и сможет забирать их к себе копией. Код подходит один раз и действует 10 минут.</p>
+            <label class="check">
+              <input type="checkbox" id="dev-mutual">
+              <span data-i18n="devices.mutual">И получить доступ к его встречам в ответ</span>
+            </label>
+            <div class="voice-enroll__row feedback__row">
+              <button class="btn-secondary" type="button" id="dev-create" data-i18n="devices.create">Создать код</button>
+              <button class="btn-ghost" type="button" id="dev-copy" data-i18n="devices.copy" hidden>Скопировать код</button>
+            </div>
+            <input type="text" id="dev-code" class="dev-code" readonly hidden spellcheck="false">
+            <p class="hint" id="dev-invite-result" hidden></p>
+          </div>
+
+          <div class="card" id="dev-join">
+            <p class="card__title" data-i18n="devices.join_title">Подключиться по коду</p>
+            <p class="hint" data-i18n="devices.join_hint">Вставьте код, созданный на другом компьютере. Вы увидите то, что там открыли; этот компьютер ему ничего не откроет, пока вы не включите это ниже, в списке устройств.</p>
+            <label class="field">
+              <input type="text" id="dev-join-code" autocomplete="off" spellcheck="false" placeholder="KS1-…">
+            </label>
+            <div class="voice-enroll__row">
+              <button class="btn-secondary" type="button" id="dev-join-btn" data-i18n="devices.join">Подключить</button>
+              <span class="hint" id="dev-join-result"></span>
+            </div>
+          </div>
+
+          <div class="card" id="dev-list-card">
+            <p class="card__title" data-i18n="devices.list_title">Подключённые компьютеры</p>
+            <p class="hint" id="dev-list-empty" data-i18n="devices.list_empty">Пока ни одного. Сопрягите компьютеры кодом выше.</p>
+            <div id="dev-list" class="dev-list"></div>
+          </div>
+
+          <div class="card">
+            <p class="hint" data-i18n="devices.privacy">Встречи забираются копией: записи, расшифровка, заметки и итоги ложатся в папку с именем того компьютера и дальше живут как свои. Забрать можно только готовые встречи, и только пока тот компьютер включён и Konspekt на нём запущен. Отвязать устройство можно в любой момент: копии при этом остаются у вас.</p>
           </div>
         </section>
 

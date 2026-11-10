@@ -215,7 +215,8 @@
       "data": "Podaci",
       "about": "O aplikaciji",
       "license": "Licenca",
-      "telegram": "Telegram"
+      "telegram": "Telegram",
+      "devices": "Drugi računar"
     }
   },
   "audio": {
@@ -663,6 +664,52 @@
     "go": "Transkribuj",
     "added": "Snimak sa linka je u redu čekanja",
     "pasted": "Link je nalepljen: transkribujemo snimak"
+  },
+  "devices": {
+    "title": "Drugi računar",
+    "intro": "Konspekt mora biti instaliran i pokrenut i na drugom računaru. Računari mogu biti u istoj mreži ili u različitim: veza radi i preko interneta. Sve putuje šifrovano, direktno između vaših uređaja, bez našeg servera između.",
+    "unavailable": "Razmena nije dostupna na ovom računaru: mrežna biblioteka ne podržava ovaj sistem.",
+    "start_failed": "Čvor za razmenu se nije pokrenuo: {error}",
+    "invite_title": "Otvori ovaj računar drugom",
+    "invite_hint": "Napravite kod i unesite ga na drugom računaru. Taj računar će videti vaše završene sastanke i moći da ih preuzme kao kopije. Kod važi jednom i traje 10 minuta.",
+    "mutual": "I dobiti pristup njegovim sastancima zauzvrat",
+    "create": "Napravi kod",
+    "copy": "Kopiraj kod",
+    "copied": "Kod je kopiran: nalepite ga na drugom računaru",
+    "join_title": "Poveži se kodom",
+    "join_hint": "Nalepite kod napravljen na drugom računaru. Videćete ono što je tamo otvoreno; ovaj računar mu ništa ne otvara dok to ne uključite ispod, u spisku uređaja.",
+    "join": "Poveži",
+    "joining": "Povezivanje…",
+    "joined": "Povezano: {name}",
+    "list_title": "Povezani računari",
+    "list_empty": "Još nijedan. Uparite računare kodom iznad.",
+    "privacy": "Sastanci se preuzimaju kao kopija: snimci, transkript, beleške i rezime idu u fasciklu sa imenom tog računara i dalje žive kao vaši. Mogu se preuzeti samo završeni sastanci, i samo dok je taj računar uključen i Konspekt pokrenut. Uređaj možete odvezati bilo kada: kopije ostaju kod vas.",
+    "online": "na mreži",
+    "offline": "van mreže",
+    "they_share": "Otvoreni sastanci za vas: {n}, preuzeto {taken}",
+    "they_share_unknown": "Otvorio vam je svoje sastanke",
+    "they_share_none": "Nije vam ništa otvorio",
+    "i_share": "Otvori mu moje završene sastanke",
+    "auto_pull": "Preuzimaj njegove nove sastanke automatski",
+    "pull": "Preuzmi nove",
+    "pull_n": "Preuzmi nove ({n})",
+    "pulling": "Preuzimanje…",
+    "pulled": "Preuzeto sastanaka: {n}",
+    "forget": "Odveži",
+    "forget_confirm": "Odvezati {name}? Kopije sastanaka ostaju, ali novi sa njega više neće stizati. Ponovo se može upariti kodom.",
+    "error": {
+      "bad_code": "Kod je pogrešan ili istekao: napravite novi na tom računaru",
+      "self_code": "Ovo je kod ovog istog računara",
+      "offline": "Taj računar ne odgovara: proverite da je uključen i da je Konspekt pokrenut",
+      "unavailable": "Razmena nije dostupna na ovom računaru",
+      "not_paired": "Uređaj nije uparen",
+      "no_access": "Taj računar vam nije otvorio svoje sastanke",
+      "too_many": "Previše pokušaja: sačekajte deset minuta",
+      "unknown": "Na tom računaru je starija verzija Konspekta: ažurirajte je",
+      "internal": "Nije uspelo: detalji su u dnevniku",
+      "transfer": "Prenos je prekinut, pokušajte ponovo",
+      "too_big": "Odgovor je prevelik, prenos je zaustavljen"
+    }
   },
   "telegram": {
     "opened": "Telegram je otvoren: izaberite čet",

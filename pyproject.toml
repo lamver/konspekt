@@ -48,6 +48,10 @@ dependencies = [
     # отдельной программы и без ffmpeg (app/core/link.py). Unlicense.
     "yt-dlp>=2026.8.19",
     "paramiko>=3.4",
+    # Другой компьютер: Конспекты обмениваются встречами напрямую, без
+    # нашего сервера (app/core/устройства.py). MIT/Apache-2.0. Под Intel
+    # Mac колёс нет, там раздел честно говорит, что недоступен.
+    "iroh>=1.2.0; sys_platform != 'darwin' or platform_machine != 'x86_64'",
 ]
 
 [project.scripts]

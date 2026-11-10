@@ -85,6 +85,7 @@ from ..core.events import (
     LLM_DOWNLOAD,
     IMPORT_PROGRESS,
     TELEGRAM_CHANGED,
+    DEVICES_CHANGED,
     MEETINGS_CHANGED,
     MEETING_UPDATED,
     MEANING_STATE,
@@ -3626,6 +3627,74 @@ class AppService:
         bus.emit(MEETINGS_CHANGED)
         return {"ok": True, "on": bool(on)}
 
+    # --- другой компьютер --------------------------------------------------
+
+    _устройства = None
+
+    def запустить_устройства(self) -> None:
+        """Поднять узел обмена. Привязка к сети идёт в своём потоке:
+        окно не должно ждать ретранслятор."""
+        from . import устройства as уст
+
+        if self._устройства is not None or not уст.доступно():
+            return
+        обмен = уст.Обмен(self.store, на_изменение=lambda: bus.emit(MEETINGS_CHANGED))
+        self._устройства = уст.Узел(обмен, на_изменение=self._устройства_изменились)
+        threading.Thread(target=self._устройства.запустить, name="konspekt-p2p-start", daemon=True).start()
+
+    def остановить_устройства(self) -> None:
+        узел, self._устройства = self._устройства, None
+        if узел is not None:
+            узел.остановить()
+
+    def _устройства_изменились(self) -> None:
+        bus.emit(DEVICES_CHANGED, self.devices_state())
+
+    def devices_state(self) -> dict[str, Any]:
+        from . import устройства as уст
+
+        if self._устройства is None:
+            return {"available": уст.доступно(), "running": False, "error": "", "id": "",
+                    "name": уст.имя_компьютера(), "proto": уст.ПРОТОКОЛ, "devices": []}
+        return self._устройства.состояние()
+
+    def _устройства_вызов(self, действие) -> dict[str, Any]:
+        """Ответ окну: состояние плюс код ошибки, если что-то не вышло."""
+        from . import устройства as уст
+
+        if self._устройства is None:
+            return {"ok": False, "error": "unavailable", **self.devices_state()}
+        try:
+            итог = действие()
+        except уст.Ошибка as e:
+            log.info("Другой компьютер: %s", e)
+            return {"ok": False, "error": e.код, **self.devices_state()}
+        except Exception:
+            log.exception("Другой компьютер: сбой")
+            return {"ok": False, "error": "internal", **self.devices_state()}
+        return {"ok": True, "result": итог, **self.devices_state()}
+
+    def devices_refresh(self, device_id: str | None = None) -> dict[str, Any]:
+        return self._устройства_вызов(lambda: self._устройства.обновить(device_id or None))
+
+    def devices_invite(self, mutual: bool) -> dict[str, Any]:
+        return self._устройства_вызов(lambda: self._устройства.создать_код(bool(mutual)))
+
+    def devices_join(self, code: str) -> dict[str, Any]:
+        return self._устройства_вызов(lambda: self._устройства.подключить(str(code or "")))
+
+    def devices_forget(self, device_id: str) -> dict[str, Any]:
+        return self._устройства_вызов(lambda: self._устройства.отвязать(str(device_id)))
+
+    def devices_share(self, device_id: str, level: str) -> dict[str, Any]:
+        return self._устройства_вызов(lambda: self._устройства.открыть(str(device_id), str(level)))
+
+    def devices_auto(self, device_id: str, on: bool) -> dict[str, Any]:
+        return self._устройства_вызов(lambda: self._устройства.забирать_самим(str(device_id), bool(on)))
+
+    def devices_pull(self, device_id: str) -> dict[str, Any]:
+        return self._устройства_вызов(lambda: self._устройства.забрать_новые(str(device_id)))
+
     def запустить_источники(self) -> None:
         """Обход папок-источников в фоне. Зовётся при старте."""
         try:
@@ -3923,6 +3992,9 @@ class AppService:
         # Бот спрашивает Telegram в своём потоке: без остановки соединение
         # висело бы ещё до 25 секунд после выхода.
         self.остановить_телеграм()
+        # Узел обмена держит сокет и ретранслятор: закрываем, чтобы
+        # соседние Конспекты увидели нас выключенными сразу.
+        self.остановить_устройства()
         if self._сторож_папок is not None:
             self._сторож_папок.остановить()
         # Перепроверка версии больше не нужна: программа закрывается.

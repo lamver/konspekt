@@ -215,7 +215,8 @@
       "data": "Datos",
       "about": "Acerca de",
       "license": "Licencia",
-      "telegram": "Telegram"
+      "telegram": "Telegram",
+      "devices": "Otro equipo"
     }
   },
   "audio": {
@@ -663,6 +664,52 @@
     "go": "Transcribir",
     "added": "La grabación del enlace está en cola",
     "pasted": "Enlace pegado: transcribiendo la grabación"
+  },
+  "devices": {
+    "title": "Otro equipo",
+    "intro": "Konspekt también debe estar instalado y abierto en el segundo equipo. Los equipos pueden estar en la misma red o en redes distintas: por internet la conexión también funciona. Todo viaja cifrado, directamente entre sus dispositivos, sin ningún servidor nuestro de por medio.",
+    "unavailable": "El intercambio no está disponible en este equipo: la biblioteca de red no admite este sistema.",
+    "start_failed": "El nodo de intercambio no arrancó: {error}",
+    "invite_title": "Abrir este equipo a otro",
+    "invite_hint": "Cree un código e introdúzcalo en el otro equipo. Ese equipo verá sus reuniones terminadas y podrá llevarse copias. El código sirve una vez y dura 10 minutos.",
+    "mutual": "Y obtener acceso a sus reuniones a cambio",
+    "create": "Crear código",
+    "copy": "Copiar código",
+    "copied": "Código copiado: péguelo en el otro equipo",
+    "join_title": "Conectar con un código",
+    "join_hint": "Pegue el código creado en el otro equipo. Verá lo que allí se abrió; este equipo no le abrirá nada hasta que lo active abajo, en la lista de dispositivos.",
+    "join": "Conectar",
+    "joining": "Conectando…",
+    "joined": "Conectado: {name}",
+    "list_title": "Equipos conectados",
+    "list_empty": "Ninguno todavía. Empareje los equipos con el código de arriba.",
+    "privacy": "Las reuniones se llevan como copia: grabaciones, transcripción, notas y resumen van a una carpeta con el nombre de ese equipo y siguen como propias. Solo se pueden llevar reuniones terminadas, y solo mientras ese equipo esté encendido con Konspekt abierto. Puede desvincular un dispositivo en cualquier momento: las copias se quedan con usted.",
+    "online": "en línea",
+    "offline": "sin conexión",
+    "they_share": "Reuniones abiertas para usted: {n}, llevadas {taken}",
+    "they_share_unknown": "Le ha abierto sus reuniones",
+    "they_share_none": "No le ha abierto nada",
+    "i_share": "Abrirle mis reuniones terminadas",
+    "auto_pull": "Llevar sus reuniones nuevas automáticamente",
+    "pull": "Llevar nuevas",
+    "pull_n": "Llevar nuevas ({n})",
+    "pulling": "Llevando…",
+    "pulled": "Reuniones llevadas: {n}",
+    "forget": "Desvincular",
+    "forget_confirm": "¿Desvincular {name}? Las copias de las reuniones se quedan, pero ya no llegará nada nuevo. Puede emparejar de nuevo con un código.",
+    "error": {
+      "bad_code": "El código es incorrecto o caducó: cree uno nuevo en ese equipo",
+      "self_code": "Este es el código de este mismo equipo",
+      "offline": "Ese equipo no responde: compruebe que está encendido y que Konspekt está abierto",
+      "unavailable": "El intercambio no está disponible en este equipo",
+      "not_paired": "El dispositivo no está emparejado",
+      "no_access": "Ese equipo no le ha abierto sus reuniones",
+      "too_many": "Demasiados intentos: espere diez minutos",
+      "unknown": "Ese equipo tiene una versión antigua de Konspekt: actualícela",
+      "internal": "No se pudo: los detalles están en el registro",
+      "transfer": "La transferencia se interrumpió, inténtelo de nuevo",
+      "too_big": "La respuesta es demasiado grande, transferencia detenida"
+    }
   },
   "telegram": {
     "opened": "Telegram abierto: elige un chat",

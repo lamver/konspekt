@@ -215,7 +215,8 @@
       "data": "Data",
       "about": "About",
       "license": "License",
-      "telegram": "Telegram"
+      "telegram": "Telegram",
+      "devices": "Other computer"
     }
   },
   "audio": {
@@ -663,6 +664,52 @@
     "go": "Transcribe",
     "added": "Recording from the link is queued",
     "pasted": "Link pasted: transcribing the recording"
+  },
+  "devices": {
+    "title": "Other computer",
+    "intro": "Konspekt must be installed and running on the second computer too. The computers can be on the same network or different ones: the connection works over the internet as well. Everything travels encrypted, directly between your devices, with no server of ours in between.",
+    "unavailable": "Exchange isn't available on this computer: the networking library doesn't support this system.",
+    "start_failed": "The exchange node didn't start: {error}",
+    "invite_title": "Open this computer to another",
+    "invite_hint": "Create a code and enter it on the other computer. That computer will see your finished meetings and be able to take copies of them. The code works once and lasts 10 minutes.",
+    "mutual": "And get access to its meetings in return",
+    "create": "Create code",
+    "copy": "Copy code",
+    "copied": "Code copied: paste it on the other computer",
+    "join_title": "Connect with a code",
+    "join_hint": "Paste a code created on the other computer. You'll see what was opened there; this computer opens nothing to it until you turn that on below, in the device list.",
+    "join": "Connect",
+    "joining": "Connecting…",
+    "joined": "Connected: {name}",
+    "list_title": "Connected computers",
+    "list_empty": "None yet. Pair computers with a code above.",
+    "privacy": "Meetings are taken as copies: recordings, transcript, notes and summary land in a folder named after that computer and live on as your own. Only finished meetings can be taken, and only while that computer is on with Konspekt running. You can unpair a device at any time: the copies stay with you.",
+    "online": "online",
+    "offline": "offline",
+    "they_share": "Meetings opened to you: {n}, taken {taken}",
+    "they_share_unknown": "Has opened its meetings to you",
+    "they_share_none": "Has opened nothing to you",
+    "i_share": "Open my finished meetings to it",
+    "auto_pull": "Take its new meetings automatically",
+    "pull": "Take new",
+    "pull_n": "Take new ({n})",
+    "pulling": "Taking…",
+    "pulled": "Meetings taken: {n}",
+    "forget": "Unpair",
+    "forget_confirm": "Unpair {name}? Copies of meetings stay, but nothing new will come from it. You can pair again with a code.",
+    "error": {
+      "bad_code": "The code is wrong or expired: create a new one on that computer",
+      "self_code": "This is this computer's own code",
+      "offline": "That computer isn't answering: make sure it's on and Konspekt is running there",
+      "unavailable": "Exchange isn't available on this computer",
+      "not_paired": "The device isn't paired",
+      "no_access": "That computer hasn't opened its meetings to you",
+      "too_many": "Too many attempts: wait ten minutes",
+      "unknown": "That computer runs an older Konspekt: update it",
+      "internal": "Didn't work: details are in the log",
+      "transfer": "The transfer broke off, try again",
+      "too_big": "The reply is too large, transfer stopped"
+    }
   },
   "telegram": {
     "opened": "Telegram is open: pick a chat",

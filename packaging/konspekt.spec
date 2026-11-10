@@ -96,7 +96,8 @@ for _строка in _ЗАВИСИМОСТИ:
 binaries = []
 # soundcard и av носят свои нативные библиотеки, автоматически они не
 # находятся: обе обращаются к ним через cffi и ctypes.
-for package in ("soundcard", "av", "onnxruntime"):
+# iroh (другой компьютер) грузит iroh_ffi.dll через ctypes по пути рядом с .py.
+for package in ("soundcard", "av", "onnxruntime", "iroh"):
     try:
         binaries += collect_dynamic_libs(package)
     except Exception:

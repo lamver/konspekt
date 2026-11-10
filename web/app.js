@@ -365,6 +365,9 @@ window.__konspekt_event = function (payload) {
     case 'telegram.changed':
       renderTelegram(payload);
       break;
+    case 'devices.changed':
+      renderDevices(payload);
+      break;
     case 'trial.blocked':
       // Пробный период кончился: объясняем, почему «Запись» или файл не
       // сработали, и показываем плашку с покупкой.
@@ -3950,6 +3953,7 @@ const PREFS_TITLES = {
   data: () => t('prefs.tab.data'),
   license: () => t('prefs.tab.license'),
   telegram: () => t('prefs.tab.telegram'),
+  devices: () => t('prefs.tab.devices'),
   about: () => t('prefs.tab.about'),
 };
 
@@ -3969,9 +3973,171 @@ function showPrefsTab(tab) {
   if (tab === 'about') loadAbout();
   if (tab === 'license') refreshLicense();
   if (tab === 'telegram') loadTelegram(); else stopTelegramPoll();
+  if (tab === 'devices') loadDevices();
   if (tab === 'data') loadUsage();
   if (tab === 'speech') loadAsrSettings();
   if (tab === 'dictation') loadDictation();
+}
+
+/* --- Другой компьютер ---------------------------------------------------- */
+
+let devicesState = null;
+
+/** Раздел открыли: показать, что знаем, и тут же спросить устройства, живы ли. */
+async function loadDevices() {
+  renderDevices(await api.devices_state());
+  renderDevices(await api.devices_refresh(null));
+}
+
+function devicesError(code) {
+  return tЕслиЕсть(`devices.error.${code || 'internal'}`) || t('devices.error.internal');
+}
+
+function renderDevices(s) {
+  if (!s) return;
+  devicesState = s;
+  const нет = !s.available;
+  el('dev-unavailable').hidden = !нет && !s.error;
+  if (s.error && s.available) el('dev-unavailable-text').textContent = t('devices.start_failed', { error: s.error });
+  el('dev-invite').hidden = нет;
+  el('dev-join').hidden = нет;
+  el('dev-list-card').hidden = нет;
+  const список = el('dev-list');
+  список.innerHTML = '';
+  const устройства = s.devices || [];
+  el('dev-list-empty').hidden = устройства.length > 0;
+  for (const d of устройства) список.appendChild(deviceNode(d));
+}
+
+function deviceNode(d) {
+  const box = document.createElement('div');
+  box.className = 'dev-item';
+  const head = document.createElement('div');
+  head.className = 'dev-item__head';
+  const name = document.createElement('span');
+  name.className = 'dev-item__name';
+  name.textContent = d.name;
+  name.title = d.id;
+  const state = document.createElement('span');
+  state.className = 'dev-item__state' + (d.online ? ' is-online' : '');
+  state.textContent = d.online ? t('devices.online') : t('devices.offline');
+  head.append(name, state);
+  box.appendChild(head);
+
+  const theirs = document.createElement('p');
+  theirs.className = 'hint';
+  if (d.remote_share === 'view') {
+    theirs.textContent = d.remote_meetings >= 0
+      ? t('devices.they_share', { n: d.remote_meetings, taken: d.taken })
+      : t('devices.they_share_unknown');
+  } else {
+    theirs.textContent = t('devices.they_share_none');
+  }
+  box.appendChild(theirs);
+
+  const share = document.createElement('label');
+  share.className = 'check';
+  const shareBox = document.createElement('input');
+  shareBox.type = 'checkbox';
+  shareBox.checked = d.share === 'view';
+  shareBox.addEventListener('change', async () => {
+    renderDevices(await api.devices_share(d.id, shareBox.checked ? 'view' : 'none'));
+  });
+  const shareText = document.createElement('span');
+  shareText.textContent = t('devices.i_share');
+  share.append(shareBox, shareText);
+  box.appendChild(share);
+
+  if (d.remote_share === 'view') {
+    const auto = document.createElement('label');
+    auto.className = 'check';
+    const autoBox = document.createElement('input');
+    autoBox.type = 'checkbox';
+    autoBox.checked = !!d.auto_pull;
+    autoBox.addEventListener('change', async () => {
+      renderDevices(await api.devices_auto(d.id, autoBox.checked));
+    });
+    const autoText = document.createElement('span');
+    autoText.textContent = t('devices.auto_pull');
+    auto.append(autoBox, autoText);
+    box.appendChild(auto);
+  }
+
+  const row = document.createElement('div');
+  row.className = 'dev-item__row';
+  if (d.remote_share === 'view') {
+    const pull = document.createElement('button');
+    pull.className = 'btn-secondary';
+    pull.type = 'button';
+    const новых = d.remote_meetings >= 0 ? Math.max(0, d.remote_meetings - d.taken) : null;
+    pull.textContent = новых === null ? t('devices.pull') : t('devices.pull_n', { n: новых });
+    pull.disabled = !d.online || новых === 0;
+    pull.addEventListener('click', async () => {
+      pull.disabled = true;
+      pull.textContent = t('devices.pulling');
+      const r = await api.devices_pull(d.id);
+      if (!r.ok) showToast(devicesError(r.error));
+      else showToast(t('devices.pulled', { n: r.result }));
+      renderDevices(r);
+    });
+    row.appendChild(pull);
+  }
+  const forget = document.createElement('button');
+  forget.className = 'btn-ghost';
+  forget.type = 'button';
+  forget.textContent = t('devices.forget');
+  forget.addEventListener('click', async () => {
+    if (!await confirmDialog(t('devices.forget'), t('devices.forget_confirm', { name: d.name }),
+      { yes: t('devices.forget'), danger: true })) return;
+    renderDevices(await api.devices_forget(d.id));
+  });
+  row.appendChild(forget);
+  box.appendChild(row);
+  return box;
+}
+
+async function createDeviceCode() {
+  const итог = el('dev-invite-result');
+  итог.hidden = true;
+  const r = await api.devices_invite(el('dev-mutual').checked);
+  if (!r.ok) {
+    итог.textContent = devicesError(r.error);
+    итог.hidden = false;
+    return;
+  }
+  const поле = el('dev-code');
+  поле.value = r.result;
+  поле.hidden = false;
+  el('dev-copy').hidden = false;
+  поле.focus();
+  поле.select();
+  renderDevices(r);
+}
+
+async function copyDeviceCode() {
+  const поле = el('dev-code');
+  try {
+    await navigator.clipboard.writeText(поле.value);
+    showToast(t('devices.copied'));
+  } catch (e) {
+    поле.focus();
+    поле.select();
+  }
+}
+
+async function joinDevice() {
+  const поле = el('dev-join-code');
+  const итог = el('dev-join-result');
+  итог.textContent = t('devices.joining');
+  const r = await api.devices_join(поле.value || '');
+  if (!r.ok) {
+    итог.textContent = devicesError(r.error);
+    renderDevices(r);
+    return;
+  }
+  поле.value = '';
+  итог.textContent = t('devices.joined', { name: r.result.name });
+  renderDevices(r);
 }
 
 /* --- Свой бот в Telegram ------------------------------------------------ */
@@ -5084,6 +5250,10 @@ function bindUi() {
   }
   if (ui.summarySendTelegram) ui.summarySendTelegram.addEventListener('click', отправитьВТелеграм);
   el('tg-connect').addEventListener('click', connectTelegram);
+  el('dev-create').addEventListener('click', createDeviceCode);
+  el('dev-copy').addEventListener('click', copyDeviceCode);
+  el('dev-join-btn').addEventListener('click', joinDevice);
+  el('dev-join-code').addEventListener('keydown', (e) => { if (e.key === 'Enter') joinDevice(); });
   el('source-kind').addEventListener('change', syncSourceKind);
   el('source-pick').addEventListener('click', async () => {
     const путь = await api.pick_directory();

@@ -698,6 +698,32 @@ class Api:
     def folder_set_notify(self, folder_id: str, on: bool) -> dict[str, Any]:
         return self._service.folder_set_notify(str(folder_id), bool(on))
 
+    # --- другой компьютер -------------------------------------------------
+
+    def devices_state(self) -> dict[str, Any]:
+        return self._service.devices_state()
+
+    def devices_refresh(self, device_id: str | None = None) -> dict[str, Any]:
+        return self._service.devices_refresh(device_id)
+
+    def devices_invite(self, mutual: bool) -> dict[str, Any]:
+        return self._service.devices_invite(bool(mutual))
+
+    def devices_join(self, code: str) -> dict[str, Any]:
+        return self._service.devices_join(str(code or ""))
+
+    def devices_forget(self, device_id: str) -> dict[str, Any]:
+        return self._service.devices_forget(str(device_id))
+
+    def devices_share(self, device_id: str, level: str) -> dict[str, Any]:
+        return self._service.devices_share(str(device_id), str(level))
+
+    def devices_auto(self, device_id: str, on: bool) -> dict[str, Any]:
+        return self._service.devices_auto(str(device_id), bool(on))
+
+    def devices_pull(self, device_id: str) -> dict[str, Any]:
+        return self._service.devices_pull(str(device_id))
+
     def telegram_state(self) -> dict[str, Any]:
         return self._service.telegram_state()
 

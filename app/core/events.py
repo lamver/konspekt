@@ -80,6 +80,8 @@ IMPORT_CHANGED = "import.changed"
 IMPORT_PROGRESS = "import.progress"
 # Бот Telegram: привязали к чату, включили, выключили.
 TELEGRAM_CHANGED = "telegram.changed"
+# Другой компьютер: сопряжение, доступ, кто в сети, что забрано.
+DEVICES_CHANGED = "devices.changed"
 SUMMARY_READY = "summary.ready"
 # Саммари и ответы чата приходят по кускам: ждать минуту на пустом
 # экране невыносимо, а текст, который печатается на глазах, ощущается

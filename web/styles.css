@@ -1991,6 +1991,17 @@ body.is-resizing * { user-select: none !important; }
 /* Написать разработчику: кнопки не ломаются на две строки, ответ под
    ними отдельной строкой. */
 .feedback__row { flex-wrap: wrap; }
+/* Другой компьютер */
+.dev-code { width: 100%; box-sizing: border-box; margin-top: 8px; font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+.dev-list { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+.dev-item { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.dev-item__head { display: flex; align-items: center; gap: 8px; }
+.dev-item__name { font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dev-item__state { font-size: 12px; color: var(--ink-3); white-space: nowrap; }
+.dev-item__state.is-online { color: var(--accent); }
+.dev-item .check { margin: 6px 0 0; }
+.dev-item__row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; align-items: center; }
+.dev-item__row button { white-space: nowrap; }
 .feedback__row button { white-space: nowrap; }
 
 .about__notice {
