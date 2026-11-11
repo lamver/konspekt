@@ -370,7 +370,7 @@ window.__konspekt_event = function (payload) {
     case 'notes.typing':
       // На другом компьютере печатают к этой встрече: показываем текст по
       // мере набора, если здесь в заметках сейчас не печатают сами.
-      if (payload.meeting_id === state.currentId && document.activeElement !== ui.notes) {
+      if (payload.meeting_id === state.currentId && !notesBusy()) {
         if (ui.notes.value !== payload.notes) { ui.notes.value = payload.notes; syncNotesView(); }
         showTypingHint(payload.who);
       }
@@ -402,7 +402,7 @@ window.__konspekt_event = function (payload) {
         renderMeta(payload.meeting);
         // Заметки приехали с другого компьютера: подменяем текст, если
         // человек сейчас не печатает в нём, иначе затрём набранное.
-        if (typeof payload.meeting.notes === 'string' && document.activeElement !== ui.notes
+        if (typeof payload.meeting.notes === 'string' && !notesBusy()
             && ui.notes.value !== payload.meeting.notes) {
           ui.notes.value = payload.meeting.notes;
           syncNotesView();
@@ -2559,6 +2559,7 @@ async function selectMeeting(id, jumpTo = null) {
 
   ui.title.value = meeting.title || '';
   ui.notes.value = meeting.notes || '';
+  notesDirty = false;
   syncNotesView();
   renderMeetingLanguage(meeting);
   renderMeta(meeting);
@@ -3891,10 +3892,20 @@ async function pickAttachments() {
 
 /* --- Заметки ------------------------------------------------------------ */
 
+/* Есть ли в поле набранное, но ещё не сохранённое. Пока есть, текст
+   снаружи поле не трогает; пустое или сохранённое поле обновляется даже
+   в фокусе: при открытии встречи оно получает фокус само. */
+let notesDirty = false;
+
 function scheduleSave() {
+  notesDirty = true;
   clearTimeout(saveTimer);
   saveTimer = setTimeout(flushNotes, 700);
   scheduleTyping();
+}
+
+function notesBusy() {
+  return notesDirty && document.activeElement === ui.notes;
 }
 
 /* Набор летит на другой компьютер раньше автосохранения: не чаще, чем раз
@@ -3920,6 +3931,7 @@ function flushNotes() {
   clearTimeout(saveTimer);
   if (!state.currentId) return;
   const notes = ui.notes.value;
+  notesDirty = false;
   api.save_notes(state.currentId, notes);
   const meeting = state.meetings.find((m) => m.id === state.currentId);
   if (meeting) meeting.notes = notes;
