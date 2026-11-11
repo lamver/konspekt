@@ -84,8 +84,10 @@ class Устройство:
     added: float = field(default_factory=now)
     # Что ЭТОТ компьютер открыл тому: none или view. По умолчанию ничего.
     share: str = "none"
-    # Забирать его новые встречи самим, пока оба включены.
-    auto_pull: bool = False
+    # Забирать его новые встречи самим, пока оба включены. Включено с
+    # сопряжения: человек ждёт, что всё приедет само и дальше будет
+    # подтягиваться, а не ищет кнопку.
+    auto_pull: bool = True
     # Чужой номер встречи -> наш: вторую копию не заводим.
     taken: dict[str, str] = field(default_factory=dict)
     # Папка, куда ложатся копии. Пусто, пока не забрали ни одной.
@@ -321,6 +323,7 @@ class Узел:
         self._поток: threading.Thread | None = None
         self._endpoint = None
         self._соединения: dict[str, Any] = {}
+        self._замки_забора: dict[str, asyncio.Lock] = {}
         self._готов = threading.Event()
         self._ошибка_старта = ""
         self._стоп = False
@@ -628,6 +631,8 @@ class Узел:
         self._соединения[id] = conn
         self._сохранить()
         self.на_изменение()
+        # Не ждать полминуты до опроса: первый забор сразу, в фоне.
+        asyncio.get_running_loop().create_task(self._опросить(id))
         return у.to_dict()
 
     async def _опросить(self, только: str | None) -> None:
@@ -649,10 +654,11 @@ class Узел:
                 if у.remote_share == "view":
                     список, _ = await self._вызвать(id, "meetings", {})
                     у.remote_meetings = len(список)
-                    if у.auto_pull:
-                        for m in список:
-                            if m["id"] not in у.taken:
-                                await self._забрать(id, m["id"])
+                    if у.auto_pull and any(m["id"] not in у.taken for m in список):
+                        # Забор идёт отдельной задачей: записи большие, а опрос
+                        # зовёт и окно, ему нельзя висеть минуты. Замок на
+                        # устройство не даст двум заборам сойтись.
+                        asyncio.get_running_loop().create_task(self._забрать_новые(id))
                 else:
                     у.remote_meetings = -1
             except Ошибка as e:
@@ -671,13 +677,25 @@ class Узел:
                 log.exception("Опрос устройств не удался")
             await asyncio.sleep(ОПРОС_СЕКУНД)
 
+    def _замок_забора(self, id: str) -> asyncio.Lock:
+        замок = self._замки_забора.get(id)
+        if замок is None:
+            замок = self._замки_забора[id] = asyncio.Lock()
+        return замок
+
     async def _забрать(self, id: str, meeting_id: str) -> str:
         with self._замок:
             у = self.устройства.get(id)
         if у is None:
             raise Ошибка("not_paired")
-        if meeting_id in у.taken:
-            return у.taken[meeting_id]
+        # Опрос по расписанию, забор после сопряжения и кнопка могут
+        # сойтись на одной встрече: без замка выйдут две копии.
+        async with self._замок_забора(id):
+            if meeting_id in у.taken:
+                return у.taken[meeting_id]
+            return await self._забрать_под_замком(id, у, meeting_id)
+
+    async def _забрать_под_замком(self, id: str, у: Устройство, meeting_id: str) -> str:
         данные, _ = await self._вызвать(id, "meeting", {"id": meeting_id})
         loop = asyncio.get_running_loop()
 
@@ -691,6 +709,7 @@ class Узел:
 
         наш = await loop.run_in_executor(None, self.обмен.сохранить, у, данные, скачать)
         self._сохранить()
+        self.на_изменение()
         return наш
 
     async def _забрать_новые(self, id: str) -> int:
@@ -701,10 +720,15 @@ class Узел:
         список, _ = await self._вызвать(id, "meetings", {})
         у.remote_meetings = len(список)
         сколько = 0
-        for m in список:
-            if m["id"] not in у.taken:
-                await self._забрать(id, m["id"])
-                сколько += 1
+        try:
+            for m in список:
+                if m["id"] not in у.taken:
+                    await self._забрать(id, m["id"])
+                    сколько += 1
+        except Ошибка as e:
+            log.info("Забор у %s прервался после %d встреч: %s", у.name, сколько, e)
+            if сколько == 0:
+                raise
         self.на_изменение()
         return сколько
 
@@ -807,6 +831,10 @@ class Узел:
             self.устройства[кто] = у
         self._сохранить()
         self.на_изменение()
+        if взаимно:
+            # Тот компьютер открылся нам в ответ: забираем его встречи, не
+            # дожидаясь опроса. Соединение к нему поднимется своё.
+            asyncio.get_running_loop().create_task(self._опросить(кто))
         return {"name": self.имя, "mutual": взаимно, "proto": ПРОТОКОЛ}
 
 

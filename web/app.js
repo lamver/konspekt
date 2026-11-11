@@ -4035,49 +4035,45 @@ function deviceNode(d) {
   }
   box.appendChild(theirs);
 
-  const share = document.createElement('label');
-  share.className = 'check';
-  const shareBox = document.createElement('input');
-  shareBox.type = 'checkbox';
-  shareBox.checked = d.share === 'view';
-  shareBox.addEventListener('change', async () => {
-    renderDevices(await api.devices_share(d.id, shareBox.checked ? 'view' : 'none'));
-  });
-  const shareText = document.createElement('span');
-  shareText.textContent = t('devices.i_share');
-  share.append(shareBox, shareText);
-  box.appendChild(share);
-
-  if (d.remote_share === 'view') {
-    const auto = document.createElement('label');
-    auto.className = 'check';
-    const autoBox = document.createElement('input');
-    autoBox.type = 'checkbox';
-    autoBox.checked = !!d.auto_pull;
-    autoBox.addEventListener('change', async () => {
-      renderDevices(await api.devices_auto(d.id, autoBox.checked));
+  // Два права, не больше: только забирать его встречи, или ещё и
+  // отдавать свои. Третьего («отдавать, не забирая») нет: кто ввёл код,
+  // тот и забирает, это и есть смысл сопряжения.
+  const rights = document.createElement('div');
+  rights.className = 'dev-item__rights';
+  for (const [уровень, ключ] of [['none', 'devices.right_read'], ['view', 'devices.right_both']]) {
+    const label = document.createElement('label');
+    label.className = 'check';
+    const radio = document.createElement('input');
+    radio.type = 'radio';
+    radio.name = `dev-right-${d.id}`;
+    radio.value = уровень;
+    radio.checked = (d.share === 'view') === (уровень === 'view');
+    radio.addEventListener('change', async () => {
+      if (radio.checked) renderDevices(await api.devices_share(d.id, уровень));
     });
-    const autoText = document.createElement('span');
-    autoText.textContent = t('devices.auto_pull');
-    auto.append(autoBox, autoText);
-    box.appendChild(auto);
+    const text = document.createElement('span');
+    text.textContent = t(ключ);
+    label.append(radio, text);
+    rights.appendChild(label);
   }
+  box.appendChild(rights);
 
   const row = document.createElement('div');
   row.className = 'dev-item__row';
   if (d.remote_share === 'view') {
+    // Новое приезжает само раз в полминуты; кнопка для нетерпеливых и
+    // для проверки, что связь жива.
     const pull = document.createElement('button');
     pull.className = 'btn-secondary';
     pull.type = 'button';
-    const новых = d.remote_meetings >= 0 ? Math.max(0, d.remote_meetings - d.taken) : null;
-    pull.textContent = новых === null ? t('devices.pull') : t('devices.pull_n', { n: новых });
-    pull.disabled = !d.online || новых === 0;
+    const новых = d.remote_meetings >= 0 ? Math.max(0, d.remote_meetings - d.taken) : 0;
+    pull.textContent = новых > 0 ? t('devices.pull_n', { n: новых }) : t('devices.check_now');
     pull.addEventListener('click', async () => {
       pull.disabled = true;
       pull.textContent = t('devices.pulling');
       const r = await api.devices_pull(d.id);
       if (!r.ok) showToast(devicesError(r.error));
-      else showToast(t('devices.pulled', { n: r.result }));
+      else showToast(r.result > 0 ? t('devices.pulled', { n: r.result }) : t('devices.up_to_date'));
       renderDevices(r);
     });
     row.appendChild(pull);
