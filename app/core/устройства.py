@@ -71,6 +71,10 @@ ALPN = b"konspekt/1"
 ФАЙЛ_КЛЮЧА = "устройство.key"
 ФАЙЛ_УСТРОЙСТВ = "устройства.json"
 УРОВНИ = ("none", "view")
+# Что отдаём: идущую запись, обработку и готовое. Черновик без записи не
+# встреча. Идущая запись у копии показывается как «обработка»: записи
+# звука у неё ещё нет, кнопки «Остановить» тоже.
+ОТДАВАЕМЫЕ = (MeetingStatus.RECORDING, MeetingStatus.PROCESSING, MeetingStatus.READY)
 
 
 def доступно() -> bool:
@@ -220,7 +224,7 @@ class Обмен:
         «последняя правка побеждает»: копия прислала то, что человек
         только что сохранил, это и есть последняя правка."""
         m = self.store.get_meeting(meeting_id)
-        if m is None or m.status != MeetingStatus.READY:
+        if m is None or m.status not in ОТДАВАЕМЫЕ:
             raise Ошибка("not_found")
         изменилось = False
         текст = данные.get("notes")
@@ -253,18 +257,19 @@ class Обмен:
         копии, _ = self._чужое()
         out = []
         for m in self.store.list_meetings(limit=100000):
-            if m.status != MeetingStatus.READY or m.id in копии:
+            if m.status not in ОТДАВАЕМЫЕ or m.id in копии:
                 continue
             папка = папки.get(где.get(m.id) or "", "")
             out.append({
                 "id": m.id, "title": m.title, "created_at": m.created_at,
                 "started_at": m.started_at, "ended_at": m.ended_at,
                 "duration": m.duration, "language": m.language, "template": m.template,
-                "folder": папка,
-                # Всё, что меняется у готовой встречи и должно доехать до копии.
+                "folder": папка, "status": _статус_наружу(m.status),
+                # Всё, что меняется у встречи и должно доехать до копии.
                 "stamp": "|".join(str(x) for x in (
                     m.title, папка, len(m.summary or ""), len(m.notes or ""),
-                    m.template, m.language, m.ended_at, отпечатки.get(m.id, "0:0"),
+                    m.template, m.language, m.ended_at, m.status.value,
+                    отпечатки.get(m.id, "0:0"),
                 )),
             })
         return out
@@ -298,7 +303,7 @@ class Обмен:
 
     def встреча(self, meeting_id: str) -> dict[str, Any]:
         m = self.store.get_meeting(meeting_id)
-        if m is None or m.status != MeetingStatus.READY or meeting_id in self._чужое()[0]:
+        if m is None or m.status not in ОТДАВАЕМЫЕ or meeting_id in self._чужое()[0]:
             raise Ошибка("not_found")
         звук = []
         for ч in self.store.list_audio_chunks(meeting_id):
@@ -310,6 +315,7 @@ class Обмен:
                 "duration": ч["duration_s"], "size": путь.stat().st_size,
             })
         d = m.to_dict()
+        d["status"] = _статус_наружу(m.status)
         папки = {f["id"]: f["name"] for f in self.store.list_folders()}
         d["folder"] = папки.get(self.store.meeting_folders().get(meeting_id) or "", "")
         d["segments"] = [s.to_dict() for s in self.store.list_segments(meeting_id)]
@@ -358,7 +364,7 @@ class Обмен:
             created_at=float(данные.get("created_at") or now()),
             started_at=данные.get("started_at"),
             ended_at=данные.get("ended_at"),
-            status=MeetingStatus.READY,
+            status=_статус_копии(данные),
             template=str(данные.get("template") or "general"),
             notes=str(данные.get("notes") or ""),
             summary=str(данные.get("summary") or ""),
@@ -370,6 +376,9 @@ class Обмен:
             self.store.mark_trial_legacy(meeting.id)
         if hasattr(self.store, "set_origin"):
             self.store.set_origin(meeting.id, устройство.id)
+        # Копию не спасать: звук у неё без реплик только пока источник
+        # ещё пишет, а распознавать чужую запись заново здесь незачем.
+        self.store.update_meeting(meeting.id, rescued=1)
         self._наполнить(устройство, meeting.id, данные, скачать)
         устройство.taken[чужой] = meeting.id
         self.на_изменение()
@@ -387,6 +396,7 @@ class Обмен:
             наш,
             title=str(данные.get("title") or ""),
             started_at=данные.get("started_at"), ended_at=данные.get("ended_at"),
+            status=_статус_копии(данные),
             template=str(данные.get("template") or "general"),
             notes=str(данные.get("notes") or ""), summary=str(данные.get("summary") or ""),
             language=str(данные.get("language") or ""),
@@ -1160,6 +1170,16 @@ class Узел:
             # дожидаясь опроса. Соединение к нему поднимется своё.
             asyncio.get_running_loop().create_task(self._опросить(кто))
         return {"name": self.имя, "mutual": взаимно, "proto": ПРОТОКОЛ}
+
+
+def _статус_наружу(статус: MeetingStatus) -> str:
+    return "ready" if статус == MeetingStatus.READY else "processing"
+
+
+def _статус_копии(данные: dict[str, Any]) -> MeetingStatus:
+    """Идущая запись и обработка у копии одно и то же: «обработка». Старый
+    источник статуса не шлёт: у него отдавались только готовые."""
+    return MeetingStatus.READY if str(данные.get("status") or "ready") == "ready" else MeetingStatus.PROCESSING
 
 
 async def _прочитать(recv, лимит: int) -> tuple[dict[str, Any], bytes]:

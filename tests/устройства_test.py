@@ -156,6 +156,29 @@ try:
     проверить("Ноутбук / Переименованная" not in имена_b() and "Ноутбук / Проект" in имена_b(),
               "удалённая пустая папка ушла, папка со встречами осталась")
 
+    # Живая встреча: идущая запись видна копии как «обработка», растёт по
+    # мере расшифровки, а звук приезжает, когда запись остановили.
+    живая = Meeting(title="Прямо сейчас", status=MeetingStatus.RECORDING, started_at=2000.0)
+    store_a.create_meeting(живая)
+    store_a.add_segment(TranscriptSegment(meeting_id=живая.id, speaker=Speaker.ME, text="первая", start=0, end=1))
+    b.забрать_новые(a.id)
+    копия_живой = store_b.get_meeting(b.устройства[a.id].taken.get(живая.id, ""))
+    проверить(копия_живой is not None and копия_живой.status == MeetingStatus.PROCESSING
+              and [s.text for s in store_b.list_segments(копия_живой.id)] == ["первая"],
+              "идущая запись приехала как «обработка» с первой репликой")
+    store_a.add_segment(TranscriptSegment(meeting_id=живая.id, speaker=Speaker.THEM, text="вторая", start=1, end=2))
+    b.забрать_новые(a.id)
+    проверить([s.text for s in store_b.list_segments(копия_живой.id)] == ["первая", "вторая"], "реплика дописалась у копии")
+    папка_ж = звук_a / живая.id; папка_ж.mkdir()
+    (папка_ж / "mic-0.wav").write_bytes(os.urandom(4000))
+    store_a.add_audio_chunk(живая.id, "mic", str(папка_ж / "mic-0.wav"), 0.0, 2.0)
+    store_a.update_meeting(живая.id, status=MeetingStatus.READY, ended_at=2002.0)
+    b.забрать_новые(a.id)
+    копия_живой = store_b.get_meeting(копия_живой.id)
+    проверить(копия_живой.status == MeetingStatus.READY and len(store_b.list_audio_chunks(копия_живой.id)) == 1,
+              "после остановки копия готова и звук приехал")
+    проверить(not store_b.find_unrescued(), "копии не попадают в спасение без реплик")
+
     # Толчок в одну сторону: Стол Ноутбуку ничего не открыл, но толчок от Ноутбука принимает.
     store_a.create_folder("Односторонний толчок")
     a.толкнуть()
@@ -242,7 +265,7 @@ try:
     b2.запустить()
     проверить(b2.id != "" and list(b2.устройства) == [a.id], "после перезапуска устройство помнит пару")
     у_a = [m["title"] for m in b2.встречи_у(a.id)]
-    проверить(sorted(у_a) == ["Планёрка (итог)", "Чёрная"], f"и с тем же ключом снова обслуживается: {у_a}")
+    проверить(sorted(у_a) == ["Планёрка (итог)", "Прямо сейчас", "Чёрная"], f"и с тем же ключом снова обслуживается: {у_a}")
     b2.остановить()
 finally:
     for узел in (a, c):

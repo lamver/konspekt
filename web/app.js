@@ -398,6 +398,8 @@ window.__konspekt_event = function (payload) {
             && ui.notes.value !== payload.meeting.notes) {
           ui.notes.value = payload.meeting.notes;
         }
+        // Копия догнала источник: расшифровка и итоги могли дописаться.
+        if (payload.external) refreshExternal(payload.meeting.id);
       }
       break;
     case 'transcript.segment':
@@ -2509,6 +2511,18 @@ function highlight(text, query) {
   }
   if (pos < text.length) frag.appendChild(document.createTextNode(text.slice(pos)));
   return frag;
+}
+
+/** Открытая копия изменилась снаружи: перечитать расшифровку и итоги. */
+async function refreshExternal(id) {
+  const meeting = await api.get_meeting(id);
+  if (!meeting || meeting.id !== state.currentId) return;
+  renderTranscript(meeting.segments || []);
+  if (!state.busyKind && (meeting.summary || '') !== state.summaryText) {
+    renderSummary(meeting.summary || '');
+    state.summaryText = meeting.summary || '';
+  }
+  loadMeetings();
 }
 
 async function selectMeeting(id, jumpTo = null) {

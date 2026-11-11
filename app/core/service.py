@@ -3649,7 +3649,8 @@ class AppService:
         threading.Thread(target=self._устройства.запустить, name="konspekt-p2p-start", daemon=True).start()
         # Любое изменение встреч и папок толкает сопряжённые компьютеры:
         # им не ждать полминуты до опроса.
-        for тема in (MEETINGS_CHANGED, MEETING_UPDATED, SUMMARY_READY):
+        for тема in (MEETINGS_CHANGED, MEETING_UPDATED, SUMMARY_READY,
+                     TRANSCRIPT_SEGMENT, RECORDING_STARTED, RECORDING_STOPPED):
             bus.on(тема, self._толкнуть_устройства)
 
     def _толкнуть_устройства(self, _payload: Any = None) -> None:
@@ -3668,7 +3669,7 @@ class AppService:
         """Заметки или итоги приехали с другого компьютера: окну перечитать."""
         meeting = self.store.get_meeting(meeting_id)
         if meeting is not None:
-            bus.emit(MEETING_UPDATED, {"meeting_id": meeting_id, "meeting": meeting.to_dict()})
+            bus.emit(MEETING_UPDATED, {"meeting_id": meeting_id, "meeting": meeting.to_dict(), "external": True})
 
     def _заметки_на_источник(self, meeting_id: str) -> None:
         if self._устройства is not None:
