@@ -5,11 +5,13 @@
 ЗВУКИ), чтобы картинка и звук не разъехались.
 
 Запуск: python promo/звук.py  →  promo/out/звук.wav (48 кГц, стерео)
+        python promo/звук.py promo/ролик-0.19.html promo/out/звук-0.19.wav
 """
 from __future__ import annotations
 
 import json
 import re
+import sys
 import wave
 from pathlib import Path
 
@@ -205,7 +207,8 @@ def отзвук(x: np.ndarray, сек: float = 0.5, доля: float = 0.16) -> 
 
 
 def main() -> int:
-    html = (ПАПКА / "ролик.html").read_text(encoding="utf-8")
+    страница = Path(sys.argv[1]) if len(sys.argv) > 1 else ПАПКА / "ролик.html"
+    html = страница.read_text(encoding="utf-8")
     м = re.search(r"/\*ЗВУКИ\*/(.*?)/\*/ЗВУКИ\*/", html, re.S)
     if not м:
         raise SystemExit("в ролик.html нет списка ЗВУКИ")
@@ -241,7 +244,7 @@ def main() -> int:
     стерео = np.stack([л, п], axis=1) * масштаб
     данные = (np.clip(стерео, -1, 1) * 32767).astype("<i2")
 
-    выход = ПАПКА / "out" / "звук.wav"
+    выход = Path(sys.argv[2]) if len(sys.argv) > 2 else ПАПКА / "out" / "звук.wav"
     выход.parent.mkdir(parents=True, exist_ok=True)
     with wave.open(str(выход), "wb") as w:
         w.setnchannels(2)
