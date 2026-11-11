@@ -96,6 +96,7 @@
     "transcript": "Transcripción"
   },
   "notes": {
+    "edit": "Editar",
     "attach_missing": "adjunto eliminado",
     "attach": "Adjuntar archivo",
     "attached": "Adjuntado: {name}",

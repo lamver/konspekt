@@ -3630,19 +3630,121 @@ function syncNotesView() {
   if (печатают || !текст.trim()) {
     ui.notesView.hidden = true;
     ui.notes.hidden = false;
+    syncNotesChrome();
     return;
   }
   ui.notesView.innerHTML = renderMarkdown(текст);
   hydrateAttachments(ui.notesView);
   ui.notesView.hidden = false;
   ui.notes.hidden = true;
+  syncNotesChrome();
+}
+
+/** Полоска внизу и кнопка «Править» следуют за текстом и режимом. */
+function syncNotesChrome() {
+  if (state.attachments) renderAttachments(state.attachments);
+  ui.notesEdit.hidden = ui.notesView.hidden;
 }
 
 function editNotes() {
   ui.notesView.hidden = true;
   ui.notes.hidden = false;
+  ui.notesEdit.hidden = true;
   ui.notes.focus();
   ui.notes.setSelectionRange(ui.notes.value.length, ui.notes.value.length);
+}
+
+/* --- Вставка с форматированием ------------------------------------------ */
+
+/**
+ * HTML из буфера (таблица из Excel, список из письма, жирный из
+ * браузера) превращается в markdown. Без библиотеки: нужны только
+ * заголовки, абзацы, списки, таблицы, жирный, курсив, код и ссылки.
+ * Всё прочее остаётся текстом.
+ */
+function htmlToMarkdown(html) {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const clean = (s) => String(s).replace(/\s+/g, ' ');
+  const inline = (node) => {
+    let out = '';
+    for (const ch of node.childNodes) {
+      if (ch.nodeType === 3) { out += clean(ch.nodeValue); continue; }
+      if (ch.nodeType !== 1) continue;
+      const tag = ch.tagName.toLowerCase();
+      const внутри = () => inline(ch);
+      if (tag === 'br') out += '\n';
+      else if (tag === 'strong' || tag === 'b') out += `**${внутри().trim()}**`;
+      else if (tag === 'em' || tag === 'i') out += `*${внутри().trim()}*`;
+      else if (tag === 's' || tag === 'del' || tag === 'strike') out += `~~${внутри().trim()}~~`;
+      else if (tag === 'code') out += `\`${ch.textContent}\``;
+      else if (tag === 'a') {
+        const href = ch.getAttribute('href') || '';
+        const text = внутри().trim() || href;
+        out += href && !href.startsWith('javascript:') ? `[${text}](${href})` : text;
+      } else if (tag === 'img') out += ch.getAttribute('alt') ? `[${ch.getAttribute('alt')}]` : '';
+      else out += внутри();
+    }
+    return out;
+  };
+  const блоки = [];
+  const block = (node, глубина = 0) => {
+    for (const ch of node.childNodes) {
+      if (ch.nodeType === 3) { const t = clean(ch.nodeValue).trim(); if (t) блоки.push(t); continue; }
+      if (ch.nodeType !== 1) continue;
+      const tag = ch.tagName.toLowerCase();
+      if (/^h[1-6]$/.test(tag)) блоки.push(`${'#'.repeat(Number(tag[1]))} ${inline(ch).trim()}`);
+      else if (tag === 'p' || tag === 'div' || tag === 'section' || tag === 'article' || tag === 'blockquote') {
+        const детиБлоки = [...ch.children].some((x) => /^(p|div|ul|ol|table|h[1-6]|pre|blockquote)$/i.test(x.tagName));
+        if (детиБлоки) block(ch, глубина);
+        else { const t = inline(ch).trim(); if (t) блоки.push(tag === 'blockquote' ? t.split('\n').map((x) => `> ${x}`).join('\n') : t); }
+      } else if (tag === 'ul' || tag === 'ol') {
+        let n = 0;
+        const строки = [];
+        for (const li of ch.children) {
+          if (li.tagName.toLowerCase() !== 'li') continue;
+          n += 1;
+          const вложенные = [...li.children].filter((x) => /^(ul|ol)$/i.test(x.tagName));
+          for (const v of вложенные) v.remove();
+          const текст = inline(li).trim();
+          строки.push(`${'  '.repeat(глубина)}${tag === 'ol' ? `${n}.` : '-'} ${текст}`);
+          for (const v of вложенные) {
+            const до = блоки.length;
+            block({ childNodes: [v] }, глубина + 1);
+            строки.push(...блоки.splice(до));
+          }
+        }
+        блоки.push(строки.join('\n'));
+      } else if (tag === 'table') {
+        const ряды = [...ch.querySelectorAll('tr')].map((tr) => [...tr.children].map((td) => inline(td).trim().replace(/\|/g, '\\|').replace(/\n/g, ' ')));
+        if (ряды.length) {
+          const ширина = Math.max(...ряды.map((r) => r.length));
+          const ряд = (r) => `| ${Array.from({ length: ширина }, (_, i) => r[i] || '').join(' | ')} |`;
+          блоки.push([ряд(ряды[0]), `| ${Array(ширина).fill('---').join(' | ')} |`, ...ряды.slice(1).map(ряд)].join('\n'));
+        }
+      } else if (tag === 'pre') блоки.push('```\n' + ch.textContent.replace(/\n$/, '') + '\n```');
+      else if (tag === 'hr') блоки.push('---');
+      else if (tag === 'br') блоки.push('');
+      else if (tag === 'style' || tag === 'script' || tag === 'meta' || tag === 'link') continue;
+      else {
+        const детиБлоки = [...ch.children].some((x) => /^(p|div|ul|ol|table|h[1-6]|pre|blockquote|tr)$/i.test(x.tagName));
+        if (детиБлоки) block(ch, глубина);
+        else { const t = inline(ch).trim(); if (t) блоки.push(t); }
+      }
+    }
+  };
+  block(doc.body);
+  return блоки.join('\n\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+/** Вставить текст в поле заметок по месту курсора. */
+function insertAtCursor(текст) {
+  const поле = ui.notes;
+  const от = поле.selectionStart;
+  const до = поле.selectionEnd;
+  поле.value = поле.value.slice(0, от) + текст + поле.value.slice(до);
+  const курсор = от + текст.length;
+  поле.setSelectionRange(курсор, курсор);
+  scheduleSave();
 }
 
 /** Вставить ссылку на вложение в текст: по месту курсора, иначе в конец. */
@@ -3738,10 +3840,24 @@ function имяЭл(a) {
 
 /** Файлы из буфера обмена: картинка со скриншота, скопированный файл. */
 async function pasteAttachments(e) {
-  const files = e.clipboardData && e.clipboardData.files ? [...e.clipboardData.files] : [];
-  if (!files.length || !state.currentId) return;
+  if (!state.currentId || !e.clipboardData) return;
+  const files = e.clipboardData.files ? [...e.clipboardData.files] : [];
+  if (files.length) {
+    e.preventDefault();
+    for (const f of files) await attachFile(f);
+    return;
+  }
+  // Таблица из Excel, список из письма, жирный из браузера: буфер несёт
+  // HTML, и его можно сохранить разметкой. Если из HTML вышло то же, что
+  // из простого текста, вставляем как обычно.
+  const html = e.clipboardData.getData('text/html');
+  const plain = e.clipboardData.getData('text/plain');
+  if (!html) return;
+  let md = '';
+  try { md = htmlToMarkdown(html); } catch (err) { md = ''; }
+  if (!md || md === plain.trim()) return;
   e.preventDefault();
-  for (const f of files) await attachFile(f);
+  insertAtCursor(md);
 }
 
 async function attachFile(file) {
@@ -5280,6 +5396,7 @@ function bindUi() {
     meta: el('meeting-meta'),
     notes: el('notes'),
     notesView: el('notes-view'),
+    notesEdit: el('notes-edit'),
     saveHint: el('save-hint'),
     attachments: el('attachments'),
     attachPick: el('attach-pick'),
@@ -5656,6 +5773,9 @@ function bindUi() {
     if (e.target.closest('[data-att]')) return;
     editNotes();
   });
+  // Двойной щелчок где угодно, хоть по картинке: правка.
+  ui.notesView.addEventListener('dblclick', (e) => { e.preventDefault(); editNotes(); });
+  ui.notesEdit.addEventListener('click', editNotes);
   ui.notes.addEventListener('paste', pasteAttachments);
   ui.attachPick.addEventListener('click', pickAttachments);
 

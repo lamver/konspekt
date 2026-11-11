@@ -669,7 +669,7 @@ body { display: flex; flex-direction: column; }
 .notes-view p { margin: 0 0 6px; }
 .md-att { display: inline-block; vertical-align: middle; }
 .md-att--media { display: block; margin: 6px 0; }
-.md-att__img { display: block; max-width: 100%; max-height: 320px; border-radius: 8px; cursor: zoom-in; }
+.md-att__img { display: block; max-width: 100%; max-height: 260px; border: 1px solid var(--line); border-radius: 8px; cursor: zoom-in; background: var(--paper-2); }
 .md-att__player { display: block; width: 100%; max-width: 460px; max-height: 280px; border-radius: 8px; outline: none; }
 .md-att__caption { display: block; font-size: 10.5px; color: var(--ink-3); margin-top: 2px; }
 .md-att--file .attachment { margin: 1px 0; }
@@ -685,6 +685,7 @@ body { display: flex; flex-direction: column; }
 }
 .save-hint.is-visible { opacity: 1; }
 .notes-foot { display: flex; align-items: center; justify-content: space-between; padding-right: 18px; }
+.notes-foot__right { display: flex; gap: 14px; }
 .notes-foot .save-hint { padding-bottom: 8px; }
 .notes-attach { font-size: 11px; padding: 0 0 8px; color: var(--ink-3); }
 .notes-attach:hover { color: var(--ink); opacity: 1; }

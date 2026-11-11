@@ -96,6 +96,7 @@
     "transcript": "Transcript"
   },
   "notes": {
+    "edit": "Edit",
     "attach_missing": "attachment removed",
     "attach": "Attach file",
     "attached": "Attached: {name}",

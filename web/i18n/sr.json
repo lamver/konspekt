@@ -96,6 +96,7 @@
     "transcript": "Transkript"
   },
   "notes": {
+    "edit": "Uredi",
     "attach_missing": "prilog je uklonjen",
     "attach": "Priloži datoteku",
     "attached": "Priloženo: {name}",
