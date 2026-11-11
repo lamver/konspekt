@@ -253,6 +253,30 @@ class Обмен:
             })
         return out
 
+    def папки(self) -> list[str]:
+        """Имена папок источника, включая пустые: у копии они должны быть."""
+        return [f["name"] for f in self.store.list_folders()]
+
+    def зеркало_папок(self, устройство: Устройство, имена: list[str]) -> bool:
+        """Завести у себя папки источника, которых ещё нет, и убрать
+        пустые, которых у источника больше нет: переименовал или удалил.
+        Папку со встречами не трогаем, даже если у источника её не стало."""
+        изменилось = False
+        свои = {f["name"]: f for f in self.store.list_folders()}
+        нужные = {f"{устройство.name} / {имя}" for имя in имена if имя}
+        for имя in нужные:
+            if имя not in свои:
+                self.store.create_folder(имя)
+                изменилось = True
+        приставка = f"{устройство.name} / "
+        for имя, f in свои.items():
+            if имя.startswith(приставка) and имя not in нужные and not f.get("source") and not f.get("count"):
+                self.store.delete_folder(f["id"])
+                изменилось = True
+        if изменилось:
+            self.на_изменение()
+        return изменилось
+
     def встреча(self, meeting_id: str) -> dict[str, Any]:
         m = self.store.get_meeting(meeting_id)
         if m is None or m.status != MeetingStatus.READY:
@@ -806,6 +830,7 @@ class Узел:
                 if у.remote_share == "view":
                     список, _ = await self._вызвать(id, "meetings", {})
                     у.remote_meetings = len(список)
+                    await self._зеркало_папок(id, у)
                     if у.auto_pull and any(self._надо_забрать(у, m) for m in список):
                         # Забор идёт отдельной задачей: записи большие, а опрос
                         # зовёт и окно, ему нельзя висеть минуты. Замок на
@@ -889,6 +914,18 @@ class Узел:
         self.на_изменение()
         return наш
 
+    async def _зеркало_папок(self, id: str, у: Устройство) -> None:
+        """Папки источника, в том числе пустые. Старая версия источника
+        запроса не знает: тогда папки появятся только со встречами."""
+        try:
+            имена, _ = await self._вызвать(id, "folders", {})
+        except Ошибка as e:
+            if e.код == "unknown":
+                return
+            raise
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, self.обмен.зеркало_папок, у, list(имена or []))
+
     async def _забрать_новые(self, id: str) -> int:
         with self._замок:
             у = self.устройства.get(id)
@@ -896,6 +933,7 @@ class Узел:
             raise Ошибка("not_paired")
         список, _ = await self._вызвать(id, "meetings", {})
         у.remote_meetings = len(список)
+        await self._зеркало_папок(id, у)
         сколько = 0
         try:
             for m in список:
@@ -967,6 +1005,8 @@ class Узел:
                 raise Ошибка("no_access")
             elif метод == "meetings":
                 результат = self.обмен.встречи()
+            elif метод == "folders":
+                результат = self.обмен.папки()
             elif метод == "meeting":
                 результат = self.обмен.встреча(str(аргументы.get("id") or ""))
             elif метод == "notes":
