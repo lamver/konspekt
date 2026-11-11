@@ -676,6 +676,15 @@
     "pasted": "Link je nalepljen: transkribujemo snimak"
   },
   "devices": {
+    "leader_title": "Kod rukovodioca",
+    "leader_hint": "Jedan kod za ceo tim: unose ga na svojim računarima i vi vidite njihove sastanke, uključujući one koji se snimaju upravo sada. Vaši sastanci ostaju vaši. Kod je višekratan, važi nedelju dana, novi poništava stari.",
+    "leader_create": "Napravi kod rukovodioca",
+    "leader_renew": "Novi kod",
+    "leader_revoke": "Opozovi",
+    "leader_revoke_confirm": "Opozvati kod? Ko je već povezan ostaje povezan; niko novi ne može da uđe sa njim.",
+    "leader_until": "Važi do {date}",
+    "live_now": "Snima se sada",
+    "live_open": "Otvori sastanak",
     "title": "Drugi računar",
     "intro": "Konspekt mora biti instaliran i pokrenut i na drugom računaru. Računari mogu biti u istoj mreži ili u različitim: veza radi i preko interneta. Sve putuje šifrovano, direktno između vaših uređaja, bez našeg servera između.",
     "unavailable": "Razmena nije dostupna na ovom računaru: mrežna biblioteka ne podržava ovaj sistem.",

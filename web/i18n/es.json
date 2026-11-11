@@ -676,6 +676,15 @@
     "pasted": "Enlace pegado: transcribiendo la grabación"
   },
   "devices": {
+    "leader_title": "Código de responsable",
+    "leader_hint": "Un código para todo el equipo: lo introducen en sus equipos y usted ve sus reuniones, incluidas las que se graban ahora mismo. Sus propias reuniones siguen siendo suyas. El código es reutilizable, dura una semana, uno nuevo anula el anterior.",
+    "leader_create": "Crear código de responsable",
+    "leader_renew": "Nuevo código",
+    "leader_revoke": "Revocar",
+    "leader_revoke_confirm": "¿Revocar el código? Quien ya está conectado sigue conectado; nadie nuevo podrá entrar con él.",
+    "leader_until": "Válido hasta {date}",
+    "live_now": "Grabando ahora",
+    "live_open": "Abrir la reunión",
     "title": "Otro equipo",
     "intro": "Konspekt también debe estar instalado y abierto en el segundo equipo. Los equipos pueden estar en la misma red o en redes distintas: por internet la conexión también funciona. Todo viaja cifrado, directamente entre sus dispositivos, sin ningún servidor nuestro de por medio.",
     "unavailable": "El intercambio no está disponible en este equipo: la biblioteca de red no admite este sistema.",

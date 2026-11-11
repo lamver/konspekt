@@ -124,6 +124,7 @@
       <div class="sidebar__search">
         <input type="search" id="search" data-i18n-placeholder="search.placeholder" placeholder="Поиск по встречам" autocomplete="off">
       </div>
+        <div class="live-now" id="live-now" hidden></div>
       <div class="meeting-list" id="meeting-list"></div>
     </aside>
 
@@ -761,6 +762,18 @@
             </div>
             <input type="text" id="dev-code" class="dev-code" readonly hidden spellcheck="false">
             <p class="hint" id="dev-invite-result" hidden></p>
+          </div>
+
+          <div class="card" id="dev-leader">
+            <p class="card__title" data-i18n="devices.leader_title">Код руководителя</p>
+            <p class="hint" data-i18n="devices.leader_hint">Один код для всех сотрудников: они вводят его у себя, и вы видите их встречи, в том числе идущие прямо сейчас. Своих встреч вы им не открываете. Код многоразовый, действует неделю, новый отменяет прежний.</p>
+            <div class="voice-enroll__row feedback__row">
+              <button class="btn-secondary" type="button" id="dev-leader-create" data-i18n="devices.leader_create">Создать код руководителя</button>
+              <button class="btn-ghost" type="button" id="dev-leader-copy" data-i18n="devices.copy" hidden>Скопировать код</button>
+              <button class="btn-ghost" type="button" id="dev-leader-revoke" data-i18n="devices.leader_revoke" hidden>Отозвать</button>
+            </div>
+            <input type="text" id="dev-leader-code" class="dev-code" readonly hidden spellcheck="false">
+            <p class="hint" id="dev-leader-until" hidden></p>
           </div>
 
           <div class="card" id="dev-join">

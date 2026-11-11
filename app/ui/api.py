@@ -724,6 +724,9 @@ class Api:
     def devices_pull(self, device_id: str) -> dict[str, Any]:
         return self._service.devices_pull(str(device_id))
 
+    def devices_leader_code(self, on: bool) -> dict[str, Any]:
+        return self._service.devices_leader_code(bool(on))
+
     def notes_typing(self, meeting_id: str, text: str) -> None:
         self._service.notes_typing(str(meeting_id), str(text or ""))
 

@@ -57,7 +57,12 @@ ALPN = b"konspekt/1"
 # запрос отвечает unknown, и окно просит обновить тот компьютер.
 ПРОТОКОЛ = 1
 ПРИСТАВКА = "KS1"
+# Код руководителя: многоразовый, живёт неделю, направление обратное.
+# Кто его вводит, тот открывает свои встречи тому, кто создал, и ничего
+# не получает в ответ: сотрудники отдают встречи руководителю.
+ПРИСТАВКА_РУКОВОДИТЕЛЯ = "KS2"
 КОД_ЖИВЁТ = 10 * 60
+КОД_РУКОВОДИТЕЛЯ_ЖИВЁТ = 7 * 24 * 3600
 # Несопряжённый узел может прислать только сопряжение: больше четырёх
 # килобайт ему читать не станем, чтобы чужак не заставил выделять память.
 ЛИМИТ_ЧУЖОГО = 4096
@@ -114,6 +119,9 @@ class Устройство:
     relay: str = ""
     direct: list[str] = field(default_factory=list)
     # Что узнали при последнем опросе, в файл не пишется.
+    # Встречи, которые тот компьютер пишет прямо сейчас: названия и наши
+    # номера копий, чтобы из сводки открыть одним щелчком.
+    recording: list[dict[str, Any]] = field(default_factory=list)
     online: bool = False
     remote_share: str = ""
     remote_proto: int = 0
@@ -127,7 +135,7 @@ class Устройство:
 
     def в_файл(self) -> dict[str, Any]:
         d = asdict(self)
-        for k in ("online", "remote_share", "remote_proto", "last_seen", "remote_meetings"):
+        for k in ("online", "remote_share", "remote_proto", "last_seen", "remote_meetings", "recording"):
             d.pop(k, None)
         return d
 
@@ -149,10 +157,20 @@ def _записать_атомарно(путь: Path, данные: bytes) -> N
 
 def разобрать_код(код: str) -> tuple[str, str]:
     """`KS1-<билет>-<секрет>` -> (билет, секрет). Пробелы и регистр прощаем."""
+    билет, секрет, _ = разобрать_код_полностью(код)
+    return билет, секрет
+
+
+def разобрать_код_полностью(код: str) -> tuple[str, str, bool]:
+    """(билет, секрет, это код руководителя)."""
     части = код.strip().replace(" ", "").split("-", 2)
-    if len(части) != 3 or части[0].upper() != ПРИСТАВКА or not части[1] or not части[2]:
+    if len(части) != 3 or не_приставка(части[0]) or not части[1] or not части[2]:
         raise Ошибка("bad_code")
-    return части[1], части[2].lower()
+    return части[1], части[2].lower(), части[0].upper() == ПРИСТАВКА_РУКОВОДИТЕЛЯ
+
+
+def не_приставка(с: str) -> bool:
+    return с.upper() not in (ПРИСТАВКА, ПРИСТАВКА_РУКОВОДИТЕЛЯ)
 
 
 def имя_компьютера() -> str:
@@ -274,6 +292,7 @@ class Обмен:
                 "started_at": m.started_at, "ended_at": m.ended_at,
                 "duration": m.duration, "language": m.language, "template": m.template,
                 "folder": папка, "status": _статус_наружу(m.status),
+                "live": m.status == MeetingStatus.RECORDING,
                 # Всё, что меняется у встречи и должно доехать до копии.
                 "stamp": "|".join(str(x) for x in (
                     m.title, папка, len(m.summary or ""), len(m.notes or ""),
@@ -567,6 +586,9 @@ class Узел:
         self.минимально = минимально
         self.устройства: dict[str, Устройство] = {}
         self._бывшие: list[str] = []
+        # Код руководителя: (секрет, годен до). Один живой за раз, в файле:
+        # сотрудники вводят его и завтра, и после перезапуска.
+        self._код_руководителя: tuple[str, float] | None = None
         self._коды: list[tuple[str, float, bool]] = []
         self._попытки: dict[str, list[float]] = {}
         self._замок = threading.RLock()
@@ -608,6 +630,9 @@ class Узел:
         try:
             raw = json.loads(путь.read_text(encoding="utf-8"))
             self._бывшие = [str(x) for x in raw.get("former", [])]
+            кр = raw.get("leader_code")
+            if isinstance(кр, list) and len(кр) == 2 and float(кр[1]) > time.time():
+                self._код_руководителя = (str(кр[0]), float(кр[1]))
             for d in raw.get("devices", []):
                 поля = {k: v for k, v in d.items() if k in Устройство.__dataclass_fields__}
                 у = Устройство(**поля)
@@ -619,7 +644,8 @@ class Узел:
 
     def _сохранить(self) -> None:
         with self._замок:
-            данные = {"devices": [у.в_файл() for у in self.устройства.values()], "former": self._бывшие}
+            данные = {"devices": [у.в_файл() for у in self.устройства.values()], "former": self._бывшие,
+                      "leader_code": list(self._код_руководителя) if self._код_руководителя else None}
         _записать_атомарно(
             self.data_dir / ФАЙЛ_УСТРОЙСТВ,
             json.dumps(данные, ensure_ascii=False, indent=2).encode("utf-8"),
@@ -725,6 +751,11 @@ class Узел:
         with self._замок:
             устройства = [у.to_dict() for у in self.устройства.values()]
         устройства.sort(key=lambda d: d["added"])
+        код = None
+        with self._замок:
+            if self._код_руководителя and self._код_руководителя[1] > time.time() and self._endpoint is not None:
+                код = {"code": f"{ПРИСТАВКА_РУКОВОДИТЕЛЯ}-{self.билет()}-{self._код_руководителя[0]}",
+                       "until": self._код_руководителя[1]}
         return {
             "available": доступно(),
             "running": self._endpoint is not None,
@@ -733,6 +764,12 @@ class Узел:
             "name": self.имя,
             "proto": ПРОТОКОЛ,
             "devices": устройства,
+            "leader_code": код,
+            # Кто пишет прямо сейчас: для сводки наверху списка встреч.
+            "recording": [
+                {"device": d["name"], "device_id": d["id"], **r}
+                for d in устройства for r in d.get("recording", [])
+            ],
         }
 
     def билет(self) -> str:
@@ -761,6 +798,28 @@ class Узел:
             self._коды = живые
         return None
 
+    def создать_код_руководителя(self) -> dict[str, Any]:
+        """Многоразовый код на неделю. Новый отменяет прежний."""
+        if self._endpoint is None:
+            raise Ошибка("unavailable")
+        секрет = base64.b32encode(secrets.token_bytes(10)).decode().lower().rstrip("=")
+        with self._замок:
+            self._код_руководителя = (секрет, time.time() + КОД_РУКОВОДИТЕЛЯ_ЖИВЁТ)
+        self._сохранить()
+        self.на_изменение()
+        return self.состояние()["leader_code"]
+
+    def отозвать_код_руководителя(self) -> None:
+        with self._замок:
+            self._код_руководителя = None
+        self._сохранить()
+        self.на_изменение()
+
+    def _код_руководителя_подходит(self, секрет: str) -> bool:
+        with self._замок:
+            кр = self._код_руководителя
+        return bool(кр) and кр[1] > time.time() and secrets.compare_digest(кр[0], секрет)
+
     def _лимит_попыток(self, кто: str) -> bool:
         with self._замок:
             окно = [t for t in self._попытки.get(кто, []) if time.time() - t < КОД_ЖИВЁТ]
@@ -781,14 +840,14 @@ class Узел:
             raise Ошибка("offline", str(e))
 
     def подключить(self, код: str) -> dict[str, Any]:
-        билет, секрет = разобрать_код(код)
+        билет, секрет, руководитель = разобрать_код_полностью(код)
         try:
             addr = iroh.EndpointTicket.from_string(билет).endpoint_addr()
         except Exception:
             raise Ошибка("bad_code")
         if str(addr.id()) == self.id:
             raise Ошибка("self_code")
-        return self._выполнить(self._сопрячься(addr, секрет), 40)
+        return self._выполнить(self._сопрячься(addr, секрет, руководитель), 40)
 
     def отвязать(self, id: str) -> None:
         with self._замок:
@@ -1076,23 +1135,24 @@ class Узел:
             self._соединения.pop(id, None)
             raise Ошибка("offline", str(e))
 
-    async def _сопрячься(self, addr, секрет: str) -> dict[str, Any]:
+    async def _сопрячься(self, addr, секрет: str, руководитель: bool = False) -> dict[str, Any]:
         try:
             conn = await asyncio.wait_for(self._endpoint.connect(addr, ALPN), 25)
             ответ, _ = await asyncio.wait_for(self._запрос(conn, "pair", {
-                "secret": секрет, "name": self.имя, "ticket": self.билет(),
+                "secret": секрет, "name": self.имя, "ticket": self.билет(), "leader": руководитель,
             }), 30)
         except Ошибка:
             raise
         except Exception as e:
             raise Ошибка("offline", str(e))
         id = str(conn.remote_id())
+        # По коду руководителя направление обратное: мы отдаём, нам ничего.
         у = Устройство(
             id=id, name=str(ответ.get("name") or id[:10]),
-            share="view" if ответ.get("mutual") else "none",
+            share="view" if (руководитель or ответ.get("mutual")) else "none",
             relay=addr.relay_url() or "", direct=list(addr.direct_addresses()),
-            online=True, remote_share="view", remote_proto=int(ответ.get("proto") or 0),
-            last_seen=now(),
+            online=True, remote_share="none" if руководитель else "view",
+            remote_proto=int(ответ.get("proto") or 0), last_seen=now(),
         )
         with self._замок:
             self.устройства[id] = у
@@ -1126,6 +1186,11 @@ class Узел:
                 if у.remote_share == "view":
                     список, _ = await self._вызвать(id, "meetings", {})
                     у.remote_meetings = len(список)
+                    у.recording = [
+                        {"title": m.get("title") or "", "started_at": m.get("started_at"),
+                         "meeting_id": у.taken.get(m["id"], "")}
+                        for m in список if m.get("live")
+                    ]
                     await self._зеркало_папок(id, у)
                     if у.auto_pull and any(self._надо_забрать(у, m) for m in список):
                         # Забор идёт отдельной задачей: записи большие, а опрос
@@ -1384,7 +1449,32 @@ class Узел:
     def _сопряжение(self, кто: str, аргументы: dict[str, Any]) -> dict[str, Any]:
         if not self._лимит_попыток(кто):
             raise Ошибка("too_many")
-        взаимно = self._взять_код(str(аргументы.get("secret") or ""))
+        секрет = str(аргументы.get("secret") or "")
+        if аргументы.get("leader"):
+            # Сотрудник вводит код руководителя: он открывает нам, мы ему нет.
+            if not self._код_руководителя_подходит(секрет):
+                raise Ошибка("bad_code")
+            with self._замок:
+                у = self.устройства.get(кто)
+                relay, direct = "", []
+                try:
+                    addr = iroh.EndpointTicket.from_string(str(аргументы.get("ticket") or "")).endpoint_addr()
+                    if str(addr.id()) == кто:
+                        relay, direct = addr.relay_url() or "", list(addr.direct_addresses())
+                except Exception:
+                    pass
+                if у is None:
+                    у = Устройство(id=кто, name=str(аргументы.get("name") or кто[:10]), share="none",
+                                   relay=relay, direct=direct)
+                    self.устройства[кто] = у
+                у.online = True
+                у.last_seen = now()
+                у.remote_share = "view"
+            self._сохранить()
+            self.на_изменение()
+            asyncio.get_running_loop().create_task(self._опросить(кто))
+            return {"name": self.имя, "mutual": False, "proto": ПРОТОКОЛ}
+        взаимно = self._взять_код(секрет)
         if взаимно is None:
             raise Ошибка("bad_code")
         relay, direct = "", []

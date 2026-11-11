@@ -2028,6 +2028,16 @@ body.is-resizing * { user-select: none !important; }
 /* Другой компьютер */
 .dev-code { width: 100%; box-sizing: border-box; margin-top: 8px; font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
 .dev-list { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+/* Сводка «в записи сейчас» над списком встреч */
+.live-now { margin: 0 0 6px; padding: 6px 8px; border-radius: 8px; background: var(--paper-3); font-size: 11.5px; }
+.live-now__title { color: var(--ink-3); font-weight: 600; font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 3px; }
+.live-now__item { display: flex; align-items: center; gap: 6px; padding: 3px 2px; border-radius: 6px; cursor: pointer; }
+.live-now__item:hover { background: var(--paper); }
+.live-now__dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); animation: live-pulse 1.6s ease-in-out infinite; flex: none; }
+.live-now__who { font-weight: 600; flex: none; }
+.live-now__what { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink-2); }
+.live-now__time { color: var(--ink-3); flex: none; font-variant-numeric: tabular-nums; }
+@keyframes live-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
 .dev-item { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
 .dev-item__head { display: flex; align-items: center; gap: 8px; }
 .dev-item__name { font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

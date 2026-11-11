@@ -3805,6 +3805,12 @@ class AppService:
     def devices_pull(self, device_id: str) -> dict[str, Any]:
         return self._устройства_вызов(lambda: self._устройства.забрать_новые(str(device_id)))
 
+    def devices_leader_code(self, on: bool) -> dict[str, Any]:
+        """Код руководителя: создать новый или отозвать."""
+        if on:
+            return self._устройства_вызов(lambda: self._устройства.создать_код_руководителя())
+        return self._устройства_вызов(lambda: self._устройства.отозвать_код_руководителя())
+
     def запустить_источники(self) -> None:
         """Обход папок-источников в фоне. Зовётся при старте."""
         try:

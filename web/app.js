@@ -188,6 +188,8 @@ const state = {
   collapsedFolders: new Set(),
   // Имена сопряжённых компьютеров: их папки собираются под одним узлом.
   deviceNames: [],
+  // Кто из них пишет встречу прямо сейчас: сводка над списком.
+  liveNow: [],
   // Найденное в расшифровках: запрос, к которому относится результат,
   // и карта «встреча → совпадения». Отдельно от filter, потому что
   // ответ базы приходит с задержкой и может отстать от строки поиска.
@@ -380,6 +382,8 @@ window.__konspekt_event = function (payload) {
       if (payload && payload.devices) {
         const имена = payload.devices.map((d) => d.name);
         if (имена.join('|') !== state.deviceNames.join('|')) { state.deviceNames = имена; renderMeetingList(); }
+        state.liveNow = payload.recording || [];
+        renderLiveNow();
       }
       break;
     case 'trial.blocked':
@@ -1735,7 +1739,11 @@ async function loadMeetings() {
   ]);
   state.meetings = meetings || [];
   state.folders = folders || [];
-  if (devices && devices.devices) state.deviceNames = devices.devices.map((d) => d.name);
+  if (devices && devices.devices) {
+    state.deviceNames = devices.devices.map((d) => d.name);
+    state.liveNow = devices.recording || [];
+  }
+  renderLiveNow();
   renderMeetingList();
   // Если ничего не выбрано, открываем самую свежую встречу.
   if (!state.currentId && state.meetings.length) {
@@ -4423,6 +4431,41 @@ function showPrefsTab(tab) {
   if (tab === 'dictation') loadDictation();
 }
 
+/* --- Кто в записи сейчас -------------------------------------------------- */
+
+let liveNowTimer = null;
+
+/** Сводка над списком: у кого из сопряжённых компьютеров идёт запись. */
+function renderLiveNow() {
+  const box = el('live-now');
+  if (!box) return;
+  const список = state.liveNow || [];
+  box.hidden = !список.length;
+  box.innerHTML = '';
+  clearTimeout(liveNowTimer);
+  if (!список.length) return;
+  const title = document.createElement('div');
+  title.className = 'live-now__title';
+  title.textContent = t('devices.live_now');
+  box.appendChild(title);
+  for (const r of список) {
+    const row = document.createElement('div');
+    row.className = 'live-now__item';
+    row.title = t('devices.live_open');
+    const dot = document.createElement('span'); dot.className = 'live-now__dot';
+    const who = document.createElement('span'); who.className = 'live-now__who'; who.textContent = r.device;
+    const what = document.createElement('span'); what.className = 'live-now__what'; what.textContent = r.title || t('meeting.untitled');
+    const time = document.createElement('span'); time.className = 'live-now__time';
+    const сек = r.started_at ? Math.max(0, Date.now() / 1000 - r.started_at) : 0;
+    time.textContent = r.started_at ? fmtDuration(сек) : '';
+    row.append(dot, who, what, time);
+    if (r.meeting_id) row.addEventListener('click', () => selectMeeting(r.meeting_id));
+    box.appendChild(row);
+  }
+  // Длительность тикает сама, пока запись идёт.
+  liveNowTimer = setTimeout(renderLiveNow, 1000);
+}
+
 /* --- Другой компьютер ---------------------------------------------------- */
 
 let devicesState = null;
@@ -4444,8 +4487,10 @@ function renderDevices(s) {
   el('dev-unavailable').hidden = !нет && !s.error;
   if (s.error && s.available) el('dev-unavailable-text').textContent = t('devices.start_failed', { error: s.error });
   el('dev-invite').hidden = нет;
+  el('dev-leader').hidden = нет;
   el('dev-join').hidden = нет;
   el('dev-list-card').hidden = нет;
+  renderLeaderCode(s.leader_code);
   const список = el('dev-list');
   список.innerHTML = '';
   const устройства = s.devices || [];
@@ -4534,6 +4579,46 @@ function deviceNode(d) {
   row.appendChild(forget);
   box.appendChild(row);
   return box;
+}
+
+function renderLeaderCode(код) {
+  const поле = el('dev-leader-code');
+  const есть = !!(код && код.code);
+  поле.hidden = !есть;
+  el('dev-leader-copy').hidden = !есть;
+  el('dev-leader-revoke').hidden = !есть;
+  el('dev-leader-until').hidden = !есть;
+  el('dev-leader-create').textContent = t(есть ? 'devices.leader_renew' : 'devices.leader_create');
+  if (есть) {
+    поле.value = код.code;
+    el('dev-leader-until').textContent = t('devices.leader_until', { date: fmtDate(код.until) });
+  }
+}
+
+async function createLeaderCode() {
+  const r = await api.devices_leader_code(true);
+  if (!r.ok) { showToast(devicesError(r.error)); return; }
+  renderDevices(r);
+  const поле = el('dev-leader-code');
+  поле.focus();
+  поле.select();
+}
+
+async function revokeLeaderCode() {
+  if (!await confirmDialog(t('devices.leader_revoke'), t('devices.leader_revoke_confirm'),
+    { yes: t('devices.leader_revoke'), danger: true })) return;
+  renderDevices(await api.devices_leader_code(false));
+}
+
+async function copyLeaderCode() {
+  const поле = el('dev-leader-code');
+  try {
+    await navigator.clipboard.writeText(поле.value);
+    showToast(t('devices.copied'));
+  } catch (e) {
+    поле.focus();
+    поле.select();
+  }
 }
 
 async function createDeviceCode() {
@@ -5695,6 +5780,9 @@ function bindUi() {
   if (ui.summarySendTelegram) ui.summarySendTelegram.addEventListener('click', отправитьВТелеграм);
   el('tg-connect').addEventListener('click', connectTelegram);
   el('dev-create').addEventListener('click', createDeviceCode);
+  el('dev-leader-create').addEventListener('click', createLeaderCode);
+  el('dev-leader-copy').addEventListener('click', copyLeaderCode);
+  el('dev-leader-revoke').addEventListener('click', revokeLeaderCode);
   el('dev-copy').addEventListener('click', copyDeviceCode);
   el('dev-join-btn').addEventListener('click', joinDevice);
   el('dev-join-code').addEventListener('keydown', (e) => { if (e.key === 'Enter') joinDevice(); });

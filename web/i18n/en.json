@@ -676,6 +676,15 @@
     "pasted": "Link pasted: transcribing the recording"
   },
   "devices": {
+    "leader_title": "Manager code",
+    "leader_hint": "One code for the whole team: they enter it on their computers and you see their meetings, including ones being recorded right now. Your own meetings stay yours. The code is reusable, lasts a week, a new one replaces the old.",
+    "leader_create": "Create manager code",
+    "leader_renew": "New code",
+    "leader_revoke": "Revoke",
+    "leader_revoke_confirm": "Revoke the code? Those already connected stay connected; nobody new can join with it.",
+    "leader_until": "Valid until {date}",
+    "live_now": "Recording now",
+    "live_open": "Open the meeting",
     "title": "Other computer",
     "intro": "Konspekt must be installed and running on the second computer too. The computers can be on the same network or different ones: the connection works over the internet as well. Everything travels encrypted, directly between your devices, with no server of ours in between.",
     "unavailable": "Exchange isn't available on this computer: the networking library doesn't support this system.",
