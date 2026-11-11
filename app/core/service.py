@@ -3647,6 +3647,14 @@ class AppService:
         )
         self._устройства = уст.Узел(обмен, на_изменение=self._устройства_изменились)
         threading.Thread(target=self._устройства.запустить, name="konspekt-p2p-start", daemon=True).start()
+        # Любое изменение встреч и папок толкает сопряжённые компьютеры:
+        # им не ждать полминуты до опроса.
+        for тема in (MEETINGS_CHANGED, MEETING_UPDATED, SUMMARY_READY):
+            bus.on(тема, self._толкнуть_устройства)
+
+    def _толкнуть_устройства(self, _payload: Any = None) -> None:
+        if self._устройства is not None:
+            self._устройства.толкнуть()
 
     def остановить_устройства(self) -> None:
         узел, self._устройства = self._устройства, None

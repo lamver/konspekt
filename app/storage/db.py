@@ -369,6 +369,10 @@ class Store:
             self._add_columns("chat_messages", {"archived_at": "REAL"})
             # Язык встречи, выбранный человеком (models.Meeting.language).
             self._add_columns("meetings", {"language": "TEXT NOT NULL DEFAULT ''"})
+            # Откуда встреча: пусто у своих, номер устройства у копий с
+            # другого компьютера. Копия остаётся копией и после отвязки:
+            # отдавать её обратно как свою нельзя.
+            self._add_columns("meetings", {"origin": "TEXT NOT NULL DEFAULT ''"})
             self._начать_пробный_период()
             if was < 2:
                 self._add_columns(
@@ -573,6 +577,17 @@ class Store:
                 "INSERT OR IGNORE INTO trial_legacy(meeting_id) VALUES (?)", (meeting_id,)
             )
             self._conn.commit()
+
+    def set_origin(self, meeting_id: str, origin: str) -> None:
+        """Пометить встречу копией с другого компьютера."""
+        with self._lock:
+            self._conn.execute("UPDATE meetings SET origin=? WHERE id=?", (origin, meeting_id))
+            self._conn.commit()
+
+    def copies(self) -> set[str]:
+        """Номера встреч, которые приехали с других компьютеров."""
+        with self._lock:
+            return {r[0] for r in self._conn.execute("SELECT id FROM meetings WHERE origin != ''")}
 
     def meeting_stamps(self) -> dict[str, str]:
         """Отпечаток содержимого встреч для сверки копий на другом компьютере:

@@ -66,6 +66,8 @@ ALPN = b"konspekt/1"
 # Сколько раз за десять минут можно ошибиться кодом с одного устройства.
 ПОПЫТОК_КОДА = 10
 ОПРОС_СЕКУНД = 30.0
+# Толчок соседям после своего изменения: собрать пачку правок в один.
+ТОЛЧОК_СЕКУНД = 1.5
 ФАЙЛ_КЛЮЧА = "устройство.key"
 ФАЙЛ_УСТРОЙСТВ = "устройства.json"
 УРОВНИ = ("none", "view")
@@ -184,6 +186,19 @@ class Обмен:
         self.на_изменение = на_изменение or (lambda: None)
         # Открытая в окне встреча изменилась снаружи: окну надо перечитать.
         self.на_встречу = на_встречу or (lambda meeting_id: None)
+        # Узел подставляет себя: обмен должен знать, что у нас копии, а
+        # что своё. Отдаём только своё, иначе при связи в обе стороны
+        # встречи и папки отражаются друг в друге без конца.
+        self.узел: Any = None
+
+    def _чужое(self) -> tuple[set[str], set[str]]:
+        """Номера встреч-копий и имена сопряжённых компьютеров."""
+        if self.узел is None:
+            return set(), set()
+        return self.узел.копии(), self.узел.имена()
+
+    def _зеркальная_папка(self, имя: str, имена: set[str]) -> bool:
+        return any(имя == к or имя.startswith(f"{к} / ") for к in имена)
 
     # --- заметки в обе стороны -------------------------------------------
 
@@ -235,9 +250,10 @@ class Обмен:
         папки = {f["id"]: f["name"] for f in self.store.list_folders()}
         где = self.store.meeting_folders()
         отпечатки = self.store.meeting_stamps() if hasattr(self.store, "meeting_stamps") else {}
+        копии, _ = self._чужое()
         out = []
         for m in self.store.list_meetings(limit=100000):
-            if m.status != MeetingStatus.READY:
+            if m.status != MeetingStatus.READY or m.id in копии:
                 continue
             папка = папки.get(где.get(m.id) or "", "")
             out.append({
@@ -254,8 +270,11 @@ class Обмен:
         return out
 
     def папки(self) -> list[str]:
-        """Имена папок источника, включая пустые: у копии они должны быть."""
-        return [f["name"] for f in self.store.list_folders()]
+        """Имена своих папок, включая пустые: у копии они должны быть.
+        Папки других компьютеров не отдаём: это не наше."""
+        _, имена = self._чужое()
+        return [f["name"] for f in self.store.list_folders()
+                if not self._зеркальная_папка(f["name"], имена)]
 
     def зеркало_папок(self, устройство: Устройство, имена: list[str]) -> bool:
         """Завести у себя папки источника, которых ещё нет, и убрать
@@ -279,7 +298,7 @@ class Обмен:
 
     def встреча(self, meeting_id: str) -> dict[str, Any]:
         m = self.store.get_meeting(meeting_id)
-        if m is None or m.status != MeetingStatus.READY:
+        if m is None or m.status != MeetingStatus.READY or meeting_id in self._чужое()[0]:
             raise Ошибка("not_found")
         звук = []
         for ч in self.store.list_audio_chunks(meeting_id):
@@ -349,6 +368,8 @@ class Обмен:
         # Копия не ест пробный период: записывали не здесь.
         if hasattr(self.store, "mark_trial_legacy"):
             self.store.mark_trial_legacy(meeting.id)
+        if hasattr(self.store, "set_origin"):
+            self.store.set_origin(meeting.id, устройство.id)
         self._наполнить(устройство, meeting.id, данные, скачать)
         устройство.taken[чужой] = meeting.id
         self.на_изменение()
@@ -450,6 +471,7 @@ class Узел:
             минимально = os.environ.get("KONSPEKT_P2P_MINIMAL", "") == "1"
         self.минимально = минимально
         self.устройства: dict[str, Устройство] = {}
+        self._бывшие: list[str] = []
         self._коды: list[tuple[str, float, bool]] = []
         self._попытки: dict[str, list[float]] = {}
         self._замок = threading.RLock()
@@ -458,10 +480,26 @@ class Узел:
         self._endpoint = None
         self._соединения: dict[str, Any] = {}
         self._замки_забора: dict[str, asyncio.Lock] = {}
+        self._таймер_толчка: threading.Timer | None = None
+        self._опросы_в_очереди: set[str] = set()
         self._готов = threading.Event()
         self._ошибка_старта = ""
         self._стоп = False
         self._загрузить()
+        обмен.узел = self
+
+    def копии(self) -> set[str]:
+        with self._замок:
+            свои = {свой for у in self.устройства.values() for свой in у.taken.values()}
+        if hasattr(self.обмен.store, "copies"):
+            свои |= self.обмен.store.copies()
+        return свои
+
+    def имена(self) -> set[str]:
+        """Имена сопряжённых компьютеров и бывших: их папки остаются после
+        отвязки и отдавать их как свои нельзя."""
+        with self._замок:
+            return {у.name for у in self.устройства.values()} | set(self._бывшие)
 
     # --- файлы -----------------------------------------------------------
 
@@ -471,6 +509,7 @@ class Узел:
             return
         try:
             raw = json.loads(путь.read_text(encoding="utf-8"))
+            self._бывшие = [str(x) for x in raw.get("former", [])]
             for d in raw.get("devices", []):
                 поля = {k: v for k, v in d.items() if k in Устройство.__dataclass_fields__}
                 у = Устройство(**поля)
@@ -482,7 +521,7 @@ class Узел:
 
     def _сохранить(self) -> None:
         with self._замок:
-            данные = {"devices": [у.в_файл() for у in self.устройства.values()]}
+            данные = {"devices": [у.в_файл() for у in self.устройства.values()], "former": self._бывшие}
         _записать_атомарно(
             self.data_dir / ФАЙЛ_УСТРОЙСТВ,
             json.dumps(данные, ensure_ascii=False, indent=2).encode("utf-8"),
@@ -511,6 +550,9 @@ class Узел:
 
     def остановить(self) -> None:
         self._стоп = True
+        with self._замок:
+            if self._таймер_толчка is not None:
+                self._таймер_толчка.cancel()
         loop, self._loop = self._loop, None
         if loop is not None and self._endpoint is not None:
             try:
@@ -653,6 +695,8 @@ class Узел:
     def отвязать(self, id: str) -> None:
         with self._замок:
             у = self.устройства.pop(id, None)
+            if у is not None and у.name not in self._бывшие:
+                self._бывшие.append(у.name)
         if у is None:
             return
         self._сохранить()
@@ -696,6 +740,50 @@ class Узел:
 
     def забрать_новые(self, id: str) -> int:
         return self._выполнить(self._забрать_новые(id), 3600)
+
+    def толкнуть(self) -> None:
+        """Что-то изменилось у нас: сказать тем, кому мы открыли встречи,
+        чтобы они спросили сейчас, а не через полминуты. Правки идут
+        пачками (импорт десяти файлов), поэтому ждём полторы секунды тишины."""
+        if self._loop is None:
+            return
+        with self._замок:
+            if self._таймер_толчка is not None:
+                self._таймер_толчка.cancel()
+            self._таймер_толчка = threading.Timer(ТОЛЧОК_СЕКУНД, self._толкнуть_сейчас)
+            self._таймер_толчка.daemon = True
+            self._таймер_толчка.start()
+
+    def _толкнуть_сейчас(self) -> None:
+        loop = self._loop
+        if loop is None:
+            return
+        asyncio.run_coroutine_threadsafe(self._толкнуть_всех(), loop)
+
+    async def _толкнуть_всех(self) -> None:
+        with self._замок:
+            ids = [у.id for у in self.устройства.values() if у.share == "view"]
+        for id in ids:
+            try:
+                await asyncio.wait_for(self._вызвать(id, "poke", {}), 10)
+                log.debug("Толкнули %s", id[:10])
+            except Exception as e:
+                # Выключен или старая версия: заберёт при своём опросе.
+                log.debug("Толчок до %s не дошёл: %s", id[:10], e)
+
+    def _опросить_скоро(self, id: str) -> None:
+        """Опрос по толчку, один за раз на устройство."""
+        if id in self._опросы_в_очереди:
+            return
+        self._опросы_в_очереди.add(id)
+
+        async def опрос() -> None:
+            try:
+                await self._опросить(id)
+            finally:
+                self._опросы_в_очереди.discard(id)
+
+        asyncio.get_running_loop().create_task(опрос())
 
     def отправить_заметки(self, наш: str) -> bool:
         """Заметки сохранили у копии: отправить источнику, если это копия.
@@ -1007,6 +1095,12 @@ class Узел:
                 результат = self.обмен.встречи()
             elif метод == "folders":
                 результат = self.обмен.папки()
+            elif метод == "poke":
+                # У того компьютера что-то изменилось: спросим его сейчас.
+                log.debug("Толчок от %s, открыт нам: %s", кто[:10], у.remote_share)
+                if у.remote_share == "view":
+                    self._опросить_скоро(кто)
+                результат = {"ok": True}
             elif метод == "meeting":
                 результат = self.обмен.встреча(str(аргументы.get("id") or ""))
             elif метод == "notes":
