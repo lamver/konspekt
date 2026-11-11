@@ -142,6 +142,20 @@ CREATE TABLE IF NOT EXISTS audio_chunks (
     duration_s  REAL NOT NULL DEFAULT 0
 );
 
+-- Вложения к заметкам: картинка из буфера, файл с диска. Сам файл лежит
+-- в attachments/<встреча>/, в базе только запись о нём. origin пуст у
+-- своих и равен номеру устройства у приехавших с другого компьютера:
+-- зеркало вправе убирать только чужие, когда их не стало у источника.
+CREATE TABLE IF NOT EXISTS attachments (
+    id          TEXT PRIMARY KEY,
+    meeting_id  TEXT NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,
+    name        TEXT NOT NULL,
+    path        TEXT NOT NULL,
+    size        INTEGER NOT NULL DEFAULT 0,
+    origin      TEXT NOT NULL DEFAULT '',
+    created_at  REAL NOT NULL
+);
+
 -- Куски речи, которые не успели распознать.
 --
 -- Звук их цел в WAV, пропало только распознавание, и досчёт после
@@ -591,16 +605,60 @@ class Store:
 
     def meeting_stamps(self) -> dict[str, str]:
         """Отпечаток содержимого встреч для сверки копий на другом компьютере:
-        сколько реплик и строк заметок. Два запроса на всю базу, а не по
-        одному на встречу."""
+        сколько реплик, строк заметок и вложений. Три запроса на всю базу,
+        а не по одному на встречу."""
         with self._lock:
+            # Не только сколько, но и что: исправленная реплика или
+            # «одно вложение убрали, другое добавили» число не меняют.
             реплики = dict(self._conn.execute(
-                "SELECT meeting_id, COUNT(*) FROM transcript_segments GROUP BY meeting_id"
+                "SELECT meeting_id, COUNT(*) || '/' || COALESCE(SUM(length(text)), 0)"
+                " FROM transcript_segments GROUP BY meeting_id"
             ).fetchall())
             строки = dict(self._conn.execute(
-                "SELECT meeting_id, COUNT(*) FROM note_lines GROUP BY meeting_id"
+                "SELECT meeting_id, COUNT(*) || '/' || COALESCE(SUM(length(text)), 0)"
+                " FROM note_lines GROUP BY meeting_id"
             ).fetchall())
-        return {m: f"{реплики.get(m, 0)}:{строки.get(m, 0)}" for m in set(реплики) | set(строки)}
+            вложения = dict(self._conn.execute(
+                "SELECT meeting_id, GROUP_CONCAT(id, ',') FROM"
+                " (SELECT meeting_id, id FROM attachments ORDER BY meeting_id, id) GROUP BY meeting_id"
+            ).fetchall())
+        return {m: f"{реплики.get(m, '0/0')}:{строки.get(m, '0/0')}:{вложения.get(m, '')}"
+                for m in set(реплики) | set(строки) | set(вложения)}
+
+    # --- вложения ---------------------------------------------------------
+
+    def add_attachment(self, meeting_id: str, name: str, path: str, size: int,
+                       origin: str = "", id: str | None = None,
+                       created_at: float | None = None) -> dict[str, Any]:
+        запись = {
+            "id": id or new_id(), "meeting_id": meeting_id, "name": name, "path": path,
+            "size": int(size), "origin": origin, "created_at": created_at or now(),
+        }
+        with self._lock:
+            self._conn.execute(
+                "INSERT OR REPLACE INTO attachments(id, meeting_id, name, path, size, origin, created_at)"
+                " VALUES (?,?,?,?,?,?,?)",
+                (запись["id"], meeting_id, name, path, запись["size"], origin, запись["created_at"]),
+            )
+            self._conn.commit()
+        return запись
+
+    def list_attachments(self, meeting_id: str) -> list[dict[str, Any]]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM attachments WHERE meeting_id=? ORDER BY created_at", (meeting_id,)
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_attachment(self, attachment_id: str) -> dict[str, Any] | None:
+        with self._lock:
+            row = self._conn.execute("SELECT * FROM attachments WHERE id=?", (attachment_id,)).fetchone()
+        return dict(row) if row else None
+
+    def delete_attachment(self, attachment_id: str) -> None:
+        with self._lock:
+            self._conn.execute("DELETE FROM attachments WHERE id=?", (attachment_id,))
+            self._conn.commit()
 
     def replace_transcript(self, meeting_id: str, segments: list[TranscriptSegment]) -> None:
         """Заменить расшифровку целиком: копия с другого компьютера догоняет

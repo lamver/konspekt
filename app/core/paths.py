@@ -76,6 +76,13 @@ def audio_dir() -> Path:
     return path
 
 
+def attachments_dir() -> Path:
+    """Вложения к заметкам: по папке на встречу."""
+    path = data_dir() / "attachments"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
 def models_dir() -> Path:
     """Каталог весов моделей.
 

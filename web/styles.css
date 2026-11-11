@@ -671,6 +671,20 @@ body { display: flex; flex-direction: column; }
   transition: opacity .2s;
 }
 .save-hint.is-visible { opacity: 1; }
+.notes-foot { display: flex; align-items: center; justify-content: space-between; padding-right: 18px; }
+.notes-foot .save-hint { padding-bottom: 8px; }
+.notes-attach { font-size: 11px; padding: 0 0 8px; color: var(--ink-3); }
+.notes-attach:hover { color: var(--ink); opacity: 1; }
+.attachments { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 18px 8px; }
+.attachment { position: relative; display: inline-flex; align-items: center; gap: 6px; max-width: 220px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper-2); cursor: pointer; font-size: 11.5px; color: var(--ink-2); }
+.attachment:hover { background: var(--paper-3); }
+.attachment--image { padding: 2px; }
+.attachment__thumb { display: block; width: 72px; height: 72px; object-fit: cover; border-radius: 6px; }
+.attachment__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.attachment__size { color: var(--ink-3); flex: none; }
+.attachment__remove { position: absolute; top: -6px; right: -6px; width: 16px; height: 16px; border: 0; border-radius: 50%; background: var(--ink-3); color: var(--paper); font-size: 11px; line-height: 16px; padding: 0; cursor: pointer; display: none; }
+.attachment:hover .attachment__remove { display: block; }
+.attachment__remove:hover { background: var(--accent); }
 
 .placeholder {
   flex: 1;

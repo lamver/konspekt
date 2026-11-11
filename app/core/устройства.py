@@ -42,6 +42,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from . import paths
+from . import вложения as вл
 from .models import Meeting, MeetingStatus, NoteLine, Speaker, TranscriptSegment, now
 
 try:  # Intel Mac: колёс iroh под x86_64 macOS нет, там раздел только объясняет это.
@@ -250,6 +251,9 @@ class Обмен:
             self.на_изменение()
         return изменилось
 
+    def вложения_есть(self, meeting_id: str) -> list[str]:
+        return [a["id"] for a in self.store.list_attachments(meeting_id)]
+
     # --- отдаём ---------------------------------------------------------
 
     def встречи(self) -> list[dict[str, Any]]:
@@ -323,7 +327,55 @@ class Обмен:
         d["segments"] = [s.to_dict() for s in self.store.list_segments(meeting_id)]
         d["note_lines"] = [n.to_dict() for n in self.store.list_note_lines(meeting_id)]
         d["audio"] = звук
+        d["attachments"] = [
+            {"id": a["id"], "name": a["name"], "size": a["size"], "created_at": a["created_at"]}
+            for a in self.store.list_attachments(meeting_id) if Path(a["path"]).exists()
+        ]
         return d
+
+    def читать_вложение(self, meeting_id: str, attachment_id: str, offset: int, size: int) -> bytes:
+        a = self.store.get_attachment(attachment_id)
+        if a is None or a["meeting_id"] != meeting_id or not Path(a["path"]).exists():
+            raise Ошибка("not_found")
+        with Path(a["path"]).open("rb") as f:
+            f.seek(max(0, int(offset)))
+            return f.read(max(0, min(int(size), КУСОК)))
+
+    def вложения_свои(self, meeting_id: str) -> list[dict[str, Any]]:
+        """Вложения, добавленные здесь: их копия шлёт источнику."""
+        return [a for a in self.store.list_attachments(meeting_id)
+                if not a.get("origin") and Path(a["path"]).exists()]
+
+    def принять_вложение(self, meeting_id: str, кто: str, а: dict[str, Any], данные: bytes) -> bool:
+        """Кусок вложения с копии. Файл собирается в .part и становится
+        вложением, когда пришёл целиком. Возвращает, готов ли файл."""
+        aid = str(а.get("aid") or "")
+        имя = вл.безопасное_имя(str(а.get("name") or ""))
+        размер = int(а.get("size") or 0)
+        сдвиг = int(а.get("offset") or 0)
+        if not aid or len(aid) > 64 or не_буквы(aid) or размер <= 0 or размер > 50 * 1024 * 1024:
+            raise Ошибка("too_big" if размер > 50 * 1024 * 1024 else "bad_data")
+        if self.store.get_attachment(aid) is not None:
+            return True
+        папка = paths.attachments_dir() / meeting_id
+        папка.mkdir(parents=True, exist_ok=True)
+        часть = папка / f"{aid}.part"
+        if сдвиг == 0:
+            часть.write_bytes(данные)
+        else:
+            if not часть.exists() or часть.stat().st_size != сдвиг:
+                raise Ошибка("transfer", "кусок не по порядку")
+            with часть.open("ab") as f:
+                f.write(данные)
+        if часть.stat().st_size < размер:
+            return False
+        путь = папка / f"{aid}-{имя}"
+        os.replace(часть, путь)
+        self.store.add_attachment(meeting_id, имя, str(путь), размер, кто, aid,
+                                  float(а.get("created_at") or now()))
+        self.на_встречу(meeting_id)
+        self.на_изменение()
+        return True
 
     def читать_звук(self, meeting_id: str, name: str, offset: int, size: int) -> bytes:
         """Кусок файла записи. Только файлы, записанные за этой встречей:
@@ -356,7 +408,8 @@ class Обмен:
         return папка["id"]
 
     def сохранить(self, устройство: Устройство, данные: dict[str, Any],
-                  скачать: Callable[[str, int, int], bytes]) -> str:
+                  скачать: Callable[[str, int, int], bytes],
+                  скачать_вложение: Callable[[str, int, int], bytes] | None = None) -> str:
         """Положить чужую встречу к себе. Возвращает наш номер встречи."""
         чужой = str(данные.get("id") or "")
         if чужой in устройство.taken:
@@ -381,13 +434,14 @@ class Обмен:
         # Копию не спасать: звук у неё без реплик только пока источник
         # ещё пишет, а распознавать чужую запись заново здесь незачем.
         self.store.update_meeting(meeting.id, rescued=1)
-        self._наполнить(устройство, meeting.id, данные, скачать)
+        self._наполнить(устройство, meeting.id, данные, скачать, скачать_вложение=скачать_вложение)
         устройство.taken[чужой] = meeting.id
         self.на_изменение()
         return meeting.id
 
     def обновить(self, устройство: Устройство, наш: str, данные: dict[str, Any],
-                 скачать: Callable[[str, int, int], bytes]) -> bool:
+                 скачать: Callable[[str, int, int], bytes],
+                 скачать_вложение: Callable[[str, int, int], bytes] | None = None) -> bool:
         """Догнать источник: название, итоги, заметки, расшифровка, папка.
         Записи докачиваются только недостающие. Копия остаётся той же
         встречей, с тем же номером."""
@@ -403,13 +457,15 @@ class Обмен:
             notes=str(данные.get("notes") or ""), summary=str(данные.get("summary") or ""),
             language=str(данные.get("language") or ""),
         )
-        self._наполнить(устройство, наш, данные, скачать, заменить=True)
+        self._наполнить(устройство, наш, данные, скачать, заменить=True, скачать_вложение=скачать_вложение)
         self.на_встречу(наш)
         self.на_изменение()
         return True
 
     def _наполнить(self, устройство: Устройство, наш: str, данные: dict[str, Any],
-                   скачать: Callable[[str, int, int], bytes], заменить: bool = False) -> None:
+                   скачать: Callable[[str, int, int], bytes], заменить: bool = False,
+                   скачать_вложение: Callable[[str, int, int], bytes] | None = None) -> None:
+        скачать_вложение = скачать_вложение or (lambda aid, сдвиг, размер: b"")
         реплики = []
         for s in данные.get("segments") or []:
             try:
@@ -465,6 +521,30 @@ class Обмен:
                 наш, str(ф.get("track") or "mic"), str(путь),
                 float(ф.get("start") or 0.0), float(ф.get("duration") or 0.0),
             )
+        # Вложения: недостающие докачать, а те, что приехали от этого
+        # компьютера и у него исчезли, убрать. Своих не трогаем.
+        есть_вл = {a["id"]: a for a in self.store.list_attachments(наш)}
+        удалённые = {str(a.get("id") or "") for a in данные.get("attachments") or []}
+        for а in данные.get("attachments") or []:
+            aid = str(а.get("id") or "")
+            размер = int(а.get("size") or 0)
+            if not aid or aid in есть_вл or размер <= 0:
+                continue
+            куски = []
+            сдвиг = 0
+            while сдвиг < размер:
+                кусок = скачать_вложение(aid, сдвиг, min(КУСОК, размер - сдвиг))
+                if not кусок:
+                    raise Ошибка("transfer", f"пустой кусок вложения {aid} на {сдвиг}")
+                куски.append(кусок)
+                сдвиг += len(кусок)
+            вл.сохранить(self.store, наш, str(а.get("name") or ""), b"".join(куски),
+                         origin=устройство.id, id=aid, created_at=float(а.get("created_at") or now()))
+        if заменить:
+            for aid, a in есть_вл.items():
+                if a.get("origin") == устройство.id and aid not in удалённые:
+                    self.store.delete_attachment(aid)
+                    Path(a["path"]).unlink(missing_ok=True)
         self.store.set_meeting_folder(
             наш, self.папка_устройства(устройство, str(данные.get("folder") or "")))
 
@@ -855,6 +935,34 @@ class Узел:
         asyncio.run_coroutine_threadsafe(self._послать_заметки(у.id), self._loop)
         return True
 
+    async def _послать_вложение(self, id: str, чужой: str, a: dict[str, Any]) -> None:
+        """Файл кусками по 4 МБ: источник собирает его у себя."""
+        путь = Path(a["path"])
+        размер = путь.stat().st_size
+        with путь.open("rb") as f:
+            сдвиг = 0
+            while True:
+                кусок = f.read(КУСОК)
+                if not кусок and сдвиг > 0:
+                    break
+                await self._вызвать_с_данными(id, "attach", {
+                    "id": чужой, "aid": a["id"], "name": a["name"], "size": размер,
+                    "offset": сдвиг, "created_at": a["created_at"],
+                }, кусок)
+                сдвиг += len(кусок)
+                if сдвиг >= размер:
+                    break
+
+    async def _вызвать_с_данными(self, id: str, метод: str, аргументы: dict[str, Any], данные: bytes):
+        try:
+            conn = await self._соединение(id)
+            return await asyncio.wait_for(self._запрос(conn, метод, аргументы, данные), ТАЙМАУТ)
+        except Ошибка:
+            raise
+        except Exception as e:
+            self._соединения.pop(id, None)
+            raise Ошибка("offline", str(e))
+
     async def _послать_заметки(self, id: str) -> None:
         with self._замок:
             у = self.устройства.get(id)
@@ -867,7 +975,11 @@ class Узел:
                 continue
             try:
                 данные = self.обмен.заметки(наш)
-                await self._вызвать(id, "notes", {"id": чужой, **данные})
+                ответ, _ = await self._вызвать(id, "notes", {"id": чужой, **данные})
+                там = set(ответ.get("attachments") or []) if isinstance(ответ, dict) else set()
+                for a in self.обмен.вложения_свои(наш):
+                    if a["id"] not in там:
+                        await self._послать_вложение(id, чужой, a)
                 у.pending.remove(чужой)
             except Ошибка as e:
                 if e.код in ("not_found", "no_access", "not_paired", "unknown"):
@@ -905,10 +1017,12 @@ class Узел:
             except Exception:
                 pass
 
-    async def _запрос(self, conn, метод: str, аргументы: dict[str, Any]) -> tuple[Any, bytes]:
+    async def _запрос(self, conn, метод: str, аргументы: dict[str, Any],
+                      данные: bytes = b"") -> tuple[Any, bytes]:
         bi = await conn.open_bi()
-        тело = json.dumps({"m": метод, "a": аргументы, "p": ПРОТОКОЛ, "who": self.имя}).encode("utf-8")
-        await bi.send().write_all(len(тело).to_bytes(4, "big") + тело)
+        тело = json.dumps({"m": метод, "a": аргументы, "p": ПРОТОКОЛ, "who": self.имя,
+                           "n": len(данные)}).encode("utf-8")
+        await bi.send().write_all(len(тело).to_bytes(4, "big") + тело + данные)
         await bi.send().finish()
         ответ, данные = await _прочитать(bi.recv(), МАКС_СООБЩЕНИЕ)
         if not ответ.get("ok"):
@@ -1031,16 +1145,18 @@ class Узел:
             данные, _ = await self._вызвать(id, "meeting", {"id": m["id"]})
             loop = asyncio.get_running_loop()
             скачать = self._скачиватель(id, m["id"], loop)
-            жива = await loop.run_in_executor(None, self.обмен.обновить, у, у.taken[m["id"]], данные, скачать)
+            вложения = self._скачиватель(id, m["id"], loop, "file")
+            жива = await loop.run_in_executor(
+                None, self.обмен.обновить, у, у.taken[m["id"]], данные, скачать, вложения)
             у.stamps[m["id"]] = str(m.get("stamp") or "")
             self._сохранить()
             return жива
 
-    def _скачиватель(self, id: str, meeting_id: str, loop):
+    def _скачиватель(self, id: str, meeting_id: str, loop, метод: str = "audio"):
         def скачать(имя: str, сдвиг: int, размер: int) -> bytes:
             # Зовётся из потока хранилища: гоняем запрос через наш цикл.
             будущее = asyncio.run_coroutine_threadsafe(
-                self._вызвать(id, "audio", {"id": meeting_id, "name": имя, "offset": сдвиг, "size": размер}),
+                self._вызвать(id, метод, {"id": meeting_id, "name": имя, "offset": сдвиг, "size": размер}),
                 loop,
             )
             return будущее.result(ТАЙМАУТ)
@@ -1051,7 +1167,8 @@ class Узел:
         данные, _ = await self._вызвать(id, "meeting", {"id": meeting_id})
         loop = asyncio.get_running_loop()
         скачать = self._скачиватель(id, meeting_id, loop)
-        наш = await loop.run_in_executor(None, self.обмен.сохранить, у, данные, скачать)
+        вложения = self._скачиватель(id, meeting_id, loop, "file")
+        наш = await loop.run_in_executor(None, self.обмен.сохранить, у, данные, скачать, вложения)
         у.stamps[meeting_id] = stamp
         self._сохранить()
         self.на_изменение()
@@ -1131,7 +1248,7 @@ class Узел:
         лимит = МАКС_СООБЩЕНИЕ if у is not None else ЛИМИТ_ЧУЖОГО
         данные: bytes = b""
         try:
-            запрос, _ = await asyncio.wait_for(_прочитать(bi.recv(), лимит), ТАЙМАУТ)
+            запрос, тело_запроса = await asyncio.wait_for(_прочитать(bi.recv(), лимит), ТАЙМАУТ)
             метод = str(запрос.get("m") or "")
             аргументы = запрос.get("a") or {}
             if метод == "pair":
@@ -1174,8 +1291,21 @@ class Узел:
             elif метод == "notes":
                 # Тот, кому мы открыли встречи, пишет к ним заметки: это его
                 # копия нашей встречи, и его тезисы нам нужны.
-                результат = {"changed": self.обмен.применить_заметки(
-                    str(аргументы.get("id") or ""), аргументы)}
+                номер = str(аргументы.get("id") or "")
+                результат = {"changed": self.обмен.применить_заметки(номер, аргументы),
+                             "attachments": self.обмен.вложения_есть(номер)}
+            elif метод == "attach":
+                # Вложение с копии: кусок файла, собираем у себя.
+                номер = str(аргументы.get("id") or "")
+                if self.обмен.store.get_meeting(номер) is None or номер in self.копии():
+                    raise Ошибка("not_found")
+                результат = {"done": self.обмен.принять_вложение(номер, кто, аргументы, тело_запроса)}
+            elif метод == "file":
+                данные = self.обмен.читать_вложение(
+                    str(аргументы.get("id") or ""), str(аргументы.get("name") or ""),
+                    int(аргументы.get("offset") or 0), int(аргументы.get("size") or КУСОК),
+                )
+                результат = {"n": len(данные)}
             elif метод == "audio":
                 данные = self.обмен.читать_звук(
                     str(аргументы.get("id") or ""), str(аргументы.get("name") or ""),
@@ -1236,6 +1366,10 @@ def _статус_копии(данные: dict[str, Any]) -> MeetingStatus:
     """Идущая запись и обработка у копии одно и то же: «обработка». Старый
     источник статуса не шлёт: у него отдавались только готовые."""
     return MeetingStatus.READY if str(данные.get("status") or "ready") == "ready" else MeetingStatus.PROCESSING
+
+
+def не_буквы(s: str) -> bool:
+    return not all(c in "0123456789abcdef" for c in s)
 
 
 async def _прочитать(recv, лимит: int) -> tuple[dict[str, Any], bytes]:

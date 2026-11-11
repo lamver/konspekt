@@ -185,7 +185,11 @@
               data-i18n-placeholder="notes.placeholder"
               placeholder="Пишите короткие тезисы прямо во время встречи.&#10;&#10;Konspekt запомнит момент каждой строки и после встречи развернёт их в полноценные заметки."
               spellcheck="false"></textarea>
-            <div class="save-hint" id="save-hint"></div>
+            <div class="attachments" id="attachments" hidden></div>
+            <div class="notes-foot">
+              <div class="save-hint" id="save-hint"></div>
+              <button type="button" class="btn-link notes-attach" id="attach-pick" data-i18n="notes.attach">Прикрепить файл</button>
+            </div>
           </div>
 
           <div class="pane" data-pane="summary">

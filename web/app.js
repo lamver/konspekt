@@ -408,6 +408,7 @@ window.__konspekt_event = function (payload) {
         }
         // Копия догнала источник: расшифровка и итоги могли дописаться.
         if (payload.external) refreshExternal(payload.meeting.id);
+        if (payload.attachments) loadAttachments(payload.meeting.id);
       }
       break;
     case 'transcript.segment':
@@ -2555,6 +2556,7 @@ async function selectMeeting(id, jumpTo = null) {
   renderTranscript(meeting.segments || []);
   renderSummary(meeting.summary || '');
   state.summaryText = meeting.summary || '';
+  loadAttachments(meeting.id);
   // Открываем сетку разборов: так видно, что уже разобрано. Если модель
   // прямо сейчас считает разбор этой встречи — сразу его карточку.
   state.lenses = [];
@@ -3541,6 +3543,105 @@ function startTimer() {
 function stopTimer() {
   if (timerInterval) clearInterval(timerInterval);
   timerInterval = null;
+}
+
+/* --- Вложения к заметкам ------------------------------------------------ */
+
+const МАКС_ВСТАВКА = 20 * 1024 * 1024;
+
+async function loadAttachments(id) {
+  if (!api.list_attachments) return;
+  const список = await api.list_attachments(id);
+  if (id !== state.currentId) return;
+  renderAttachments(список || []);
+}
+
+function fmtSize(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function renderAttachments(список) {
+  const box = ui.attachments;
+  box.innerHTML = '';
+  box.hidden = !список.length;
+  for (const a of список) {
+    const chip = document.createElement('div');
+    chip.className = 'attachment' + (a.image && a.url ? ' attachment--image' : '');
+    chip.title = `${a.name} · ${fmtSize(a.size)}`;
+    if (a.image && a.url) {
+      const img = document.createElement('img');
+      img.className = 'attachment__thumb';
+      img.src = a.url;
+      img.alt = a.name;
+      // Картинка не открылась (путь недоступен): показываем как файл.
+      img.addEventListener('error', () => { chip.classList.remove('attachment--image'); img.remove(); chip.prepend(имяЭл(a)); });
+      chip.appendChild(img);
+    } else {
+      chip.appendChild(имяЭл(a));
+      const size = document.createElement('span');
+      size.className = 'attachment__size';
+      size.textContent = fmtSize(a.size);
+      chip.appendChild(size);
+    }
+    const remove = document.createElement('button');
+    remove.className = 'attachment__remove';
+    remove.type = 'button';
+    remove.textContent = '×';
+    remove.title = t('notes.attach_remove');
+    remove.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (!await confirmDialog(t('notes.attach_remove'), t('notes.attach_remove_confirm', { name: a.name }))) return;
+      await api.delete_attachment(a.id);
+      loadAttachments(state.currentId);
+    });
+    chip.appendChild(remove);
+    chip.addEventListener('click', () => api.open_attachment(a.id));
+    box.appendChild(chip);
+  }
+}
+
+function имяЭл(a) {
+  const name = document.createElement('span');
+  name.className = 'attachment__name';
+  name.textContent = a.name;
+  return name;
+}
+
+/** Файлы из буфера обмена: картинка со скриншота, скопированный файл. */
+async function pasteAttachments(e) {
+  const files = e.clipboardData && e.clipboardData.files ? [...e.clipboardData.files] : [];
+  if (!files.length || !state.currentId) return;
+  e.preventDefault();
+  for (const f of files) await attachFile(f);
+}
+
+async function attachFile(file) {
+  if (file.size > МАКС_ВСТАВКА) { showToast(t('notes.attach_too_big')); return; }
+  const b64 = await new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result).split(',')[1] || '');
+    r.onerror = reject;
+    r.readAsDataURL(file);
+  });
+  let имя = file.name || '';
+  if (!имя || имя === 'image.png') {
+    const d = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    имя = `${t('notes.pasted_image')} ${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}.png`;
+  }
+  const r = await api.attach_paste(state.currentId, имя, b64);
+  if (r && r.error) showToast(t(r.error === 'too_big' ? 'notes.attach_too_big' : 'notes.attach_failed'));
+  else showToast(t('notes.attached', { name: имя }));
+  loadAttachments(state.currentId);
+}
+
+async function pickAttachments() {
+  if (!state.currentId) return;
+  const r = await api.attach_pick(state.currentId);
+  if (r && r.length) showToast(t('notes.attached', { name: (r[0] && r[0].name) || '' }));
+  loadAttachments(state.currentId);
 }
 
 /* --- Заметки ------------------------------------------------------------ */
@@ -5050,6 +5151,8 @@ function bindUi() {
     meta: el('meeting-meta'),
     notes: el('notes'),
     saveHint: el('save-hint'),
+    attachments: el('attachments'),
+    attachPick: el('attach-pick'),
     record: el('btn-record'),
     recLabel: el('rec-label'),
     levels: el('levels'),
@@ -5418,6 +5521,8 @@ function bindUi() {
 
   ui.notes.addEventListener('input', scheduleSave);
   ui.notes.addEventListener('blur', flushNotes);
+  ui.notes.addEventListener('paste', pasteAttachments);
+  ui.attachPick.addEventListener('click', pickAttachments);
 
   ui.title.addEventListener('change', () => {
     if (!state.currentId) return;

@@ -96,6 +96,13 @@
     "transcript": "Transkript"
   },
   "notes": {
+    "attach": "Priloži datoteku",
+    "attached": "Priloženo: {name}",
+    "attach_too_big": "Datoteka je prevelika: do 20 MB iz ostave, do 50 MB sa diska",
+    "attach_failed": "Datoteka nije mogla da se priloži",
+    "attach_remove": "Ukloni prilog",
+    "attach_remove_confirm": "Ukloniti „{name}“? Datoteka se briše iz ovog sastanka.",
+    "pasted_image": "Snimak",
     "typing": "{name} kuca…",
     "placeholder": "Zapisujte kratke ideje tokom sastanka.\n\nKonspekt će zapamtiti trenutak svake linije i posle sastanka ih pretvoriti u pune beleške.",
     "saved": "Sačuvano"

@@ -727,6 +727,40 @@ class Api:
     def notes_typing(self, meeting_id: str, text: str) -> None:
         self._service.notes_typing(str(meeting_id), str(text or ""))
 
+    # --- вложения к заметкам ----------------------------------------------
+
+    def attach_paste(self, meeting_id: str, name: str, data_b64: str) -> dict[str, Any]:
+        """Файл из буфера обмена: окно шлёт его строкой base64."""
+        import base64  # noqa: PLC0415
+
+        try:
+            data = base64.b64decode(str(data_b64 or ""), validate=False)
+        except Exception:
+            return {"error": "bad_data"}
+        return self._service.attach_bytes(str(meeting_id), str(name or ""), data)
+
+    def attach_pick(self, meeting_id: str) -> list[dict[str, Any]]:
+        """Выбрать файлы через системный диалог и приложить к встрече."""
+        if not self._window:
+            return []
+        try:
+            import webview  # noqa: PLC0415
+
+            picked = self._window.create_file_dialog(webview.OPEN_DIALOG, allow_multiple=True)
+        except Exception:
+            log.exception("Не удалось открыть диалог выбора вложений")
+            return []
+        return [self._service.attach_path(str(meeting_id), str(p)) for p in (picked or [])]
+
+    def list_attachments(self, meeting_id: str) -> list[dict[str, Any]]:
+        return self._service.list_attachments(str(meeting_id))
+
+    def open_attachment(self, attachment_id: str) -> dict[str, Any]:
+        return self._service.open_attachment(str(attachment_id))
+
+    def delete_attachment(self, attachment_id: str) -> dict[str, Any]:
+        return self._service.delete_attachment(str(attachment_id))
+
     def telegram_state(self) -> dict[str, Any]:
         return self._service.telegram_state()
 

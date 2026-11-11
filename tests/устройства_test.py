@@ -179,6 +179,29 @@ try:
               "после остановки копия готова и звук приехал")
     проверить(not store_b.find_unrescued(), "копии не попадают в спасение без реплик")
 
+    # Вложения: с источника копии, с копии источнику, удаление у источника.
+    from app.core import вложения as вл
+    большое = os.urandom(5 * 1024 * 1024 + 123)
+    вл_a = вл.сохранить(store_a, своя, "схема.png", большое)
+    b.забрать_новые(a.id)
+    вл_b = {a["id"]: a for a in store_b.list_attachments(наш)}
+    проверить(вл_a["id"] in вл_b and Path(вл_b[вл_a["id"]]["path"]).read_bytes() == большое
+              and вл_b[вл_a["id"]]["origin"] == a.id, "вложение приехало на копию целиком, кусками")
+    моё = вл.сохранить(store_b, наш, "с копии.txt", b"privet" * 1000)
+    b.отправить_заметки(наш)
+    for _ in range(100):
+        if store_a.get_attachment(моё["id"]):
+            break
+        time.sleep(0.1)
+    у_a = store_a.get_attachment(моё["id"])
+    проверить(у_a is not None and Path(у_a["path"]).read_bytes() == b"privet" * 1000 and у_a["origin"] == b.id,
+              "вложение с копии приехало источнику")
+    store_a.delete_attachment(вл_a["id"]); Path(вл_a["path"]).unlink()
+    сколько = b.забрать_новые(a.id)
+    остались = {a["id"]: a["origin"] for a in store_b.list_attachments(наш)}
+    проверить(вл_a["id"] not in остались and моё["id"] in остались,
+              f"удалённое у источника ушло с копии, своё осталось (обновлено {сколько}, у B {остались}, у A {[x['id'] for x in store_a.list_attachments(своя)]}, вл_a {вл_a['id']}, моё {моё['id']})")
+
     # «Печатает»: набор с копии летит источнику без базы, и обратно.
     набор: list[tuple[str, str, str]] = []
     a.обмен.на_набор = lambda m, текст, кто: набор.append((m, текст, кто))

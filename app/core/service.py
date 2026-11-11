@@ -3630,6 +3630,63 @@ class AppService:
         bus.emit(MEETINGS_CHANGED)
         return {"ok": True, "on": bool(on)}
 
+    # --- вложения к заметкам -----------------------------------------------
+
+    МАКС_ВЛОЖЕНИЕ = 50 * 1024 * 1024
+
+    def attach_bytes(self, meeting_id: str, name: str, data: bytes) -> dict[str, Any]:
+        """Положить файл к встрече: картинку из буфера или файл с диска."""
+        from . import вложения as вл
+
+        if self.store.get_meeting(meeting_id) is None:
+            return {"error": "no_meeting"}
+        if len(data) > self.МАКС_ВЛОЖЕНИЕ:
+            return {"error": "too_big"}
+        запись = вл.сохранить(self.store, meeting_id, name, data)
+        self._вложения_изменились(meeting_id)
+        return вл.для_окна(запись)
+
+    def attach_path(self, meeting_id: str, path: str) -> dict[str, Any]:
+        p = Path(path)
+        try:
+            data = p.read_bytes()
+        except OSError:
+            return {"error": "unreadable"}
+        return self.attach_bytes(meeting_id, p.name, data)
+
+    def list_attachments(self, meeting_id: str) -> list[dict[str, Any]]:
+        from . import вложения as вл
+
+        return [вл.для_окна(a) for a in self.store.list_attachments(meeting_id)]
+
+    def open_attachment(self, attachment_id: str) -> dict[str, Any]:
+        a = self.store.get_attachment(attachment_id)
+        if a is None or not Path(a["path"]).exists():
+            return {"ok": False, "error": "missing"}
+        try:
+            os.startfile(a["path"])  # noqa: S606
+        except Exception:
+            log.exception("Не удалось открыть вложение")
+            return {"ok": False, "error": "open"}
+        return {"ok": True}
+
+    def delete_attachment(self, attachment_id: str) -> dict[str, Any]:
+        a = self.store.get_attachment(attachment_id)
+        if a is None:
+            return {"ok": True}
+        self.store.delete_attachment(attachment_id)
+        Path(a["path"]).unlink(missing_ok=True)
+        self._вложения_изменились(a["meeting_id"])
+        return {"ok": True}
+
+    def _вложения_изменились(self, meeting_id: str) -> None:
+        meeting = self.store.get_meeting(meeting_id)
+        if meeting is not None:
+            bus.emit(MEETING_UPDATED, {"meeting_id": meeting_id, "meeting": meeting.to_dict(),
+                                       "attachments": True})
+        # У копии новое вложение уходит источнику вместе с заметками.
+        self._заметки_на_источник(meeting_id)
+
     # --- другой компьютер --------------------------------------------------
 
     _устройства = None
