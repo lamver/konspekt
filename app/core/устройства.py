@@ -103,6 +103,9 @@ class Устройство:
     # Чужие номера встреч, чьи заметки с копии ещё не доехали до
     # источника: он был выключен. Уйдут при следующем опросе.
     pending: list[str] = field(default_factory=list)
+    # Вложения, убранные здесь, о которых тот компьютер ещё не знает:
+    # пары (номер встречи у источника, номер вложения).
+    detach: list[list[str]] = field(default_factory=list)
     # Папка, куда ложатся копии. Пусто, пока не забрали ни одной.
     folder_id: str = ""
     # Последний известный адрес: ретранслятор и прямые адреса. Через
@@ -880,6 +883,37 @@ class Узел:
 
         asyncio.get_running_loop().create_task(опрос())
 
+    def вложение_убрано(self, наш: str, aid: str, origin: str) -> None:
+        """Вложение убрали здесь: сказать тому компьютеру, с которым оно
+        общее. Своё, никуда не уехавшее, никого не касается."""
+        with self._замок:
+            у = self.устройства.get(origin)
+            if у is None:
+                return
+            # Номер встречи у источника: если мы копия, он в taken; если
+            # источник мы, это наш номер.
+            номер = next((чужой for чужой, свой in у.taken.items() if свой == наш), наш)
+            у.detach.append([номер, aid])
+        self._сохранить()
+        if self._loop is not None:
+            asyncio.run_coroutine_threadsafe(self._послать_удаления(origin), self._loop)
+
+    async def _послать_удаления(self, id: str) -> None:
+        with self._замок:
+            у = self.устройства.get(id)
+        if у is None or not у.detach:
+            return
+        for пара in list(у.detach):
+            try:
+                await self._вызвать(id, "detach", {"id": пара[0], "aid": пара[1]})
+                у.detach.remove(пара)
+            except Ошибка as e:
+                if e.код in ("not_found", "no_access", "not_paired", "unknown"):
+                    у.detach.remove(пара)
+                else:
+                    break
+        self._сохранить()
+
     def печатает(self, наш: str, текст: str) -> None:
         """Текст заметок по мере набора: другому компьютеру показать сразу,
         не дожидаясь автосохранения. В базу не пишется, при обрыве
@@ -952,6 +986,9 @@ class Узел:
                 сдвиг += len(кусок)
                 if сдвиг >= размер:
                     break
+        # Доехало: с этого момента оно общее с тем компьютером, и его
+        # удаление там убирает вложение и здесь.
+        self.обмен.store.set_attachment_origin(a["id"], id)
 
     async def _вызвать_с_данными(self, id: str, метод: str, аргументы: dict[str, Any], данные: bytes):
         try:
@@ -1084,6 +1121,8 @@ class Узел:
                     у.name = str(ответ["name"])
                 if у.pending:
                     await self._послать_заметки(id)
+                if у.detach:
+                    await self._послать_удаления(id)
                 if у.remote_share == "view":
                     список, _ = await self._вызвать(id, "meetings", {})
                     у.remote_meetings = len(список)
@@ -1271,6 +1310,19 @@ class Узел:
                     наш = номер
                 if наш:
                     self.обмен.на_набор(наш, str(аргументы.get("notes") or ""), str(аргументы.get("who") or у.name))
+                результат = {"ok": True}
+            elif метод == "detach":
+                # На том компьютере убрали общее вложение: убираем и у себя,
+                # но только то, что общее именно с ним.
+                номер = str(аргументы.get("id") or "")
+                aid = str(аргументы.get("aid") or "")
+                наш = у.taken.get(номер) or (номер if self.обмен.store.get_meeting(номер) else None)
+                a = self.обмен.store.get_attachment(aid) if наш else None
+                if a is not None and a["meeting_id"] == наш and a.get("origin") == кто:
+                    self.обмен.store.delete_attachment(aid)
+                    Path(a["path"]).unlink(missing_ok=True)
+                    self.обмен.на_встречу(наш)
+                    self.обмен.на_изменение()
                 результат = {"ok": True}
             elif метод == "poke":
                 # У того компьютера что-то изменилось: спросим его сейчас.

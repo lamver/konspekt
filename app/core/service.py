@@ -3686,6 +3686,11 @@ class AppService:
         self.store.delete_attachment(attachment_id)
         Path(a["path"]).unlink(missing_ok=True)
         self._вложения_изменились(a["meeting_id"])
+        if a.get("origin") and self._устройства is not None:
+            try:
+                self._устройства.вложение_убрано(a["meeting_id"], attachment_id, a["origin"])
+            except Exception:
+                log.exception("Не удалось сообщить об удалении вложения")
         return {"ok": True}
 
     def _вложения_изменились(self, meeting_id: str) -> None:

@@ -196,6 +196,30 @@ try:
     у_a = store_a.get_attachment(моё["id"])
     проверить(у_a is not None and Path(у_a["path"]).read_bytes() == b"privet" * 1000 and у_a["origin"] == b.id,
               "вложение с копии приехало источнику")
+    # Общее вложение, убранное на копии, уходит и у источника; и наоборот.
+    проверить(store_b.get_attachment(моё["id"])["origin"] == a.id, "уехавшее вложение стало общим с источником")
+    store_b.delete_attachment(моё["id"]); Path(моё["path"]).unlink()
+    b.вложение_убрано(наш, моё["id"], a.id)
+    for _ in range(50):
+        if store_a.get_attachment(моё["id"]) is None:
+            break
+        time.sleep(0.1)
+    проверить(store_a.get_attachment(моё["id"]) is None, "убранное на копии ушло у источника")
+    ещё = вл.сохранить(store_b, наш, "ещё.txt", b"x" * 10)
+    b.отправить_заметки(наш)
+    for _ in range(50):
+        if store_a.get_attachment(ещё["id"]):
+            break
+        time.sleep(0.1)
+    a_ещё = store_a.get_attachment(ещё["id"])
+    store_a.delete_attachment(ещё["id"]); Path(a_ещё["path"]).unlink()
+    a.вложение_убрано(своя, ещё["id"], b.id)
+    for _ in range(50):
+        if store_b.get_attachment(ещё["id"]) is None:
+            break
+        time.sleep(0.1)
+    проверить(store_b.get_attachment(ещё["id"]) is None, "убранное у источника ушло с копии по сообщению")
+    моё = вл.сохранить(store_b, наш, "с копии.txt", b"privet" * 1000)
     store_a.delete_attachment(вл_a["id"]); Path(вл_a["path"]).unlink()
     сколько = b.забрать_новые(a.id)
     остались = {a["id"]: a["origin"] for a in store_b.list_attachments(наш)}

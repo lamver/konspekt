@@ -655,6 +655,12 @@ class Store:
             row = self._conn.execute("SELECT * FROM attachments WHERE id=?", (attachment_id,)).fetchone()
         return dict(row) if row else None
 
+    def set_attachment_origin(self, attachment_id: str, origin: str) -> None:
+        """Вложение доехало до другого компьютера: теперь оно общее с ним."""
+        with self._lock:
+            self._conn.execute("UPDATE attachments SET origin=? WHERE id=?", (origin, attachment_id))
+            self._conn.commit()
+
     def delete_attachment(self, attachment_id: str) -> None:
         with self._lock:
             self._conn.execute("DELETE FROM attachments WHERE id=?", (attachment_id,))
