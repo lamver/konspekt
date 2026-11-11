@@ -687,6 +687,7 @@
     "online": "en línea",
     "offline": "sin conexión",
     "they_share": "Reuniones abiertas para usted: {n}, llegadas {taken}",
+    "folder_title": "Reuniones del equipo «{name}»: las copias llegan solas mientras esté encendido",
     "right_read": "Solo llevar sus reuniones",
     "right_both": "Llevar y dar las mías",
     "check_now": "Comprobar ahora",

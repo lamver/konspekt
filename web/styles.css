@@ -448,6 +448,8 @@ body { display: flex; flex-direction: column; }
 .folder__head:hover .folder__count { display: none; }
 .folder__add:hover, .folder__more:hover { background: var(--paper); color: var(--ink); }
 .folder__body { padding-left: 10px; }
+.folder--device > .folder__head { color: var(--ink); }
+.folder--device > .folder__body > .folder > .folder__head { font-weight: 500; }
 .folder.is-collapsed .folder__body { display: none; }
 .folder__empty { padding: 4px 9px 8px; font-size: 10.5px; color: var(--ink-3); font-style: italic; }
 .folder.is-drop .folder__head,

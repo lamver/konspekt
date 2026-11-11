@@ -186,6 +186,8 @@ const state = {
   // Папки встреч и какие из них свёрнуты.
   folders: [],
   collapsedFolders: new Set(),
+  // Имена сопряжённых компьютеров: их папки собираются под одним узлом.
+  deviceNames: [],
   // Найденное в расшифровках: запрос, к которому относится результат,
   // и карта «встреча → совпадения». Отдельно от filter, потому что
   // ответ базы приходит с задержкой и может отстать от строки поиска.
@@ -367,6 +369,10 @@ window.__konspekt_event = function (payload) {
       break;
     case 'devices.changed':
       renderDevices(payload);
+      if (payload && payload.devices) {
+        const имена = payload.devices.map((d) => d.name);
+        if (имена.join('|') !== state.deviceNames.join('|')) { state.deviceNames = имена; renderMeetingList(); }
+      }
       break;
     case 'trial.blocked':
       // Пробный период кончился: объясняем, почему «Запись» или файл не
@@ -1698,12 +1704,14 @@ function fmtDate(ts) {
 /* --- Список встреч ------------------------------------------------------ */
 
 async function loadMeetings() {
-  const [meetings, folders] = await Promise.all([
+  const [meetings, folders, devices] = await Promise.all([
     api.list_meetings(),
     api.list_folders ? api.list_folders() : Promise.resolve([]),
+    api.devices_state ? api.devices_state().catch(() => null) : Promise.resolve(null),
   ]);
   state.meetings = meetings || [];
   state.folders = folders || [];
+  if (devices && devices.devices) state.deviceNames = devices.devices.map((d) => d.name);
   renderMeetingList();
   // Если ничего не выбрано, открываем самую свежую встречу.
   if (!state.currentId && state.meetings.length) {
@@ -1740,7 +1748,19 @@ function renderMeetingList() {
     return;
   }
   const известные = new Set(state.folders.map((f) => f.id));
+  // Папки другого компьютера: «Castle» и «Castle / Проект» собираются под
+  // одним узлом со значком компьютера, а не рассыпаются по списку.
+  const занятые = new Set();
+  for (const имя of state.deviceNames) {
+    const корень = state.folders.find((f) => f.name === имя && !f.source);
+    const вложенные = state.folders.filter((f) => f.name.startsWith(имя + ' / ') && !f.source);
+    if (!корень && !вложенные.length) continue;
+    for (const f of вложенные) занятые.add(f.id);
+    if (корень) занятые.add(корень.id);
+    ui.list.appendChild(deviceNode(имя, корень, вложенные, items, found, q));
+  }
   for (const f of state.folders) {
+    if (занятые.has(f.id)) continue;
     const свои = items.filter((m) => m.folder_id === f.id);
     ui.list.appendChild(folderNode(f, свои, found, q));
   }
@@ -1845,6 +1865,7 @@ function meetingNode(m, found, q) {
 
 /* --- Папки --------------------------------------------------------------- */
 
+const ИКОНКА_КОМПЬЮТЕРА = '<svg viewBox="0 0 16 16" width="12" height="12"><rect x="2" y="3" width="12" height="8" rx="1.2" stroke="currentColor" stroke-width="1.3" fill="none"/><path d="M5.5 13.5h5M8 11v2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>';
 const ИКОНКА_ПАПКИ = '<svg viewBox="0 0 16 16" width="12" height="12"><path d="M2 4.5V12a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1H8L6.5 3.5H3a1 1 0 0 0-1 1Z" stroke="currentColor" stroke-width="1.3" fill="none" stroke-linejoin="round"/></svg>';
 const СТРЕЛКА = '<svg viewBox="0 0 16 16" width="10" height="10"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
@@ -1868,9 +1889,9 @@ function clearDropMarks() {
 // Две стрелки по кругу: папка сама берёт новые записи из каталога.
 const ЗНАК_ИСТОЧНИКА = '<svg viewBox="0 0 16 16" width="11" height="11"><path d="M13 6.5A5 5 0 0 0 4 4.2M3 9.5A5 5 0 0 0 12 11.8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M4 1.8v2.6h2.6M12 14.2v-2.6H9.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
-function folderNode(f, встречи, found, q) {
+function folderNode(f, встречи, found, q, опции = {}) {
   const box = document.createElement('div');
-  box.className = 'folder';
+  box.className = 'folder' + (опции.device ? ' folder--device' : '');
   box.dataset.folder = f.id;
   const свёрнута = state.collapsedFolders.has(f.id);
   box.classList.toggle('is-collapsed', свёрнута);
@@ -1884,14 +1905,14 @@ function folderNode(f, встречи, found, q) {
   arrow.innerHTML = СТРЕЛКА;
   const icon = document.createElement('span');
   icon.className = 'folder__icon';
-  icon.innerHTML = ИКОНКА_ПАПКИ;
+  icon.innerHTML = опции.device ? ИКОНКА_КОМПЬЮТЕРА : ИКОНКА_ПАПКИ;
   const name = document.createElement('span');
   name.className = 'folder__name';
-  name.textContent = f.name;
-  name.title = f.name;
+  name.textContent = опции.label || f.name;
+  name.title = опции.device ? t('devices.folder_title', { name: f.name }) : f.name;
   const count = document.createElement('span');
   count.className = 'folder__count';
-  count.textContent = String(встречи.length);
+  count.textContent = String(опции.total != null ? опции.total : встречи.length);
   const add = document.createElement('button');
   add.className = 'folder__add';
   add.type = 'button';
@@ -1965,14 +1986,31 @@ function folderNode(f, встречи, found, q) {
   body.className = 'folder__body';
   if (встречи.length) {
     for (const m of встречи) body.appendChild(meetingNode(m, found, q));
-  } else {
+  } else if (!(опции.children && опции.children.length)) {
     const пусто = document.createElement('div');
     пусто.className = 'folder__empty';
     пусто.textContent = t('folders.empty');
     body.appendChild(пусто);
   }
+  for (const узел of опции.children || []) body.appendChild(узел);
   box.append(head, body);
   return box;
+}
+
+/** Узел другого компьютера: его встречи без папки и его папки внутри. */
+function deviceNode(имя, корень, вложенные, items, found, q) {
+  const свои = корень ? items.filter((m) => m.folder_id === корень.id) : [];
+  let всего = свои.length;
+  const дети = [];
+  for (const f of вложенные) {
+    const там = items.filter((m) => m.folder_id === f.id);
+    всего += там.length;
+    дети.push(folderNode(f, там, found, q, { label: f.name.slice(имя.length + 3) }));
+  }
+  // Узлу нужна папка-корень для сворачивания и меню; если встреч без
+  // папки ещё нет, корня может не быть: берём первую вложенную как опору.
+  const опора = корень || вложенные[0];
+  return folderNode(опора, свои, found, q, { device: true, label: имя, total: всего, children: дети });
 }
 
 function toggleFolder(id) {

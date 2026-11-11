@@ -687,6 +687,7 @@
     "online": "online",
     "offline": "offline",
     "they_share": "Meetings opened to you: {n}, arrived {taken}",
+    "folder_title": "Meetings from the computer “{name}”: copies arrive by themselves while it is on",
     "right_read": "Only take its meetings",
     "right_both": "Take and give mine",
     "check_now": "Check now",

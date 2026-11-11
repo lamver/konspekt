@@ -687,6 +687,7 @@
     "online": "na mreži",
     "offline": "van mreže",
     "they_share": "Otvoreni sastanci za vas: {n}, stiglo {taken}",
+    "folder_title": "Sastanci sa računara „{name}“: kopije stižu same dok je uključen",
     "right_read": "Samo preuzimaj njegove sastanke",
     "right_both": "Preuzimaj i daj svoje",
     "check_now": "Proveri sada",
