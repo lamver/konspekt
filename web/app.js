@@ -1757,7 +1757,7 @@ function renderMeetingList() {
     if (!корень && !вложенные.length) continue;
     for (const f of вложенные) занятые.add(f.id);
     if (корень) занятые.add(корень.id);
-    ui.list.appendChild(deviceNode(имя, корень, вложенные, items, found, q));
+    ui.list.appendChild(deviceFolderNode(имя, корень, вложенные, items, found, q));
   }
   for (const f of state.folders) {
     if (занятые.has(f.id)) continue;
@@ -1998,7 +1998,7 @@ function folderNode(f, встречи, found, q, опции = {}) {
 }
 
 /** Узел другого компьютера: его встречи без папки и его папки внутри. */
-function deviceNode(имя, корень, вложенные, items, found, q) {
+function deviceFolderNode(имя, корень, вложенные, items, found, q) {
   const свои = корень ? items.filter((m) => m.folder_id === корень.id) : [];
   let всего = свои.length;
   const дети = [];
