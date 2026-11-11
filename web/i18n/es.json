@@ -96,6 +96,7 @@
     "transcript": "Transcripción"
   },
   "notes": {
+    "typing": "{name} está escribiendo…",
     "placeholder": "Anota ideas breves durante la reunión.\n\nKonspekt recordará el momento de cada línea y las convertirá en notas completas después de la reunión.",
     "saved": "Guardado"
   },

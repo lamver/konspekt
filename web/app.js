@@ -367,6 +367,14 @@ window.__konspekt_event = function (payload) {
     case 'telegram.changed':
       renderTelegram(payload);
       break;
+    case 'notes.typing':
+      // На другом компьютере печатают к этой встрече: показываем текст по
+      // мере набора, если здесь в заметках сейчас не печатают сами.
+      if (payload.meeting_id === state.currentId && document.activeElement !== ui.notes) {
+        if (ui.notes.value !== payload.notes) ui.notes.value = payload.notes;
+        showTypingHint(payload.who);
+      }
+      break;
     case 'devices.changed':
       renderDevices(payload);
       if (payload && payload.devices) {
@@ -3540,6 +3548,26 @@ function stopTimer() {
 function scheduleSave() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(flushNotes, 700);
+  scheduleTyping();
+}
+
+/* Набор летит на другой компьютер раньше автосохранения: не чаще, чем раз
+   в 150 мс, последний текст всегда доезжает. */
+let typingTimer = null;
+function scheduleTyping() {
+  if (typingTimer || !api.notes_typing) return;
+  typingTimer = setTimeout(() => {
+    typingTimer = null;
+    if (state.currentId) api.notes_typing(state.currentId, ui.notes.value);
+  }, 150);
+}
+
+let typingHintTimer = null;
+function showTypingHint(who) {
+  ui.saveHint.textContent = t('notes.typing', { name: who || '' });
+  ui.saveHint.classList.add('is-visible');
+  clearTimeout(typingHintTimer);
+  typingHintTimer = setTimeout(() => ui.saveHint.classList.remove('is-visible'), 2000);
 }
 
 function flushNotes() {

@@ -86,6 +86,7 @@ from ..core.events import (
     IMPORT_PROGRESS,
     TELEGRAM_CHANGED,
     DEVICES_CHANGED,
+    NOTES_TYPING,
     MEETINGS_CHANGED,
     MEETING_UPDATED,
     MEANING_STATE,
@@ -3645,6 +3646,8 @@ class AppService:
             на_изменение=lambda: bus.emit(MEETINGS_CHANGED),
             на_встречу=self._встреча_изменилась_снаружи,
         )
+        обмен.на_набор = lambda meeting_id, текст, кто: bus.emit(
+            NOTES_TYPING, {"meeting_id": meeting_id, "notes": текст, "who": кто})
         self._устройства = уст.Узел(обмен, на_изменение=self._устройства_изменились)
         threading.Thread(target=self._устройства.запустить, name="konspekt-p2p-start", daemon=True).start()
         # Любое изменение встреч и папок толкает сопряжённые компьютеры:
@@ -3670,6 +3673,14 @@ class AppService:
         meeting = self.store.get_meeting(meeting_id)
         if meeting is not None:
             bus.emit(MEETING_UPDATED, {"meeting_id": meeting_id, "meeting": meeting.to_dict(), "external": True})
+
+    def notes_typing(self, meeting_id: str, text: str) -> None:
+        """Набор заметок по мере ввода: другому компьютеру, без базы."""
+        if self._устройства is not None:
+            try:
+                self._устройства.печатает(meeting_id, text)
+            except Exception:
+                log.exception("Не удалось отправить набор заметок")
 
     def _заметки_на_источник(self, meeting_id: str) -> None:
         if self._устройства is not None:

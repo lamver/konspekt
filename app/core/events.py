@@ -82,6 +82,8 @@ IMPORT_PROGRESS = "import.progress"
 TELEGRAM_CHANGED = "telegram.changed"
 # Другой компьютер: сопряжение, доступ, кто в сети, что забрано.
 DEVICES_CHANGED = "devices.changed"
+# На другом компьютере печатают заметки к встрече: текст по мере набора.
+NOTES_TYPING = "notes.typing"
 SUMMARY_READY = "summary.ready"
 # Саммари и ответы чата приходят по кускам: ждать минуту на пустом
 # экране невыносимо, а текст, который печатается на глазах, ощущается

@@ -96,6 +96,7 @@
     "transcript": "Transcript"
   },
   "notes": {
+    "typing": "{name} is typing…",
     "placeholder": "Jot down short notes during the meeting.\n\nKonspekt will remember the moment of each line and turn them into full notes afterwards.",
     "saved": "Saved"
   },

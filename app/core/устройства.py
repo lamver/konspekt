@@ -190,6 +190,8 @@ class Обмен:
         self.на_изменение = на_изменение or (lambda: None)
         # Открытая в окне встреча изменилась снаружи: окну надо перечитать.
         self.на_встречу = на_встречу or (lambda meeting_id: None)
+        # На другом компьютере печатают: (наш номер встречи, текст, кто).
+        self.на_набор: Callable[[str, str, str], None] = lambda meeting_id, текст, кто: None
         # Узел подставляет себя: обмен должен знать, что у нас копии, а
         # что своё. Отдаём только своё, иначе при связи в обе стороны
         # встречи и папки отражаются друг в друге без конца.
@@ -491,6 +493,9 @@ class Узел:
         self._соединения: dict[str, Any] = {}
         self._замки_забора: dict[str, asyncio.Lock] = {}
         self._таймер_толчка: threading.Timer | None = None
+        # Набор заметок в полёте: последний текст на пару (устройство, встреча).
+        self._набор_ждёт: dict[tuple[str, str], str] = {}
+        self._набор_идёт: set[tuple[str, str]] = set()
         self._опросы_в_очереди: set[str] = set()
         self._готов = threading.Event()
         self._ошибка_старта = ""
@@ -794,6 +799,46 @@ class Узел:
                 self._опросы_в_очереди.discard(id)
 
         asyncio.get_running_loop().create_task(опрос())
+
+    def печатает(self, наш: str, текст: str) -> None:
+        """Текст заметок по мере набора: другому компьютеру показать сразу,
+        не дожидаясь автосохранения. В базу не пишется, при обрыве
+        теряется без последствий: сохранённый текст приедет своим путём."""
+        if self._loop is None:
+            return
+        with self._замок:
+            цели: list[tuple[str, str]] = []
+            for у in self.устройства.values():
+                for чужой, свой in у.taken.items():
+                    if свой == наш:
+                        # Это копия: печатаем источнику, номер его.
+                        цели.append((у.id, чужой))
+            if not цели:
+                # Своя встреча: всем, кому она открыта.
+                цели = [(у.id, наш) for у in self.устройства.values() if у.share == "view"]
+        for id, номер in цели:
+            self._набор_ждёт[(id, номер)] = текст
+            self._loop.call_soon_threadsafe(self._слать_набор, id, номер)
+
+    def _слать_набор(self, id: str, номер: str) -> None:
+        if (id, номер) in self._набор_идёт:
+            return
+        self._набор_идёт.add((id, номер))
+
+        async def слать() -> None:
+            try:
+                while (id, номер) in self._набор_ждёт:
+                    текст = self._набор_ждёт.pop((id, номер))
+                    try:
+                        await asyncio.wait_for(
+                            self._вызвать(id, "typing", {"id": номер, "notes": текст, "who": self.имя}), 5)
+                    except Exception:
+                        self._набор_ждёт.pop((id, номер), None)
+                        return
+            finally:
+                self._набор_идёт.discard((id, номер))
+
+        asyncio.get_running_loop().create_task(слать())
 
     def отправить_заметки(self, наш: str) -> bool:
         """Заметки сохранили у копии: отправить источнику, если это копия.
@@ -1099,6 +1144,17 @@ class Узел:
                 у.online = True
                 у.last_seen = now()
                 результат = {"proto": ПРОТОКОЛ, "name": self.имя, "share": у.share}
+            elif метод == "typing":
+                # Набор к встрече: либо к нашей, которую мы ему открыли, либо
+                # к его, копия которой у нас. Иначе это не его дело.
+                номер = str(аргументы.get("id") or "")
+                наш = у.taken.get(номер) if у.remote_share == "view" else None
+                if наш is None and у.share == "view" and self.обмен.store.get_meeting(номер) is not None \
+                        and номер not in self.копии():
+                    наш = номер
+                if наш:
+                    self.обмен.на_набор(наш, str(аргументы.get("notes") or ""), str(аргументы.get("who") or у.name))
+                результат = {"ok": True}
             elif метод == "poke":
                 # У того компьютера что-то изменилось: спросим его сейчас.
                 # Толчок идёт от того, кто открыл встречи НАМ, поэтому он
