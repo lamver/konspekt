@@ -2418,6 +2418,7 @@ class AppService:
     def save_notes(self, meeting_id: str, notes: str) -> None:
         """Автосохранение всего текста заметок (вызывается по debounce из UI)."""
         self.store.update_meeting(meeting_id, notes=notes)
+        self._заметки_на_источник(meeting_id)
 
     def add_note_line(self, meeting_id: str, text: str) -> dict[str, Any]:
         """Тезис с привязкой к моменту встречи.
@@ -2431,6 +2432,7 @@ class AppService:
             offset = max(0.0, now() - meeting.started_at)
         line = NoteLine(meeting_id=meeting_id, text=text, offset=offset)
         self.store.add_note_line(line)
+        self._заметки_на_источник(meeting_id)
         return line.to_dict()
 
     # --- импорт файлов ----------------------------------------------------
@@ -3638,7 +3640,11 @@ class AppService:
 
         if self._устройства is not None or not уст.доступно():
             return
-        обмен = уст.Обмен(self.store, на_изменение=lambda: bus.emit(MEETINGS_CHANGED))
+        обмен = уст.Обмен(
+            self.store,
+            на_изменение=lambda: bus.emit(MEETINGS_CHANGED),
+            на_встречу=self._встреча_изменилась_снаружи,
+        )
         self._устройства = уст.Узел(обмен, на_изменение=self._устройства_изменились)
         threading.Thread(target=self._устройства.запустить, name="konspekt-p2p-start", daemon=True).start()
 
@@ -3649,6 +3655,19 @@ class AppService:
 
     def _устройства_изменились(self) -> None:
         bus.emit(DEVICES_CHANGED, self.devices_state())
+
+    def _встреча_изменилась_снаружи(self, meeting_id: str) -> None:
+        """Заметки или итоги приехали с другого компьютера: окну перечитать."""
+        meeting = self.store.get_meeting(meeting_id)
+        if meeting is not None:
+            bus.emit(MEETING_UPDATED, {"meeting_id": meeting_id, "meeting": meeting.to_dict()})
+
+    def _заметки_на_источник(self, meeting_id: str) -> None:
+        if self._устройства is not None:
+            try:
+                self._устройства.отправить_заметки(meeting_id)
+            except Exception:
+                log.exception("Не удалось отправить заметки на другой компьютер")
 
     def devices_state(self) -> dict[str, Any]:
         from . import устройства as уст

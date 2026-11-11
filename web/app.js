@@ -392,6 +392,12 @@ window.__konspekt_event = function (payload) {
     case 'meeting.updated':
       if (payload.meeting && payload.meeting.id === state.currentId) {
         renderMeta(payload.meeting);
+        // Заметки приехали с другого компьютера: подменяем текст, если
+        // человек сейчас не печатает в нём, иначе затрём набранное.
+        if (typeof payload.meeting.notes === 'string' && document.activeElement !== ui.notes
+            && ui.notes.value !== payload.meeting.notes) {
+          ui.notes.value = payload.meeting.notes;
+        }
       }
       break;
     case 'transcript.segment':

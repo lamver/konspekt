@@ -93,6 +93,9 @@ class Устройство:
     # Чужой номер -> отпечаток содержимого на момент копии: по нему видно,
     # что у источника встречу переименовали, дописали или перенесли.
     stamps: dict[str, str] = field(default_factory=dict)
+    # Чужие номера встреч, чьи заметки с копии ещё не доехали до
+    # источника: он был выключен. Уйдут при следующем опросе.
+    pending: list[str] = field(default_factory=list)
     # Папка, куда ложатся копии. Пусто, пока не забрали ни одной.
     folder_id: str = ""
     # Последний известный адрес: ретранслятор и прямые адреса. Через
@@ -174,10 +177,57 @@ class Обмен:
     """
 
     def __init__(self, store: Any, audio_dir: Path | None = None,
-                 на_изменение: Callable[[], None] | None = None) -> None:
+                 на_изменение: Callable[[], None] | None = None,
+                 на_встречу: Callable[[str], None] | None = None) -> None:
         self.store = store
         self.audio_dir = audio_dir or paths.audio_dir()
         self.на_изменение = на_изменение or (lambda: None)
+        # Открытая в окне встреча изменилась снаружи: окну надо перечитать.
+        self.на_встречу = на_встречу or (lambda meeting_id: None)
+
+    # --- заметки в обе стороны -------------------------------------------
+
+    def заметки(self, meeting_id: str) -> dict[str, Any]:
+        """Что копия шлёт источнику: свободный текст и строки с номерами."""
+        m = self.store.get_meeting(meeting_id)
+        if m is None:
+            raise Ошибка("not_found")
+        return {
+            "notes": m.notes or "",
+            "note_lines": [n.to_dict() for n in self.store.list_note_lines(meeting_id)],
+        }
+
+    def применить_заметки(self, meeting_id: str, данные: dict[str, Any]) -> bool:
+        """Заметки с копии легли в источник.
+
+        Строки сливаются по номерам: у каждой свой, и строка, которой тут
+        нет, добавляется. Свободный текст один на встречу, правило
+        «последняя правка побеждает»: копия прислала то, что человек
+        только что сохранил, это и есть последняя правка."""
+        m = self.store.get_meeting(meeting_id)
+        if m is None or m.status != MeetingStatus.READY:
+            raise Ошибка("not_found")
+        изменилось = False
+        текст = данные.get("notes")
+        if isinstance(текст, str) and текст != (m.notes or ""):
+            self.store.update_meeting(meeting_id, notes=текст)
+            изменилось = True
+        есть = {n.id for n in self.store.list_note_lines(meeting_id)}
+        for n in данные.get("note_lines") or []:
+            номер = str(n.get("id") or "")
+            if not номер or номер in есть:
+                continue
+            self.store.add_note_line(NoteLine(
+                id=номер, meeting_id=meeting_id, text=str(n.get("text") or ""),
+                offset=float(n.get("offset") or 0.0),
+                created_at=float(n.get("created_at") or now()),
+            ))
+            есть.add(номер)
+            изменилось = True
+        if изменилось:
+            self.на_встречу(meeting_id)
+            self.на_изменение()
+        return изменилось
 
     # --- отдаём ---------------------------------------------------------
 
@@ -297,6 +347,7 @@ class Обмен:
             language=str(данные.get("language") or ""),
         )
         self._наполнить(устройство, наш, данные, скачать, заменить=True)
+        self.на_встречу(наш)
         self.на_изменение()
         return True
 
@@ -315,13 +366,18 @@ class Обмен:
                 voice_label=str(s.get("voice_label") or ""), doubtful=bool(s.get("doubtful")),
             ))
         строки = [NoteLine(
+            id=str(n.get("id") or "") or NoteLine().id,
             meeting_id=наш, text=str(n.get("text") or ""),
             offset=float(n.get("offset") or 0.0),
             created_at=float(n.get("created_at") or now()),
         ) for n in данные.get("note_lines") or []]
         if заменить:
             self.store.replace_transcript(наш, реплики)
-            self.store.replace_note_lines(наш, строки)
+            # Строки, написанные здесь и ещё не доехавшие до источника,
+            # не теряем: объединение, а не замена.
+            свои = {n.id: n for n in self.store.list_note_lines(наш)}
+            номера = {n.id for n in строки}
+            self.store.replace_note_lines(наш, строки + [n for i, n in свои.items() if i not in номера])
         else:
             for s in реплики:
                 self.store.add_segment(s)
@@ -617,6 +673,46 @@ class Узел:
     def забрать_новые(self, id: str) -> int:
         return self._выполнить(self._забрать_новые(id), 3600)
 
+    def отправить_заметки(self, наш: str) -> bool:
+        """Заметки сохранили у копии: отправить источнику, если это копия.
+        Не ждём ответа, окно не должно висеть на сети."""
+        with self._замок:
+            пара = next(((у, чужой) for у in self.устройства.values()
+                         for чужой, свой in у.taken.items() if свой == наш), None)
+        if пара is None or self._loop is None:
+            return False
+        у, чужой = пара
+        if чужой not in у.pending:
+            у.pending.append(чужой)
+        self._сохранить()
+        asyncio.run_coroutine_threadsafe(self._послать_заметки(у.id), self._loop)
+        return True
+
+    async def _послать_заметки(self, id: str) -> None:
+        with self._замок:
+            у = self.устройства.get(id)
+        if у is None or not у.pending:
+            return
+        for чужой in list(у.pending):
+            наш = у.taken.get(чужой)
+            if not наш:
+                у.pending.remove(чужой)
+                continue
+            try:
+                данные = self.обмен.заметки(наш)
+                await self._вызвать(id, "notes", {"id": чужой, **данные})
+                у.pending.remove(чужой)
+            except Ошибка as e:
+                if e.код in ("not_found", "no_access", "not_paired", "unknown"):
+                    # Источнику эти заметки не нужны или он их не понимает:
+                    # держать в очереди бессмысленно.
+                    log.info("Заметки для %s не приняты: %s", у.name, e)
+                    у.pending.remove(чужой)
+                else:
+                    log.info("Заметки для %s подождут: %s", у.name, e)
+                break
+        self._сохранить()
+
     # --- сторона, которая спрашивает -------------------------------------
 
     def _адрес(self, у: Устройство):
@@ -705,6 +801,8 @@ class Узел:
                 у.remote_proto = int(ответ.get("proto") or 0)
                 if ответ.get("name"):
                     у.name = str(ответ["name"])
+                if у.pending:
+                    await self._послать_заметки(id)
                 if у.remote_share == "view":
                     список, _ = await self._вызвать(id, "meetings", {})
                     у.remote_meetings = len(список)
@@ -871,6 +969,11 @@ class Узел:
                 результат = self.обмен.встречи()
             elif метод == "meeting":
                 результат = self.обмен.встреча(str(аргументы.get("id") or ""))
+            elif метод == "notes":
+                # Тот, кому мы открыли встречи, пишет к ним заметки: это его
+                # копия нашей встречи, и его тезисы нам нужны.
+                результат = {"changed": self.обмен.применить_заметки(
+                    str(аргументы.get("id") or ""), аргументы)}
             elif метод == "audio":
                 данные = self.обмен.читать_звук(
                     str(аргументы.get("id") or ""), str(аргументы.get("name") or ""),
