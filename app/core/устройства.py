@@ -255,6 +255,9 @@ class Обмен:
             language=str(данные.get("language") or ""),
         )
         self.store.create_meeting(meeting)
+        # Копия не ест пробный период: записывали не здесь.
+        if hasattr(self.store, "mark_trial_legacy"):
+            self.store.mark_trial_legacy(meeting.id)
         for s in данные.get("segments") or []:
             try:
                 speaker = Speaker(s.get("speaker") or "them")

@@ -562,6 +562,18 @@ class Store:
                 "SELECT 1 FROM trial_legacy WHERE meeting_id=?", (meeting_id,)
             ).fetchone() is not None
 
+    def mark_trial_legacy(self, meeting_id: str) -> None:
+        """Вывести встречу из счёта пробного периода.
+
+        Копия с другого компьютера: записывали не здесь, и там она уже
+        посчитана. Считать её второй раз значит сжечь пробный период
+        одним сопряжением, а это не то, за что пробный период дают."""
+        with self._lock:
+            self._conn.execute(
+                "INSERT OR IGNORE INTO trial_legacy(meeting_id) VALUES (?)", (meeting_id,)
+            )
+            self._conn.commit()
+
     def trial_counts(self, meeting_id: str) -> bool:
         """Посчитана ли встреча в пробный период."""
         with self._lock:
