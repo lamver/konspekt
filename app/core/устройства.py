@@ -90,6 +90,9 @@ class Устройство:
     auto_pull: bool = True
     # Чужой номер встречи -> наш: вторую копию не заводим.
     taken: dict[str, str] = field(default_factory=dict)
+    # Чужой номер -> отпечаток содержимого на момент копии: по нему видно,
+    # что у источника встречу переименовали, дописали или перенесли.
+    stamps: dict[str, str] = field(default_factory=dict)
     # Папка, куда ложатся копии. Пусто, пока не забрали ни одной.
     folder_id: str = ""
     # Последний известный адрес: ретранслятор и прямые адреса. Через
@@ -179,14 +182,24 @@ class Обмен:
     # --- отдаём ---------------------------------------------------------
 
     def встречи(self) -> list[dict[str, Any]]:
+        папки = {f["id"]: f["name"] for f in self.store.list_folders()}
+        где = self.store.meeting_folders()
+        отпечатки = self.store.meeting_stamps() if hasattr(self.store, "meeting_stamps") else {}
         out = []
         for m in self.store.list_meetings(limit=100000):
             if m.status != MeetingStatus.READY:
                 continue
+            папка = папки.get(где.get(m.id) or "", "")
             out.append({
                 "id": m.id, "title": m.title, "created_at": m.created_at,
                 "started_at": m.started_at, "ended_at": m.ended_at,
                 "duration": m.duration, "language": m.language, "template": m.template,
+                "folder": папка,
+                # Всё, что меняется у готовой встречи и должно доехать до копии.
+                "stamp": "|".join(str(x) for x in (
+                    m.title, папка, len(m.summary or ""), len(m.notes or ""),
+                    m.template, m.language, m.ended_at, отпечатки.get(m.id, "0:0"),
+                )),
             })
         return out
 
@@ -204,6 +217,8 @@ class Обмен:
                 "duration": ч["duration_s"], "size": путь.stat().st_size,
             })
         d = m.to_dict()
+        папки = {f["id"]: f["name"] for f in self.store.list_folders()}
+        d["folder"] = папки.get(self.store.meeting_folders().get(meeting_id) or "", "")
         d["segments"] = [s.to_dict() for s in self.store.list_segments(meeting_id)]
         d["note_lines"] = [n.to_dict() for n in self.store.list_note_lines(meeting_id)]
         d["audio"] = звук
@@ -224,17 +239,19 @@ class Обмен:
 
     # --- принимаем -----------------------------------------------------
 
-    def папка_устройства(self, устройство: Устройство) -> str:
-        """Копии лежат в папке с именем того компьютера: видно, откуда что."""
-        имена = {f["id"]: f for f in self.store.list_folders()}
-        if устройство.folder_id and устройство.folder_id in имена:
-            return устройство.folder_id
-        for f in имена.values():
-            if f["name"] == устройство.name and not f.get("source"):
-                устройство.folder_id = f["id"]
+    def папка_устройства(self, устройство: Устройство, подпапка: str = "") -> str:
+        """Копии лежат в папке с именем того компьютера, а его папки
+        повторяются рядом как «Компьютер / Папка»: вложенных папок у
+        Конспекта нет, а где что лежало у источника, видно и так."""
+        имя = f"{устройство.name} / {подпапка}" if подпапка else устройство.name
+        for f in self.store.list_folders():
+            if f["name"] == имя and not f.get("source"):
+                if not подпапка:
+                    устройство.folder_id = f["id"]
                 return f["id"]
-        папка = self.store.create_folder(устройство.name)
-        устройство.folder_id = папка["id"]
+        папка = self.store.create_folder(имя)
+        if not подпапка:
+            устройство.folder_id = папка["id"]
         return папка["id"]
 
     def сохранить(self, устройство: Устройство, данные: dict[str, Any],
@@ -258,28 +275,64 @@ class Обмен:
         # Копия не ест пробный период: записывали не здесь.
         if hasattr(self.store, "mark_trial_legacy"):
             self.store.mark_trial_legacy(meeting.id)
+        self._наполнить(устройство, meeting.id, данные, скачать)
+        устройство.taken[чужой] = meeting.id
+        self.на_изменение()
+        return meeting.id
+
+    def обновить(self, устройство: Устройство, наш: str, данные: dict[str, Any],
+                 скачать: Callable[[str, int, int], bytes]) -> bool:
+        """Догнать источник: название, итоги, заметки, расшифровка, папка.
+        Записи докачиваются только недостающие. Копия остаётся той же
+        встречей, с тем же номером."""
+        if self.store.get_meeting(наш) is None:
+            # Копию удалили здесь: заново не заводим, человек так решил.
+            return False
+        self.store.update_meeting(
+            наш,
+            title=str(данные.get("title") or ""),
+            started_at=данные.get("started_at"), ended_at=данные.get("ended_at"),
+            template=str(данные.get("template") or "general"),
+            notes=str(данные.get("notes") or ""), summary=str(данные.get("summary") or ""),
+            language=str(данные.get("language") or ""),
+        )
+        self._наполнить(устройство, наш, данные, скачать, заменить=True)
+        self.на_изменение()
+        return True
+
+    def _наполнить(self, устройство: Устройство, наш: str, данные: dict[str, Any],
+                   скачать: Callable[[str, int, int], bytes], заменить: bool = False) -> None:
+        реплики = []
         for s in данные.get("segments") or []:
             try:
                 speaker = Speaker(s.get("speaker") or "them")
             except ValueError:
                 speaker = Speaker.THEM
-            self.store.add_segment(TranscriptSegment(
-                meeting_id=meeting.id, speaker=speaker, text=str(s.get("text") or ""),
+            реплики.append(TranscriptSegment(
+                meeting_id=наш, speaker=speaker, text=str(s.get("text") or ""),
                 start=float(s.get("start") or 0.0), end=float(s.get("end") or 0.0),
                 lang=str(s.get("lang") or "ru"), voice_id=str(s.get("voice_id") or ""),
                 voice_label=str(s.get("voice_label") or ""), doubtful=bool(s.get("doubtful")),
             ))
-        for n in данные.get("note_lines") or []:
-            self.store.add_note_line(NoteLine(
-                meeting_id=meeting.id, text=str(n.get("text") or ""),
-                offset=float(n.get("offset") or 0.0),
-                created_at=float(n.get("created_at") or now()),
-            ))
-        папка = self.audio_dir / meeting.id
+        строки = [NoteLine(
+            meeting_id=наш, text=str(n.get("text") or ""),
+            offset=float(n.get("offset") or 0.0),
+            created_at=float(n.get("created_at") or now()),
+        ) for n in данные.get("note_lines") or []]
+        if заменить:
+            self.store.replace_transcript(наш, реплики)
+            self.store.replace_note_lines(наш, строки)
+        else:
+            for s in реплики:
+                self.store.add_segment(s)
+            for n in строки:
+                self.store.add_note_line(n)
+        папка = self.audio_dir / наш
+        есть = {Path(ч["path"]).name for ч in self.store.list_audio_chunks(наш)} if заменить else set()
         for ф in данные.get("audio") or []:
             имя = str(ф.get("name") or "")
             размер = int(ф.get("size") or 0)
-            if not _безопасное_имя(имя) or размер <= 0:
+            if not _безопасное_имя(имя) or размер <= 0 or имя in есть:
                 continue
             папка.mkdir(parents=True, exist_ok=True)
             путь = папка / имя
@@ -296,13 +349,11 @@ class Обмен:
                 путь.unlink(missing_ok=True)
                 raise
             self.store.add_audio_chunk(
-                meeting.id, str(ф.get("track") or "mic"), str(путь),
+                наш, str(ф.get("track") or "mic"), str(путь),
                 float(ф.get("start") or 0.0), float(ф.get("duration") or 0.0),
             )
-        self.store.set_meeting_folder(meeting.id, self.папка_устройства(устройство))
-        устройство.taken[чужой] = meeting.id
-        self.на_изменение()
-        return meeting.id
+        self.store.set_meeting_folder(
+            наш, self.папка_устройства(устройство, str(данные.get("folder") or "")))
 
 class Узел:
     """Наше устройство в сети Конспектов: ключ, сопряжения, запросы."""
@@ -657,7 +708,7 @@ class Узел:
                 if у.remote_share == "view":
                     список, _ = await self._вызвать(id, "meetings", {})
                     у.remote_meetings = len(список)
-                    if у.auto_pull and any(m["id"] not in у.taken for m in список):
+                    if у.auto_pull and any(self._надо_забрать(у, m) for m in список):
                         # Забор идёт отдельной задачей: записи большие, а опрос
                         # зовёт и окно, ему нельзя висеть минуты. Замок на
                         # устройство не даст двум заборам сойтись.
@@ -698,19 +749,44 @@ class Узел:
                 return у.taken[meeting_id]
             return await self._забрать_под_замком(id, у, meeting_id)
 
-    async def _забрать_под_замком(self, id: str, у: Устройство, meeting_id: str) -> str:
-        данные, _ = await self._вызвать(id, "meeting", {"id": meeting_id})
-        loop = asyncio.get_running_loop()
+    @staticmethod
+    def _надо_забрать(у: Устройство, m: dict[str, Any]) -> bool:
+        """Новая или изменившаяся у источника встреча."""
+        чужой = m["id"]
+        if чужой not in у.taken:
+            return True
+        return bool(m.get("stamp")) and у.stamps.get(чужой) != m.get("stamp")
 
+    async def _обновить(self, id: str, у: Устройство, m: dict[str, Any]) -> bool:
+        """Копия есть, но у источника встреча изменилась: догнать."""
+        async with self._замок_забора(id):
+            if у.stamps.get(m["id"]) == m.get("stamp"):
+                return False
+            данные, _ = await self._вызвать(id, "meeting", {"id": m["id"]})
+            loop = asyncio.get_running_loop()
+            скачать = self._скачиватель(id, m["id"], loop)
+            жива = await loop.run_in_executor(None, self.обмен.обновить, у, у.taken[m["id"]], данные, скачать)
+            у.stamps[m["id"]] = str(m.get("stamp") or "")
+            self._сохранить()
+            return жива
+
+    def _скачиватель(self, id: str, meeting_id: str, loop):
         def скачать(имя: str, сдвиг: int, размер: int) -> bytes:
             # Зовётся из потока хранилища: гоняем запрос через наш цикл.
             будущее = asyncio.run_coroutine_threadsafe(
                 self._вызвать(id, "audio", {"id": meeting_id, "name": имя, "offset": сдвиг, "size": размер}),
                 loop,
             )
-            return будущее.result(ТАЙМАУТ)[1]
+            return будущее.result(ТАЙМАУТ)
+        return lambda имя, сдвиг, размер: скачать(имя, сдвиг, размер)[1]
 
+    async def _забрать_под_замком(self, id: str, у: Устройство, meeting_id: str,
+                                  stamp: str = "") -> str:
+        данные, _ = await self._вызвать(id, "meeting", {"id": meeting_id})
+        loop = asyncio.get_running_loop()
+        скачать = self._скачиватель(id, meeting_id, loop)
         наш = await loop.run_in_executor(None, self.обмен.сохранить, у, данные, скачать)
+        у.stamps[meeting_id] = stamp
         self._сохранить()
         self.на_изменение()
         return наш
@@ -726,8 +802,14 @@ class Узел:
         try:
             for m in список:
                 if m["id"] not in у.taken:
-                    await self._забрать(id, m["id"])
+                    async with self._замок_забора(id):
+                        if m["id"] in у.taken:
+                            continue
+                        await self._забрать_под_замком(id, у, m["id"], str(m.get("stamp") or ""))
                     сколько += 1
+                elif self._надо_забрать(у, m):
+                    if await self._обновить(id, у, m):
+                        сколько += 1
         except Ошибка as e:
             log.info("Забор у %s прервался после %d встреч: %s", у.name, сколько, e)
             if сколько == 0:

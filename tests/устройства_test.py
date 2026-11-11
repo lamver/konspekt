@@ -128,6 +128,20 @@ try:
     проверить(папки.get(store_b.meeting_folders().get(наш)) == "Ноутбук", "копия лежит в папке «Ноутбук»")
     проверить(b.забрать(a.id, своя) == наш and len(store_b.list_meetings()) == 2, "вторая копия не заводится")
 
+    # Зеркало: у источника переименовали, дописали, перенесли в папку.
+    проект = store_a.create_folder("Проект")
+    store_a.update_meeting(своя, title="Планёрка (итог)", summary="Итоги: решили всё")
+    store_a.add_segment(TranscriptSegment(meeting_id=своя, speaker=Speaker.ME, text="Добавка", start=2, end=3))
+    store_a.set_meeting_folder(своя, проект["id"])
+    проверить(b.забрать_новые(a.id) == 1, "изменённая встреча догнана как одна")
+    копия = store_b.get_meeting(наш)
+    папки_b = {f["id"]: f["name"] for f in store_b.list_folders()}
+    проверить(копия.title == "Планёрка (итог)" and копия.summary == "Итоги: решили всё", "название и итоги догнали источник")
+    проверить([s.text for s in store_b.list_segments(наш)] == ["Привет", "Здравствуйте", "Добавка"], "расшифровка дописалась")
+    проверить(папки_b.get(store_b.meeting_folders().get(наш)) == "Ноутбук / Проект", "копия переехала в «Ноутбук / Проект»")
+    проверить(len(store_b.list_audio_chunks(наш)) == 1, "запись не скачана второй раз")
+    проверить(b.забрать_новые(a.id) == 0, "без изменений ничего не гоняем")
+
     # Путь наружу.
     try:
         b._выполнить(b._вызвать(a.id, "audio", {"id": своя, "name": "..\\..\\konspekt.db", "offset": 0, "size": 100}))

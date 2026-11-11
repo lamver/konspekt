@@ -574,6 +574,35 @@ class Store:
             )
             self._conn.commit()
 
+    def meeting_stamps(self) -> dict[str, str]:
+        """Отпечаток содержимого встреч для сверки копий на другом компьютере:
+        сколько реплик и строк заметок. Два запроса на всю базу, а не по
+        одному на встречу."""
+        with self._lock:
+            реплики = dict(self._conn.execute(
+                "SELECT meeting_id, COUNT(*) FROM transcript_segments GROUP BY meeting_id"
+            ).fetchall())
+            строки = dict(self._conn.execute(
+                "SELECT meeting_id, COUNT(*) FROM note_lines GROUP BY meeting_id"
+            ).fetchall())
+        return {m: f"{реплики.get(m, 0)}:{строки.get(m, 0)}" for m in set(реплики) | set(строки)}
+
+    def replace_transcript(self, meeting_id: str, segments: list[TranscriptSegment]) -> None:
+        """Заменить расшифровку целиком: копия с другого компьютера догоняет
+        источник. Индекс поиска чинят триггеры."""
+        with self._lock:
+            self._conn.execute("DELETE FROM transcript_segments WHERE meeting_id=?", (meeting_id,))
+            self._conn.commit()
+        for s in segments:
+            self.add_segment(s)
+
+    def replace_note_lines(self, meeting_id: str, lines: list[NoteLine]) -> None:
+        with self._lock:
+            self._conn.execute("DELETE FROM note_lines WHERE meeting_id=?", (meeting_id,))
+            self._conn.commit()
+        for n in lines:
+            self.add_note_line(n)
+
     def trial_counts(self, meeting_id: str) -> bool:
         """Посчитана ли встреча в пробный период."""
         with self._lock:
