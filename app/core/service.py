@@ -3659,6 +3659,15 @@ class AppService:
 
         return [вл.для_окна(a) for a in self.store.list_attachments(meeting_id)]
 
+    def attachment_data(self, attachment_id: str) -> dict[str, Any]:
+        """Файл целиком данными: окну для встроенного плеера."""
+        from . import вложения as вл
+
+        a = self.store.get_attachment(attachment_id)
+        if a is None:
+            return {"error": "missing"}
+        return {"url": вл.данными(Path(a["path"])), "kind": вл.вид(a["name"])}
+
     def open_attachment(self, attachment_id: str) -> dict[str, Any]:
         a = self.store.get_attachment(attachment_id)
         if a is None or not Path(a["path"]).exists():

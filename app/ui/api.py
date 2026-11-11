@@ -758,6 +758,9 @@ class Api:
     def open_attachment(self, attachment_id: str) -> dict[str, Any]:
         return self._service.open_attachment(str(attachment_id))
 
+    def attachment_data(self, attachment_id: str) -> dict[str, Any]:
+        return self._service.attachment_data(str(attachment_id))
+
     def delete_attachment(self, attachment_id: str) -> dict[str, Any]:
         return self._service.delete_attachment(str(attachment_id))
 

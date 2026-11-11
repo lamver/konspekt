@@ -2531,6 +2531,7 @@ async function refreshExternal(id) {
     renderSummary(meeting.summary || '');
     state.summaryText = meeting.summary || '';
   }
+  loadAttachments(id);
   loadMeetings();
 }
 
@@ -3568,16 +3569,29 @@ function renderAttachments(список) {
   box.hidden = !список.length;
   for (const a of список) {
     const chip = document.createElement('div');
-    chip.className = 'attachment' + (a.image && a.url ? ' attachment--image' : '');
+    const встроено = (a.kind === 'image' && a.preview) || ((a.kind === 'audio' || a.kind === 'video') && a.embeddable);
+    chip.className = 'attachment' + (встроено ? ` attachment--${a.kind}` : '');
     chip.title = `${a.name} · ${fmtSize(a.size)}`;
-    if (a.image && a.url) {
+    if (a.kind === 'image' && a.preview) {
+      // Картинка прямо в заметках, уменьшенная; щелчок открывает файл.
       const img = document.createElement('img');
       img.className = 'attachment__thumb';
-      img.src = a.url;
+      img.src = a.preview;
       img.alt = a.name;
-      // Картинка не открылась (путь недоступен): показываем как файл.
-      img.addEventListener('error', () => { chip.classList.remove('attachment--image'); img.remove(); chip.prepend(имяЭл(a)); });
       chip.appendChild(img);
+    } else if ((a.kind === 'audio' || a.kind === 'video') && a.embeddable) {
+      // Плеер прямо в заметках; сам файл окно просит, когда дошло до него.
+      const player = document.createElement(a.kind);
+      player.className = 'attachment__player';
+      player.controls = true;
+      player.preload = 'metadata';
+      player.addEventListener('click', (e) => e.stopPropagation());
+      chip.appendChild(player);
+      const label = document.createElement('div');
+      label.className = 'attachment__caption';
+      label.textContent = a.name;
+      chip.appendChild(label);
+      api.attachment_data(a.id).then((r) => { if (r && r.url) player.src = r.url; });
     } else {
       chip.appendChild(имяЭл(a));
       const size = document.createElement('span');
