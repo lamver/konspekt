@@ -68,8 +68,8 @@
   },
   "meeting": {
     "language_title": "Meeting language",
-    "language_default": "{name} · default",
-    "language_auto": "Detect per phrase",
+    "language_default": "{name}",
+    "language_auto": "Auto",
     "title_placeholder": "Meeting title",
     "untitled": "Untitled",
     "recording_status": "Recording",

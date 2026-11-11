@@ -68,8 +68,8 @@
   },
   "meeting": {
     "language_title": "Язык встречи",
-    "language_default": "{name} · по умолчанию",
-    "language_auto": "Определять по фразам",
+    "language_default": "{name}",
+    "language_auto": "Авто",
     "title_placeholder": "Название встречи",
     "untitled": "Без названия",
     "recording_status": "Идёт запись",
