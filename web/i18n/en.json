@@ -96,6 +96,7 @@
     "transcript": "Transcript"
   },
   "notes": {
+    "attach_missing": "attachment removed",
     "attach": "Attach file",
     "attached": "Attached: {name}",
     "attach_too_big": "File is too large: up to 20 MB from the clipboard, up to 50 MB from disk",
@@ -104,7 +105,7 @@
     "attach_remove_confirm": "Remove “{name}”? The file is deleted from this meeting.",
     "pasted_image": "Screenshot",
     "typing": "{name} is typing…",
-    "placeholder": "Jot down short notes during the meeting.\n\nKonspekt will remember the moment of each line and turn them into full notes afterwards.",
+    "placeholder": "Jot short points right during the meeting. Markdown works: **bold**, lists, headings. Paste an image or file from the clipboard (Ctrl+V), it lands in place.\n\nKonspekt remembers the moment of every line and expands them into full notes after the meeting.",
     "saved": "Saved"
   },
   "summary": {

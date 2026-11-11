@@ -371,7 +371,7 @@ window.__konspekt_event = function (payload) {
       // На другом компьютере печатают к этой встрече: показываем текст по
       // мере набора, если здесь в заметках сейчас не печатают сами.
       if (payload.meeting_id === state.currentId && document.activeElement !== ui.notes) {
-        if (ui.notes.value !== payload.notes) ui.notes.value = payload.notes;
+        if (ui.notes.value !== payload.notes) { ui.notes.value = payload.notes; syncNotesView(); }
         showTypingHint(payload.who);
       }
       break;
@@ -405,8 +405,10 @@ window.__konspekt_event = function (payload) {
         if (typeof payload.meeting.notes === 'string' && document.activeElement !== ui.notes
             && ui.notes.value !== payload.meeting.notes) {
           ui.notes.value = payload.meeting.notes;
+          syncNotesView();
         }
-        // Копия догнала источник: расшифровка и итоги могли дописаться.
+        // Заметки могли поменяться: перевёрстать, если здесь не печатают.
+  // Копия догнала источник: расшифровка и итоги могли дописаться.
         if (payload.external) refreshExternal(payload.meeting.id);
         if (payload.attachments) loadAttachments(payload.meeting.id);
       }
@@ -592,6 +594,11 @@ function renderMarkdown(text) {
       return `\u0000${коды.length - 1}\u0000`;
     });
     s = esc(s)
+      // Вложения к заметкам: ![имя](att:номер) картинка, звук или видео по
+      // месту, [имя](att:номер) файл карточкой. Окно подставляет их после
+      // вёрстки из списка вложений встречи.
+      .replace(/!\[([^\]]*)\]\(att:([0-9a-f]{4,64})\)/g, (m, alt, id) => `<span class="md-att md-att--media" data-att="${id}" data-alt="${alt}"></span>`)
+      .replace(/\[([^\]]+)\]\(att:([0-9a-f]{4,64})\)/g, (m, надпись, id) => `<span class="md-att md-att--file" data-att="${id}">${надпись}</span>`)
       .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (m, надпись, адрес) => `<span class="md-link" title="${адрес}">${надпись}</span>`)
       .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
       .replace(/__(.+?)__/g, '<strong>$1</strong>')
@@ -2552,6 +2559,7 @@ async function selectMeeting(id, jumpTo = null) {
 
   ui.title.value = meeting.title || '';
   ui.notes.value = meeting.notes || '';
+  syncNotesView();
   renderMeetingLanguage(meeting);
   renderMeta(meeting);
   renderTranscript(meeting.segments || []);
@@ -3554,7 +3562,110 @@ async function loadAttachments(id) {
   if (!api.list_attachments) return;
   const список = await api.list_attachments(id);
   if (id !== state.currentId) return;
-  renderAttachments(список || []);
+  state.attachments = список || [];
+  renderAttachments(state.attachments);
+  // Вложения по месту в тексте: свёрстанный вид подставляет их заново.
+  if (!ui.notesView.hidden) syncNotesView();
+}
+
+/** Номера вложений, на которые текст заметок ссылается: они стоят по
+    месту, а не в полоске внизу. */
+function referencedAttachments(text) {
+  const ids = new Set();
+  for (const m of String(text || '').matchAll(/\(att:([0-9a-f]{4,64})\)/g)) ids.add(m[1]);
+  return ids;
+}
+
+/** Подставить вложения в свёрстанный текст. */
+function hydrateAttachments(container) {
+  const поНомеру = new Map((state.attachments || []).map((a) => [a.id, a]));
+  for (const узел of container.querySelectorAll('[data-att]')) {
+    const a = поНомеру.get(узел.dataset.att);
+    узел.innerHTML = '';
+    if (!a) {
+      узел.classList.add('md-att--missing');
+      узел.textContent = t('notes.attach_missing');
+      continue;
+    }
+    if (узел.classList.contains('md-att--media') && a.kind === 'image' && a.preview) {
+      const img = document.createElement('img');
+      img.className = 'md-att__img';
+      img.src = a.preview;
+      img.alt = узел.dataset.alt || a.name;
+      img.title = a.name;
+      img.addEventListener('click', (e) => { e.stopPropagation(); api.open_attachment(a.id); });
+      узел.appendChild(img);
+    } else if (узел.classList.contains('md-att--media') && (a.kind === 'audio' || a.kind === 'video') && a.embeddable) {
+      const player = document.createElement(a.kind);
+      player.className = 'md-att__player';
+      player.controls = true;
+      player.preload = 'metadata';
+      player.addEventListener('click', (e) => e.stopPropagation());
+      узел.appendChild(player);
+      const cap = document.createElement('span');
+      cap.className = 'md-att__caption';
+      cap.textContent = a.name;
+      узел.appendChild(cap);
+      api.attachment_data(a.id).then((r) => { if (r && r.url) player.src = r.url; });
+    } else {
+      const chip = document.createElement('span');
+      chip.className = 'attachment';
+      chip.title = `${a.name} · ${fmtSize(a.size)}`;
+      chip.appendChild(имяЭл(a));
+      const size = document.createElement('span');
+      size.className = 'attachment__size';
+      size.textContent = fmtSize(a.size);
+      chip.appendChild(size);
+      chip.addEventListener('click', (e) => { e.stopPropagation(); api.open_attachment(a.id); });
+      узел.appendChild(chip);
+    }
+  }
+}
+
+/** Свёрстанный вид заметок, когда в них не печатают. Пустые заметки
+    остаются полем с подсказкой: там писать, а не смотреть. */
+function syncNotesView() {
+  const текст = ui.notes.value;
+  const печатают = document.activeElement === ui.notes;
+  if (печатают || !текст.trim()) {
+    ui.notesView.hidden = true;
+    ui.notes.hidden = false;
+    return;
+  }
+  ui.notesView.innerHTML = renderMarkdown(текст);
+  hydrateAttachments(ui.notesView);
+  ui.notesView.hidden = false;
+  ui.notes.hidden = true;
+}
+
+function editNotes() {
+  ui.notesView.hidden = true;
+  ui.notes.hidden = false;
+  ui.notes.focus();
+  ui.notes.setSelectionRange(ui.notes.value.length, ui.notes.value.length);
+}
+
+/** Вставить ссылку на вложение в текст: по месту курсора, иначе в конец. */
+function insertAttachmentRef(a) {
+  const ссылка = (a.kind === 'image' || a.kind === 'audio' || a.kind === 'video' ? '!' : '') + `[${a.name}](att:${a.id})`;
+  const поле = ui.notes;
+  const было = поле.value;
+  const вПоле = !поле.hidden && document.activeElement === поле;
+  if (вПоле) {
+    const от = поле.selectionStart;
+    const до = поле.selectionEnd;
+    const перед = было.slice(0, от);
+    const после = было.slice(до);
+    const слева = перед && !перед.endsWith('\n') ? '\n' : '';
+    const справа = после && !после.startsWith('\n') ? '\n' : '';
+    поле.value = перед + слева + ссылка + справа + после;
+    const курсор = (перед + слева + ссылка + справа).length;
+    поле.setSelectionRange(курсор, курсор);
+  } else {
+    поле.value = (было.trimEnd() ? было.trimEnd() + '\n' : '') + ссылка + '\n';
+  }
+  flushNotes();
+  syncNotesView();
 }
 
 function fmtSize(bytes) {
@@ -3563,9 +3674,11 @@ function fmtSize(bytes) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-function renderAttachments(список) {
+function renderAttachments(всё) {
   const box = ui.attachments;
   box.innerHTML = '';
+  const вТексте = referencedAttachments(ui.notes.value);
+  const список = всё.filter((a) => !вТексте.has(a.id));
   box.hidden = !список.length;
   for (const a of список) {
     const chip = document.createElement('div');
@@ -3646,16 +3759,18 @@ async function attachFile(file) {
     имя = `${t('notes.pasted_image')} ${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}.png`;
   }
   const r = await api.attach_paste(state.currentId, имя, b64);
-  if (r && r.error) showToast(t(r.error === 'too_big' ? 'notes.attach_too_big' : 'notes.attach_failed'));
-  else showToast(t('notes.attached', { name: имя }));
-  loadAttachments(state.currentId);
+  if (r && r.error) { showToast(t(r.error === 'too_big' ? 'notes.attach_too_big' : 'notes.attach_failed')); return; }
+  showToast(t('notes.attached', { name: имя }));
+  await loadAttachments(state.currentId);
+  if (r && r.id) insertAttachmentRef(r);
 }
 
 async function pickAttachments() {
   if (!state.currentId) return;
   const r = await api.attach_pick(state.currentId);
   if (r && r.length) showToast(t('notes.attached', { name: (r[0] && r[0].name) || '' }));
-  loadAttachments(state.currentId);
+  await loadAttachments(state.currentId);
+  for (const a of r || []) if (a && a.id) insertAttachmentRef(a);
 }
 
 /* --- Заметки ------------------------------------------------------------ */
@@ -5164,6 +5279,7 @@ function bindUi() {
     title: el('meeting-title'),
     meta: el('meeting-meta'),
     notes: el('notes'),
+    notesView: el('notes-view'),
     saveHint: el('save-hint'),
     attachments: el('attachments'),
     attachPick: el('attach-pick'),
@@ -5534,7 +5650,12 @@ function bindUi() {
   });
 
   ui.notes.addEventListener('input', scheduleSave);
-  ui.notes.addEventListener('blur', flushNotes);
+  ui.notes.addEventListener('blur', () => { flushNotes(); syncNotesView(); });
+  ui.notesView.addEventListener('click', (e) => {
+    // Щелчок по картинке или файлу открывает их, по тексту — правку.
+    if (e.target.closest('[data-att]')) return;
+    editNotes();
+  });
   ui.notes.addEventListener('paste', pasteAttachments);
   ui.attachPick.addEventListener('click', pickAttachments);
 
@@ -5543,7 +5664,7 @@ function bindUi() {
     api.update_meeting(state.currentId, { title: ui.title.value });
   });
   ui.title.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') { e.preventDefault(); ui.notes.focus(); }
+    if (e.key === 'Enter') { e.preventDefault(); editNotes(); }
   });
 
   ui.search.addEventListener('input', () => {
@@ -5560,7 +5681,7 @@ function bindUi() {
       tab.classList.add('is-active');
       const pane = document.querySelector(`.pane[data-pane="${tab.dataset.tab}"]`);
       if (pane) pane.classList.add('is-active');
-      if (tab.dataset.tab === 'notes') ui.notes.focus();
+      if (tab.dataset.tab === 'notes' && !ui.notes.value.trim()) ui.notes.focus();
     });
   });
 

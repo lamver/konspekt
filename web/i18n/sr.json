@@ -96,6 +96,7 @@
     "transcript": "Transkript"
   },
   "notes": {
+    "attach_missing": "prilog je uklonjen",
     "attach": "Priloži datoteku",
     "attached": "Priloženo: {name}",
     "attach_too_big": "Datoteka je prevelika: do 20 MB iz ostave, do 50 MB sa diska",
@@ -104,7 +105,7 @@
     "attach_remove_confirm": "Ukloniti „{name}“? Datoteka se briše iz ovog sastanka.",
     "pasted_image": "Snimak",
     "typing": "{name} kuca…",
-    "placeholder": "Zapisujte kratke ideje tokom sastanka.\n\nKonspekt će zapamtiti trenutak svake linije i posle sastanka ih pretvoriti u pune beleške.",
+    "placeholder": "Zapisujte kratke teze tokom sastanka. Radi markdown: **podebljano**, liste, naslovi. Nalepite sliku ili datoteku iz ostave (Ctrl+V), staće na svoje mesto.\n\nKonspekt pamti trenutak svakog reda i posle sastanka ih pretvara u potpune beleške.",
     "saved": "Sačuvano"
   },
   "summary": {
