@@ -1732,19 +1732,22 @@ function fmtDate(ts) {
 /* --- Список встреч ------------------------------------------------------ */
 
 async function loadMeetings() {
-  const [meetings, folders, devices] = await Promise.all([
+  const [meetings, folders] = await Promise.all([
     api.list_meetings(),
     api.list_folders ? api.list_folders() : Promise.resolve([]),
-    api.devices_state ? api.devices_state().catch(() => null) : Promise.resolve(null),
   ]);
   state.meetings = meetings || [];
   state.folders = folders || [];
-  if (devices && devices.devices) {
-    state.deviceNames = devices.devices.map((d) => d.name);
-    state.liveNow = devices.recording || [];
-  }
-  renderLiveNow();
   renderMeetingList();
+  // Устройства отдельно и не блокируя список: мост ждёт появления
+  // метода, и там, где его нет, список встреч не должен ждать вместе с ним.
+  api.devices_state().then((devices) => {
+    if (!devices || !devices.devices) return;
+    const имена = devices.devices.map((d) => d.name);
+    state.liveNow = devices.recording || [];
+    renderLiveNow();
+    if (имена.join('|') !== state.deviceNames.join('|')) { state.deviceNames = имена; renderMeetingList(); }
+  }).catch(() => {});
   // Если ничего не выбрано, открываем самую свежую встречу.
   if (!state.currentId && state.meetings.length) {
     selectMeeting(state.meetings[0].id);
